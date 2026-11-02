@@ -1,7 +1,8 @@
 """Vercel entry point (WSGI). Try-out mode only: nothing is stored permanently.
 
 On every cold start the instance creates a fresh SQLite database in /tmp and loads
-the fictional sample data with the demo accounts (see apps/core/demo.py).
+the fictional sample data with the demo accounts (see apps/core/demo.py and
+apps/core/vercel.py, which also restores the original request path).
 """
 import os
 import sys
@@ -13,19 +14,6 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 os.environ.setdefault("VERCEL", "1")
 
-import django  # noqa: E402
+from config.wsgi import application  # noqa: E402
 
-django.setup()
-
-import logging  # noqa: E402
-
-from apps.core.demo import bootstrap_demo  # noqa: E402
-
-try:
-    bootstrap_demo()
-except Exception:  # keep serving; the traceback shows up in the Vercel function logs
-    logging.getLogger("api").exception("demo bootstrap failed")
-
-from django.core.wsgi import get_wsgi_application  # noqa: E402
-
-app = get_wsgi_application()
+app = application
