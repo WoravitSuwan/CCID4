@@ -7,6 +7,7 @@ class Role(models.TextChoices):
     HEAD = "head", "หัวหน้า"
     INVESTIGATOR = "investigator", "พนักงานสอบสวน"
     CLERK = "clerk", "เจ้าหน้าที่ธุรการ"
+    OUTSOURCE = "outsource", "เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource)"
 
 
 class User(AbstractUser):

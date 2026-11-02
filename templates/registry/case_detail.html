@@ -126,6 +126,26 @@
   </div>
 </div>
 
+<div class="card mt-5">
+  <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>การติดต่อผู้เสียหายทางโทรศัพท์</h2>
+    <span class="text-sm text-slate-500">{% if call_assignment %}ผู้รับผิดชอบ: {{ call_assignment.assignee.display_name }}{% if call_assignment.is_done %} · <span class="text-emerald-700">เสร็จแล้ว</span>{% endif %}{% else %}ยังไม่ได้มอบหมาย{% endif %}</span>
+    {% if can_record_call %}<a class="btn btn-sm btn-primary ml-auto" href="{% url 'call_case' case.pk %}">{% icon "pencil" "h-4 w-4" %} บันทึกผลการโทร</a>{% endif %}
+  </div>
+  {% if calls %}
+  <ol class="space-y-2 text-sm">
+    {% for a in calls %}
+    <li class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+      <span class="badge {% if a.reached %}badge-green{% else %}badge-amber{% endif %}">ครั้งที่ {{ a.number }}</span>
+      <span class="font-medium">{{ a.get_outcome_display }}</span>
+      <span class="text-xs text-slate-500">{{ a.called_at|thai_date:"datetime" }} · {{ a.phone|default:"-" }} · {{ a.created_by.display_name|default:"-" }}</span>
+      {% if a.note %}<span class="w-full pl-1 text-slate-600">{{ a.note }}</span>{% endif %}
+      {% if a.appointment_at %}<span class="w-full pl-1 text-xs text-emerald-700">นัดเข้าพบพนักงานสอบสวน {{ a.appointment_at|thai_date:"datetime" }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}<p class="text-sm text-slate-500">ยังไม่มีบันทึกการโทรในระบบ{% if case.contact_log %} (บันทึกเดิมจากไฟล์ทะเบียนอยู่ในข้อมูลคดีด้านบน){% endif %}</p>{% endif %}
+</div>
+
 <div class="table-wrap mt-5">
   <div class="flex items-center gap-2 px-5 py-4">{% icon "document" "h-5 w-5 text-slate-400" %}<h2>ประวัติหมายเรียก</h2></div>
   <table class="table">

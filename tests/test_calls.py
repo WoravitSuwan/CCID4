@@ -1,0 +1,135 @@
+import datetime as dt
+from io import BytesIO
+
+import pytest
+from django.utils import timezone
+from openpyxl import load_workbook
+
+from apps.accounts.models import Role, User
+from apps.calls.models import CallAssignment, CallAttempt, CallOutcome
+from apps.calls.services import contact_log_with_calls, parse_receipt_list, record_call
+from apps.core.models import AuditLog
+from apps.registry.models import Case
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def caller(db):
+    return User.objects.create_user("caller", password="pass12345", role=Role.OUTSOURCE, first_name="สมใจ")
+
+
+@pytest.fixture
+def clerk(db):
+    return User.objects.create_user("clerk1", password="pass12345", role=Role.CLERK)
+
+
+def test_parse_receipt_list():
+    assert parse_receipt_list(" l6800000000\nW6800039595, w6800039595 ;T6800110866 ") == [
+        "L6800000000", "W6800039595", "T6800110866"]
+
+
+def test_assign_by_pasting_case_ids(client, imported, caller, clerk):
+    client.force_login(clerk)
+    keys = list(Case.objects.not_final().values_list("receipt_no", flat=True)[:5])
+    resp = client.post("/calls/assign/", {"receipts": "\n".join(k.lower() for k in keys) + "\nX999",
+                                          "assignee": caller.pk, "reassign": "on"})
+    assert resp.status_code == 200
+    assert resp.context["result"]["created"] == 5 and resp.context["result"]["not_found"] == ["X999"]
+    assert CallAssignment.objects.filter(assignee=caller).count() == 5
+    assert AuditLog.objects.filter(action="assign").exists()
+
+
+def test_bulk_assign_from_register(client, imported, caller, clerk):
+    client.force_login(clerk)
+    ids = list(Case.objects.values_list("pk", flat=True)[:3])
+    client.post("/calls/assign/bulk/", {"case_ids": ids, "assignee": caller.pk, "next": "/cases/"})
+    assert CallAssignment.objects.filter(case_id__in=ids, assignee=caller).count() == 3
+
+
+def test_outsource_sees_only_assigned_cases_and_call_pages(client, imported, caller, clerk):
+    mine, other = Case.objects.not_final()[:2]
+    CallAssignment.objects.create(case=mine, assignee=caller, assigned_by=clerk)
+    client.force_login(caller)
+    page = client.get("/calls/")
+    assert [a.case_id for a in page.context["page"]] == [mine.pk]
+    assert client.get(f"/calls/{mine.pk}/").status_code == 200
+    assert client.get(f"/calls/{other.pk}/").status_code == 403
+    # every other page redirects back to the call list
+    for url in ["/", "/cases/", f"/cases/{mine.pk}/", "/summons/", "/imports/", "/settings/users/"]:
+        resp = client.get(url)
+        assert resp.status_code == 302 and resp["Location"] == "/calls/", url
+    assert mine.complainant.national_id[-3:] not in client.get(f"/calls/{mine.pk}/").content.decode() or \
+        not mine.complainant.national_id
+
+
+def test_record_calls_flow(client, imported, caller, clerk):
+    c1, c2 = Case.objects.not_final().order_by("receipt_no")[:2]
+    for c in (c1, c2):
+        CallAssignment.objects.create(case=c, assignee=caller, assigned_by=clerk)
+    client.force_login(caller)
+    now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    # 1st call: phone off -> stays in queue
+    resp = client.post(f"/calls/{c1.pk}/", {"outcome": "off", "phone": "0812345678", "called_at": now,
+                                            "note": "", "go": "stay"})
+    assert resp.status_code == 302
+    a = CallAssignment.objects.get(case=c1)
+    assert a.attempt_count == 1 and not a.is_done and a.last_outcome == "off"
+    # appointment requires a date
+    resp = client.post(f"/calls/{c1.pk}/", {"outcome": "appointed", "called_at": now, "go": "stay"})
+    assert resp.status_code == 200 and "appointment_at" in resp.context["form"].errors
+    appt = (timezone.localtime() + dt.timedelta(days=3)).strftime("%Y-%m-%dT10:00")
+    resp = client.post(f"/calls/{c1.pk}/", {"outcome": "appointed", "called_at": now, "appointment_at": appt,
+                                            "note": "สะดวกมาวันพฤหัส", "go": "next"})
+    assert resp["Location"] == f"/calls/{c2.pk}/"  # goes to the next case in the queue
+    a.refresh_from_db()
+    assert a.is_done and a.attempt_count == 2
+    assert CallAttempt.objects.filter(case=c1).count() == 2
+    assert AuditLog.objects.filter(action="call", target_id=str(c1.pk)).count() == 2
+    # queue tabs
+    page = client.get("/calls/?tab=done")
+    assert [x.case_id for x in page.context["page"]] == [c1.pk]
+
+
+def test_callback_hides_case_until_due(imported, caller):
+    case = Case.objects.not_final().first()
+    CallAssignment.objects.create(case=case, assignee=caller)
+    record_call(case, caller, outcome=CallOutcome.CALLBACK, callback_at=timezone.now() + dt.timedelta(hours=2))
+    a = CallAssignment.objects.get(case=case)
+    assert not a.is_done and a.callback_at and not a.callback_due
+
+
+def test_register_text_and_excel(client, imported, caller, clerk):
+    case = Case.objects.not_final().exclude(contact_log="").first() or Case.objects.first()
+    when = timezone.make_aware(dt.datetime(2026, 10, 9, 10, 30))
+    attempt = record_call(case, caller, outcome=CallOutcome.OFF, called_at=when)
+    assert attempt.register_text() == f"ครั้งที่ {attempt.number} ไม่สามารถติดต่อได้ (ปิดเครื่อง) 9 ตค 69 เวลา 10.30 น."
+    combined = contact_log_with_calls(case)
+    assert attempt.register_text() in combined
+    if case.contact_log:
+        assert combined.startswith(case.contact_log.strip())
+    client.force_login(clerk)
+    wb = load_workbook(BytesIO(client.get("/calls/export.xlsx").content))
+    rows = list(wb.active.values)
+    assert rows[0][0] == "เลขรับแจ้ง" and rows[1][0] == case.receipt_no
+    # register export carries the call in 'บันทึกการติดต่อ'
+    admin = User.objects.create_user("adm", password="pass12345", role=Role.ADMIN)
+    client.force_login(admin)
+    reg = load_workbook(BytesIO(client.get("/cases/export.xlsx").content))
+    texts = [c.value for ws in reg.worksheets for c in ws["Y"] if c.value]
+    assert any(attempt.register_text() in t for t in texts)
+
+
+def test_outsource_cannot_manage(client, imported, caller):
+    client.force_login(caller)
+    assert client.get("/calls/assign/").status_code == 403
+    assert client.get("/calls/export.xlsx").status_code == 403
+
+
+def test_demo_has_call_staff(db, settings):
+    from apps.core.demo import bootstrap_demo
+
+    settings.DEMO_MODE = True
+    bootstrap_demo()
+    assert CallAssignment.objects.filter(assignee__username="call1").count() == 12
+    assert CallAttempt.objects.count() == 4

@@ -1,0 +1,111 @@
+{% extends "base.html" %}{% load thai ui %}
+{% block title %}โทร {{ case.receipt_no }}{% endblock %}
+{% block content %}
+<div class="mb-3 flex items-center gap-2 text-sm">
+  <a href="{% url 'calls_queue' %}" class="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} รายการที่ต้องโทร</a>
+  {% if next_pk %}<a href="{% url 'call_case' next_pk %}" class="ml-auto inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">ข้ามไปคดีถัดไป {% icon "chevron-right" "h-4 w-4" %}</a>{% endif %}
+</div>
+
+<div class="grid gap-5 lg:grid-cols-5">
+  <!-- case info -->
+  <div class="space-y-5 lg:col-span-2">
+    <div class="card">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-lg font-semibold">{{ case.receipt_no }}</span>
+        {% if assignment.is_done %}<span class="badge badge-green">ติดต่อเสร็จแล้ว</span>{% endif %}
+      </div>
+      <div class="mt-1 text-xl font-semibold text-slate-900">{{ case.victim_name|default:case.complainant.full_name|default:"-" }}</div>
+      <div class="mt-4 space-y-2">
+        {% for p in phones %}
+        <div class="flex items-center gap-2">
+          <a href="tel:{{ p }}" class="btn btn-success flex-1 justify-start py-2.5 text-base">{% icon "phone" "h-5 w-5" %} <span class="font-mono tracking-wide">{{ p }}</span></a>
+          <button type="button" class="btn py-2.5" onclick="document.getElementById('id_phone').value='{{ p }}'" title="ใช้เบอร์นี้ในการบันทึก">เลือก</button>
+        </div>
+        {% empty %}<div class="alert alert-warning">{% icon "alert" "h-5 w-5" %} ไม่มีเบอร์โทรในข้อมูล</div>{% endfor %}
+      </div>
+      <dl class="dl mt-5 border-t border-slate-100 pt-4">
+        <dt>วันที่รับแจ้ง</dt><dd>{{ case.report_date|thai_date:"full" }}</dd>
+        <dt>ประเภทคดี</dt><dd>{{ case.case_type|default:"-" }}</dd>
+        <dt>มูลค่าความเสียหาย</dt><dd>{{ case.damage_amount|money }} บาท</dd>
+        <dt>สถานะคดี</dt><dd>{% if case.status %}<span class="badge {{ case.status|status_class }}">{{ case.status.name }}</span>{% endif %}</dd>
+        <dt>หน่วย</dt><dd>{{ case.unit_raw|default:"-" }}</dd>
+        <dt>พนักงานสอบสวน</dt><dd>{% if case.investigator %}{{ case.investigator }}{% if case.investigator.phone %}<div class="text-xs text-slate-500">โทร {{ case.investigator.phone }}</div>{% endif %}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %}</dd>
+        {% if assignment %}<dt>ผู้รับผิดชอบโทร</dt><dd>{{ assignment.assignee.display_name }}</dd>{% endif %}
+      </dl>
+      {% if case.contact_log %}
+      <div class="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
+        <div class="mb-1 text-xs font-medium text-slate-500">บันทึกการติดต่อเดิม (จากไฟล์ทะเบียน)</div>
+        <div class="whitespace-pre-line text-slate-700">{{ case.contact_log }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-header">{% icon "clock" "h-5 w-5 text-slate-400" %}<h2>ประวัติการโทร ({{ attempts|length }})</h2>
+        {% if assignment.is_done and perm_calls_manage %}<form method="post" action="{% url 'call_reopen' case.pk %}" class="ml-auto">{% csrf_token %}<button class="btn btn-sm">เปิดงานโทรอีกครั้ง</button></form>{% endif %}
+      </div>
+      <ol class="relative space-y-4 border-l border-slate-200 pl-5">
+        {% for a in attempts %}
+        <li>
+          <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full ring-4 ring-white {% if a.reached %}bg-emerald-500{% else %}bg-amber-400{% endif %}"></span>
+          <div class="text-sm font-medium">ครั้งที่ {{ a.number }} · {{ a.get_outcome_display }}</div>
+          <div class="text-xs text-slate-500">{{ a.called_at|thai_date:"datetime" }} · {{ a.phone|default:"-" }} · {{ a.created_by.display_name|default:"-" }}</div>
+          {% if a.note %}<div class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ a.note }}</div>{% endif %}
+          {% if a.callback_at %}<div class="mt-1 text-xs text-amber-700">นัดโทรกลับ {{ a.callback_at|thai_date:"datetime" }}</div>{% endif %}
+          {% if a.appointment_at %}<div class="mt-1 text-xs text-emerald-700">นัดเข้าพบพนักงานสอบสวน {{ a.appointment_at|thai_date:"datetime" }}</div>{% endif %}
+        </li>
+        {% empty %}<li class="text-sm text-slate-500">ยังไม่เคยโทร</li>{% endfor %}
+      </ol>
+    </div>
+  </div>
+
+  <!-- record form -->
+  <form method="post" class="card lg:col-span-3" id="call-form">{% csrf_token %}
+    <div class="card-header">{% icon "pencil" "h-5 w-5 text-slate-400" %}<h2>บันทึกผลการโทร ครั้งที่ {{ attempts|length|add:1 }}</h2></div>
+    {% if form.non_field_errors %}<div class="alert alert-error mb-4">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="mb-2 text-sm font-medium text-emerald-700">ติดต่อได้</div>
+    <div class="grid gap-2 sm:grid-cols-2">
+      {% for value, label in outcomes_reached %}
+      <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm transition hover:border-emerald-300 hover:bg-emerald-50/50 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 has-[:checked]:ring-1 has-[:checked]:ring-emerald-500">
+        <input type="radio" name="outcome" value="{{ value }}" class="mt-0.5 h-4 w-4 text-emerald-600" {% if form.outcome.value == value %}checked{% endif %} required>
+        <span>{{ label }}</span></label>
+      {% endfor %}
+    </div>
+    <div class="mb-2 mt-4 text-sm font-medium text-amber-700">ติดต่อไม่ได้</div>
+    <div class="grid gap-2 sm:grid-cols-2">
+      {% for value, label in outcomes_not %}
+      <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm transition hover:border-amber-300 hover:bg-amber-50/50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 has-[:checked]:ring-1 has-[:checked]:ring-amber-500">
+        <input type="radio" name="outcome" value="{{ value }}" class="mt-0.5 h-4 w-4 text-amber-600" {% if form.outcome.value == value %}checked{% endif %}>
+        <span>{{ label }}</span></label>
+      {% endfor %}
+    </div>
+    {{ form.outcome.errors }}
+
+    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+      <div id="f-appointment" class="hidden sm:col-span-2 rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-200"><label class="label" for="id_appointment_at">{{ form.appointment_at.label }} *</label>{{ form.appointment_at }}{{ form.appointment_at.errors }}
+        <span class="helptext">แจ้งพนักงานสอบสวน: {% if case.investigator %}{{ case.investigator }}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %}</span></div>
+      <div id="f-callback" class="hidden sm:col-span-2 rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200"><label class="label" for="id_callback_at">{{ form.callback_at.label }}</label>{{ form.callback_at }}{{ form.callback_at.errors }}
+        <span class="helptext">คดีจะกลับมาอยู่ในแท็บ "ต้องโทร" เมื่อถึงเวลา</span></div>
+      <div><label class="label" for="id_phone">{{ form.phone.label }}</label>{{ form.phone }}{{ form.phone.errors }}</div>
+      <div><label class="label" for="id_called_at">{{ form.called_at.label }}</label>{{ form.called_at }}{{ form.called_at.errors }}</div>
+      <div class="sm:col-span-2"><label class="label" for="id_note">{{ form.note.label }}</label>{{ form.note }}{{ form.note.errors }}</div>
+    </div>
+
+    <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+      <button class="btn btn-primary" name="go" value="next">{% icon "check" "h-4 w-4" %} บันทึก แล้วไปคดีถัดไป</button>
+      <button class="btn" name="go" value="stay">บันทึก</button>
+    </div>
+  </form>
+</div>
+<script>
+(function(){
+  const form=document.getElementById('call-form');
+  const show=()=>{const v=(form.querySelector('input[name=outcome]:checked')||{}).value;
+    document.getElementById('f-appointment').classList.toggle('hidden',v!=='appointed');
+    const cb=['callback','off','no_answer','busy','voicemail'].includes(v);
+    document.getElementById('f-callback').classList.toggle('hidden',!cb);};
+  form.addEventListener('change',show); show();
+})();
+</script>
+{% endblock %}

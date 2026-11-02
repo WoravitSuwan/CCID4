@@ -3,6 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponse
 from django.urls import path
 
+from apps.calls import views as cv
 from apps.core import settings_views as sv
 from apps.documents import views as dv
 from apps.imports import views as iv
@@ -44,6 +45,13 @@ urlpatterns = [
     path("exports/new/", dv.export_new, name="export_new"),
     path("exports/<int:pk>/", dv.export_job, name="export_job"),
     path("exports/<int:pk>/download/", dv.export_download, name="export_download"),
+    # victim phone follow-up (outsource call staff)
+    path("calls/", cv.queue, name="calls_queue"),
+    path("calls/assign/", cv.assign_view, name="calls_assign"),
+    path("calls/assign/bulk/", cv.assign_bulk, name="calls_assign_bulk"),
+    path("calls/export.xlsx", cv.export_calls, name="calls_export"),
+    path("calls/<int:pk>/", cv.call_case, name="call_case"),
+    path("calls/<int:pk>/reopen/", cv.reopen, name="call_reopen"),
     # settings
     path("settings/", sv.settings_home, name="settings_home"),
     path("settings/investigators/", sv.investigators, name="settings_investigators"),

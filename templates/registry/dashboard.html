@@ -88,6 +88,17 @@
         <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">4</span><div><a href="{% url 'export_jobs' %}" class="font-medium">ส่งออกและพิมพ์</a><div class="text-slate-500">Word / PDF พร้อมใบจ่าหน้าซอง</div></div></li>
       </ol>
     </div>
+    {% if perm_calls_manage %}
+    <a class="card block hover:ring-indigo-200" href="{% url 'calls_queue' %}">
+      <div class="mb-3 flex items-center gap-2">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ติดต่อผู้เสียหาย (outsource)</h2></div>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div><div class="text-xl font-bold text-slate-900">{{ call_stats.assigned }}</div><div class="text-xs text-slate-500">มอบหมาย</div></div>
+        <div><div class="text-xl font-bold text-emerald-700">{{ call_stats.done }}</div><div class="text-xs text-slate-500">เสร็จแล้ว</div></div>
+        <div><div class="text-xl font-bold text-indigo-700">{{ call_stats.today }}</div><div class="text-xs text-slate-500">โทรวันนี้</div></div>
+      </div>
+      <div class="mt-3 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-emerald-500" style="width: {{ call_stats.done|percent:call_stats.assigned }}%"></div></div>
+    </a>
+    {% endif %}
     <div class="card text-sm text-slate-600">
       <div class="flex items-center gap-2">{% icon "users" "h-5 w-5 text-slate-400" %} ผู้แจ้งที่ไม่อยู่ในทะเบียนคดีของกอง <span class="ml-auto font-semibold text-slate-900">{{ stats.complainants_outside|intcomma }}</span></div>
       <p class="mt-1 text-xs text-slate-400">เก็บไว้สำหรับจับคู่ภายหลัง ไม่แสดงในทะเบียน</p>

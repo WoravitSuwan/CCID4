@@ -58,6 +58,37 @@ class Command(BaseCommand):
         if inv and not User.objects.filter(username="inv").exists():
             User.objects.create_user("inv", password=DEMO_PASSWORD, role=Role.INVESTIGATOR, investigator=inv,
                                      first_name="ศักดิ์ชัย")
+        # outsource call staff with some assigned cases and a few recorded calls
+        import datetime as dt
+
+        from django.utils import timezone
+
+        from apps.calls.models import CallOutcome
+        from apps.calls.services import assign, record_call
+        from apps.registry.models import Case
+
+        callers = []
+        for username, first in (("call1", "สมใจ (outsource)"), ("call2", "มานี (outsource)")):
+            caller = User.objects.filter(username=username).first()
+            if caller is None:
+                caller = User.objects.create_user(username, password=DEMO_PASSWORD, role=Role.OUTSOURCE,
+                                                  first_name=first)
+            callers.append(caller)
+        admin = User.objects.filter(username="admin").first()
+        open_cases = list(Case.objects.not_final().order_by("receipt_no"))
+        if open_cases and not callers[0].call_assignments.exists():
+            assign(open_cases[:12], callers[0], admin)
+            assign(open_cases[12:20], callers[1], admin)
+            now = timezone.now()
+            samples = [
+                (open_cases[0], CallOutcome.OFF, "", None),
+                (open_cases[0], CallOutcome.APPOINTED, "สะดวกเข้าพบช่วงเช้า", now + dt.timedelta(days=7)),
+                (open_cases[1], CallOutcome.NO_ANSWER, "", None),
+                (open_cases[2], CallOutcome.INFO, "ส่งสลิปโอนเงินเพิ่มเติมทางไลน์แล้ว", None),
+            ]
+            for idx, (case, outcome, note, appointment) in enumerate(samples):
+                record_call(case, callers[0], outcome=outcome, note=note, appointment_at=appointment,
+                            phone=case.victim_phone, called_at=now - dt.timedelta(hours=5 - idx))
         self.stdout.write(self.style.SUCCESS(
-            f"พร้อมแล้ว ผู้ใช้ทดลอง admin / head / clerk / inv รหัสผ่าน {DEMO_PASSWORD} "
+            f"พร้อมแล้ว ผู้ใช้ทดลอง admin / head / clerk / inv / call1 / call2 รหัสผ่าน {DEMO_PASSWORD} "
             "(ชื่อ 'ธนพล มั่นคงสมมติ' ปล่อยไว้ยังไม่ผูก เพื่อลองหน้าผูกชื่อ)"))

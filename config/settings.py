@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "apps.registry",
     "apps.imports",
     "apps.documents",
+    "apps.calls",
 ]
 
 MIDDLEWARE = [

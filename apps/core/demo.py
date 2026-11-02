@@ -9,6 +9,7 @@ from django.db import connection
 logger = logging.getLogger(__name__)
 DEMO_ACCOUNTS = [
     ("admin", "ผู้ดูแลระบบ"), ("head", "หัวหน้า"), ("clerk", "ธุรการ"), ("inv", "พนักงานสอบสวน"),
+    ("call1", "outsource โทร"), ("call2", "outsource โทร"),
 ]
 
 

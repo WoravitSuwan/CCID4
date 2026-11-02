@@ -25,6 +25,8 @@ def app_context(request):
         "perm_settings": perms.can_manage_settings(user),
         "perm_issue_any": perms.can_issue_any(user),
         "pdf_available": pdf_available(),
+        "perm_calls_manage": perms.can_manage_calls(user),
+        "is_outsource": perms.is_outsource(user),
     }
     if perms.is_admin(user):
         from apps.registry.models import InvestigatorAlias, Status

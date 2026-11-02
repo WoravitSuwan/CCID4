@@ -22,6 +22,24 @@ def is_admin(user) -> bool:
     return role_of(user) == Role.ADMIN
 
 
+def is_outsource(user) -> bool:
+    return role_of(user) == Role.OUTSOURCE
+
+
+def can_manage_calls(user) -> bool:
+    """Assign cases to call staff, see every call result, export call reports."""
+    return role_of(user) in {Role.ADMIN, Role.HEAD, Role.CLERK}
+
+
+def can_record_call(user, case) -> bool:
+    if can_manage_calls(user):
+        return True
+    if is_outsource(user):
+        assignment = getattr(case, "call_assignment", None)
+        return bool(assignment and assignment.assignee_id == user.pk)
+    return role_of(user) == Role.INVESTIGATOR and owns_case(user, case)
+
+
 def can_import(user) -> bool:
     return role_of(user) in {Role.ADMIN, Role.CLERK}
 

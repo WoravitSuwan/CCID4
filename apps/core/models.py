@@ -11,6 +11,8 @@ class AuditAction(models.TextChoices):
     VIEW_ID = "view_id", "ดูเลขบัตรประชาชน"
     EDIT = "edit", "แก้ไขข้อมูล"
     SETTINGS = "settings", "แก้ไขการตั้งค่า"
+    CALL = "call", "บันทึกผลการติดต่อผู้เสียหาย"
+    ASSIGN = "assign", "มอบหมายงานโทร"
 
 
 class AuditLog(models.Model):

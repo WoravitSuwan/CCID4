@@ -14,6 +14,9 @@ from django.views.decorators.http import require_POST
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
+from apps.calls.models import CallAssignment
+from apps.calls.services import contact_log_with_calls
+from apps.calls.views import call_staff
 from apps.core import permissions as perms
 from apps.core.downloads import content_disposition
 from apps.core.audit import log
@@ -67,7 +70,17 @@ def dashboard(request):
         per_inv.append({"inv": None, "total": total_map.get(None, 0), "open": open_map.get(None, 0),
                         "never": never_map.get(None, 0), "waiting": 0, "absent": 0})
     per_inv.sort(key=lambda r: -r["open"])
-    return render(request, "registry/dashboard.html", {"stats": stats, "per_inv": per_inv})
+    from apps.calls.models import REACHED, CallAssignment, CallAttempt
+
+    today_calls = CallAttempt.objects.filter(called_at__date=timezone.localdate())
+    call_stats = {
+        "assigned": CallAssignment.objects.count(),
+        "done": CallAssignment.objects.filter(is_done=True).count(),
+        "today": today_calls.count(),
+        "today_reached": today_calls.filter(outcome__in=REACHED).count(),
+    }
+    return render(request, "registry/dashboard.html", {"stats": stats, "per_inv": per_inv,
+                                                       "call_stats": call_stats})
 
 
 # --------------------------------------------------------------------------- case list
@@ -135,6 +148,7 @@ def case_list(request):
         "form": form, "page": page, "total": page.paginator.count,
         "can_issue": perms.can_issue_any(request.user), "statuses": Status.objects.all(),
         "can_bulk_status": perms.can_issue_any(request.user),
+        "call_staff": call_staff() if perms.can_manage_calls(request.user) else [],
     })
 
 
@@ -162,6 +176,9 @@ def case_detail(request, pk):
         "can_view_id": perms.can_view_full_id(request.user, case), "blockers": case.issue_blockers(),
         "conflict": case.address_conflict(), "results": SummonsResult.choices,
         "effective": case.effective_address(), "statuses": Status.objects.all(),
+        "calls": case.calls.select_related("created_by"),
+        "call_assignment": CallAssignment.objects.filter(case=case).select_related("assignee").first(),
+        "can_record_call": perms.can_record_call(request.user, case),
     })
 
 
@@ -251,7 +268,7 @@ REGISTER_EXPORT = [
     ("บช.", lambda c: c.bureau), ("บก./ภ.จว.", lambda c: c.division), ("หน่วยที่รับผิดชอบ", lambda c: c.unit_raw),
     ("พนักงานสอบสวน", lambda c: c.investigator_raw), ("พนักงานสืบสวน", lambda c: c.detective),
     ("สถานะ", lambda c: c.status.name if c.status_id else ""), ("เบอร์โทรศัพท์ผู้เสียหาย", lambda c: c.victim_phone),
-    ("เลขอ้างอิงธนาคาร", lambda c: c.bank_ref), ("บันทึกการติดต่อ", lambda c: c.contact_log),
+    ("เลขอ้างอิงธนาคาร", lambda c: c.bank_ref), ("บันทึกการติดต่อ", lambda c: contact_log_with_calls(c)),
     ("ประจำวัน", lambda c: c.daily_log), ("หมายเหตุ", lambda c: c.remark),
 ]
 TEXT_COLUMNS = {"เลขรับแจ้ง", "เบอร์โทรศัพท์ผู้เสียหาย", "เลขอ้างอิงธนาคาร", "เลขคดีอาญา"}
@@ -261,12 +278,12 @@ def export_register(request):
     if not perms.can_export_register(request.user):
         raise PermissionDenied
     _form, qs = filtered_cases(request)
-    qs = qs.order_by("source_sheet", "report_date", "receipt_no")
+    qs = qs.order_by("source_sheet", "report_date", "receipt_no").prefetch_related("calls")
     wb = Workbook(write_only=False)
     wb.remove(wb.active)
     sheets = {}
     count = 0
-    for case in qs.iterator(chunk_size=2000):
+    for case in qs:
         name = (case.source_sheet or "ทะเบียน")[:31]
         ws = sheets.get(name)
         if ws is None:

@@ -1,0 +1,86 @@
+{% extends "base.html" %}{% load thai ui humanize %}
+{% block title %}ติดต่อผู้เสียหาย{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{% if is_outsource %}รายการคดีที่ต้องโทร{% else %}ติดต่อผู้เสียหาย{% endif %}</h1>
+    <p class="page-sub">{% if is_outsource %}คดีที่ได้รับมอบหมายให้คุณโทรติดต่อผู้เสียหาย{% else %}ติดตามผลการโทรของเจ้าหน้าที่ outsource{% endif %}</p>
+  </div>
+  {% if can_manage %}
+  <div class="ml-auto flex flex-wrap gap-2">
+    <a class="btn" href="{% url 'calls_export' %}">{% icon "download" "h-4 w-4" %} ส่งออกผลการโทร (Excel)</a>
+    <a class="btn btn-primary" href="{% url 'calls_assign' %}">{% icon "plus" "h-4 w-4" %} มอบหมายเลขรับแจ้ง</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="mb-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  <div class="stat"><div class="stat-icon bg-indigo-50 text-indigo-600">{% icon "refresh" "h-6 w-6" %}</div><div><div class="stat-label">ต้องโทร</div><div class="stat-value">{{ counts.todo|intcomma }}</div></div></div>
+  <div class="stat"><div class="stat-icon bg-amber-50 text-amber-600">{% icon "clock" "h-6 w-6" %}</div><div><div class="stat-label">นัดโทรกลับ</div><div class="stat-value">{{ counts.callback|intcomma }}</div></div></div>
+  <div class="stat"><div class="stat-icon bg-sky-50 text-sky-600">{% icon "calendar" "h-6 w-6" %}</div><div><div class="stat-label">โทรวันนี้</div><div class="stat-value">{{ stats.today|intcomma }}</div><div class="text-xs text-slate-400">ติดต่อได้ {{ stats.today_reached }}</div></div></div>
+  <div class="stat"><div class="stat-icon bg-emerald-50 text-emerald-600">{% icon "check" "h-6 w-6" %}</div><div><div class="stat-label">เสร็จแล้ว</div><div class="stat-value">{{ counts.done|intcomma }}</div><div class="text-xs text-slate-400">จาก {{ counts.all|intcomma }} คดี</div></div></div>
+</div>
+
+{% if can_manage and per_staff %}
+<div class="table-wrap mb-5">
+  <div class="flex items-center gap-2 px-5 py-4">{% icon "users" "h-5 w-5 text-slate-400" %}<h2>ความคืบหน้าตามเจ้าหน้าที่</h2></div>
+  <table class="table">
+    <thead><tr><th>เจ้าหน้าที่</th><th class="text-right">มอบหมาย</th><th>เสร็จแล้ว</th><th class="text-right">ยังไม่เคยโทร</th></tr></thead>
+    <tbody>{% for r in per_staff %}
+      <tr><td><a href="?assignee={{ r.assignee }}&tab=all" class="font-medium">{{ r.assignee__first_name|default:r.assignee__username }} {{ r.assignee__last_name }}</a></td>
+        <td class="text-right tabular-nums">{{ r.total|intcomma }}</td>
+        <td class="min-w-[160px]"><div class="flex items-center gap-2"><div class="h-1.5 flex-1 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-emerald-500" style="width: {{ r.done|percent:r.total }}%"></div></div><span class="w-14 text-right tabular-nums">{{ r.done }} ({{ r.done|percent:r.total }}%)</span></div></td>
+        <td class="text-right tabular-nums">{{ r.never|intcomma }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="mb-3 flex flex-wrap items-center gap-2">
+  <nav class="flex flex-wrap gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200/80">
+    {% for key, label in tabs %}
+    <a href="?tab={{ key }}{% if request.GET.assignee %}&assignee={{ request.GET.assignee }}{% endif %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if tab == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="{% if tab == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ counts|get_item:key }}</span></a>
+    {% endfor %}
+  </nav>
+  <form method="get" class="ml-auto flex gap-2">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    {% if can_manage %}
+    <select name="assignee" class="input w-auto py-1.5" onchange="this.form.submit()"><option value="">เจ้าหน้าที่ทุกคน</option>
+      {% for u in staff %}<option value="{{ u.pk }}" {% if request.GET.assignee == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select>
+    {% endif %}
+    <div class="relative"><span class="pointer-events-none absolute left-3 top-2 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
+      <input class="input w-56 py-1.5 pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ / เบอร์"></div>
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th>{% if can_manage %}<th>ผู้รับผิดชอบ</th>{% endif %}<th></th></tr></thead>
+    <tbody>
+    {% for a in page %}
+      <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button'))location.href='{% url 'call_case' a.case_id %}'">
+        <td class="whitespace-nowrap"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div></td>
+        <td class="font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
+        <td class="whitespace-nowrap font-mono">{{ a.case.victim_phone|default:a.case.complainant.phone|default:"-" }}</td>
+        <td class="max-w-[14rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
+        <td class="text-center tabular-nums">{% if a.attempt_count %}{{ a.attempt_count }}{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
+        <td class="text-sm">
+          {% if a.last_outcome %}<span class="badge {% if a.last_reached %}badge-green{% else %}badge-amber{% endif %}">{{ a.get_last_outcome_display }}</span>
+          <div class="text-xs text-slate-400">{{ a.last_call_at|thai_date:"datetime" }}</div>{% else %}<span class="text-slate-300">–</span>{% endif %}
+          {% if a.callback_at and not a.is_done %}<div class="text-xs {% if a.callback_due %}font-semibold text-amber-700{% else %}text-slate-500{% endif %}">โทรกลับ {{ a.callback_at|thai_date:"datetime" }}</div>{% endif %}
+        </td>
+        {% if can_manage %}<td class="whitespace-nowrap text-sm">{{ a.assignee.display_name }}</td>{% endif %}
+        <td class="text-right">{% if a.is_done %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8" class="py-16 text-center">
+        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">{% icon "check" "h-6 w-6" %}</div>
+        <div class="font-medium text-slate-700">ไม่มีรายการในแท็บนี้</div>
+        {% if can_manage %}<div class="text-sm text-slate-500"><a href="{% url 'calls_assign' %}">มอบหมายเลขรับแจ้ง</a> ให้เจ้าหน้าที่โทร</div>{% endif %}
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "_pagination.html" %}
+{% endblock %}

@@ -3,6 +3,8 @@ from django.shortcuts import redirect
 from django.urls import reverse
 
 PUBLIC_PREFIXES = ("/accounts/login", "/static/", "/healthz")
+# Call staff (outsource) may only use the call pages - everything else redirects there.
+OUTSOURCE_PREFIXES = ("/calls/", "/accounts/", "/static/", "/healthz")
 
 
 class LoginRequiredMiddleware:
@@ -20,4 +22,7 @@ class LoginRequiredMiddleware:
                 response["HX-Redirect"] = reverse(settings.LOGIN_URL)
                 return response
             return redirect(f"{reverse(settings.LOGIN_URL)}?next={request.get_full_path()}")
+        if (request.user.is_authenticated and request.user.effective_role == "outsource"
+                and not request.path.startswith(OUTSOURCE_PREFIXES)):
+            return redirect("calls_queue")
         return self.get_response(request)

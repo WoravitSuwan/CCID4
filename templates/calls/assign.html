@@ -1,0 +1,33 @@
+{% extends "base.html" %}{% load ui %}
+{% block title %}มอบหมายงานโทร{% endblock %}
+{% block content %}
+<a href="{% url 'calls_queue' %}" class="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} ติดต่อผู้เสียหาย</a>
+<div class="page-header"><div><h1>มอบหมายเลขรับแจ้งให้เจ้าหน้าที่โทร</h1>
+  <p class="page-sub">วางรายการ case id (เลขรับแจ้ง) ที่ต้องการให้เจ้าหน้าที่ outsource โทรติดต่อผู้เสียหาย</p></div></div>
+<div class="grid gap-5 lg:grid-cols-3">
+  <form method="post" class="card space-y-4 lg:col-span-2">{% csrf_token %}
+    <div><label class="label" for="id_receipts">{{ form.receipts.label }}</label>{{ form.receipts }}{{ form.receipts.errors }}
+      <span class="helptext">คัดลอกคอลัมน์เลขรับแจ้งจาก Excel มาวางได้เลย ระบบตัดช่องว่างและแปลงเป็นตัวพิมพ์ใหญ่ให้</span></div>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div><label class="label" for="id_assignee">{{ form.assignee.label }}</label>{{ form.assignee }}{{ form.assignee.errors }}</div>
+      <label class="flex items-center gap-2 self-end pb-2 text-sm">{{ form.reassign }} {{ form.reassign.label }}</label>
+    </div>
+    <button class="btn btn-primary">{% icon "check" "h-4 w-4" %} มอบหมาย</button>
+  </form>
+  <div class="space-y-4">
+    {% if result %}
+    <div class="card text-sm">
+      <h2 class="mb-2">ผลการมอบหมาย</h2>
+      <dl class="dl"><dt>เลขที่วางมา</dt><dd>{{ result.total }}</dd><dt>มอบหมายใหม่</dt><dd>{{ result.created }}</dd>
+        <dt>ย้ายจากคนอื่น</dt><dd>{{ result.moved }}</dd><dt>คงเดิม</dt><dd>{{ result.kept }}</dd></dl>
+      {% if result.not_found %}<div class="alert alert-warning mt-3">{% icon "alert" "h-5 w-5 shrink-0" %}<div>ไม่พบในทะเบียนคดี {{ result.not_found|length }} เลข:<div class="mt-1 font-mono text-xs">{{ result.not_found|join:", " }}</div></div></div>{% endif %}
+    </div>
+    {% endif %}
+    <div class="card text-sm text-slate-600">
+      <h2 class="mb-2">วิธีอื่น</h2>
+      <p>ในหน้า <a href="{% url 'case_list' %}?open=on">ทะเบียนคดี</a> ติ๊กเลือกคดี แล้วเลือก "มอบหมายให้โทร" ที่แถบด้านล่างได้เช่นกัน</p>
+      <p class="mt-2">เจ้าหน้าที่ outsource เห็นเฉพาะคดีที่ได้รับมอบหมาย และไม่เห็นเลขบัตรประชาชน</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

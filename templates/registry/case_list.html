@@ -100,6 +100,15 @@
       </select>
       <button class="btn btn-sm border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" type="submit" formaction="{% url 'case_status_bulk' %}"
         onclick="if(!this.form.status.value){alert('เลือกสถานะใหม่ก่อน');return false;}return confirm('เปลี่ยนสถานะคดีที่เลือก?')">{% icon "tag" "h-4 w-4" %} บันทึกสถานะ</button>
+      {% if call_staff %}
+      <span class="hidden h-5 w-px bg-white/20 sm:block"></span>
+      <select name="assignee" class="rounded-md border-0 bg-white/10 py-1 pl-2 pr-8 text-sm text-white focus:ring-indigo-400" aria-label="มอบหมายให้โทร">
+        <option value="" class="text-slate-900">มอบหมายให้โทร…</option>
+        {% for u in call_staff %}<option value="{{ u.pk }}" class="text-slate-900">{{ u.display_name }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" type="submit" formaction="{% url 'calls_assign_bulk' %}"
+        onclick="if(!this.form.assignee.value){alert('เลือกเจ้าหน้าที่ผู้โทรก่อน');return false;}">{% icon "users" "h-4 w-4" %} มอบหมาย</button>
+      {% endif %}
       <button type="button" class="btn btn-ghost btn-sm text-slate-300 hover:bg-white/10 hover:text-white" onclick="clearSel()">{% icon "x" "h-4 w-4" %}</button>
     </div>
   </div>
