@@ -17,8 +17,36 @@ class PdfConversionError(RuntimeError):
     pass
 
 
+SOFFICE_CANDIDATES = [
+    # Windows ("soffice.com" waits for the conversion to finish in a console)
+    r"C:\Program Files\LibreOffice\program\soffice.com",
+    r"C:\Program Files\LibreOffice\program\soffice.exe",
+    r"C:\Program Files (x86)\LibreOffice\program\soffice.com",
+    r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+    # macOS
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+]
+
+
+def soffice_path() -> str | None:
+    """LibreOffice executable: SOFFICE_BIN setting, PATH, then standard install folders."""
+    if settings.SOFFICE_BIN:
+        found = shutil.which(settings.SOFFICE_BIN) or (settings.SOFFICE_BIN if Path(settings.SOFFICE_BIN).exists()
+                                                       else None)
+        if found:
+            return found
+    for name in ("soffice", "libreoffice"):
+        found = shutil.which(name)
+        if found:
+            return found
+    for candidate in SOFFICE_CANDIDATES:
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
 def soffice_available() -> bool:
-    return shutil.which(settings.SOFFICE_BIN) is not None
+    return soffice_path() is not None
 
 
 def convert_many(docx_paths, out_dir) -> list[Path]:
@@ -28,12 +56,15 @@ def convert_many(docx_paths, out_dir) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     if not docx_paths:
         return []
-    if not soffice_available():
-        raise PdfConversionError("ไม่พบโปรแกรม LibreOffice (soffice) บนเครื่อง จึงสร้าง PDF ไม่ได้")
+    soffice = soffice_path()
+    if not soffice:
+        raise PdfConversionError(
+            "ไม่พบโปรแกรม LibreOffice บนเครื่อง จึงสร้าง PDF ไม่ได้ (ส่งออกเป็น Word ได้ตามปกติ) "
+            "— ติดตั้ง LibreOffice จาก https://www.libreoffice.org แล้วเปิดระบบใหม่")
     # A private profile per run lets several conversions run in parallel.
     profile = Path(tempfile.gettempdir()) / f"lo_profile_{uuid.uuid4().hex}"
     cmd = [
-        settings.SOFFICE_BIN, f"-env:UserInstallation=file://{profile}", "--headless", "--norestore",
+        soffice, f"-env:UserInstallation={profile.as_uri()}", "--headless", "--norestore",
         "--nolockcheck", "--convert-to", "pdf:writer_pdf_Export", "--outdir", str(out_dir),
         *[str(p) for p in docx_paths],
     ]

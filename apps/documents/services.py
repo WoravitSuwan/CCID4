@@ -400,14 +400,12 @@ def run_export(job: ExportJob):
 
 
 def start_export(job: ExportJob):
-    """Run small exports inline, large ones in Celery."""
+    """Run small exports inline, large ones in the background (Celery or thread)."""
+    from apps.core.background import run_background
+
     from .tasks import export_job
 
-    count = job.summonses.count()
-    if count > settings.EXPORT_ASYNC_THRESHOLD and not settings.CELERY_TASK_ALWAYS_EAGER:
-        try:
-            export_job.delay(job.pk)
-            return
-        except Exception:  # broker down: fall back to inline
-            logger.exception("celery unavailable, exporting inline")
-    export_job(job.pk)
+    if job.summonses.count() > settings.EXPORT_ASYNC_THRESHOLD:
+        run_background(export_job, job.pk)
+    else:
+        export_job(job.pk)

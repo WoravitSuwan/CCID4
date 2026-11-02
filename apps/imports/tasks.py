@@ -52,13 +52,7 @@ def commit_batch(batch_id, user_id=None):
 
 
 def run(task, *args):
-    """Queue in Celery; if the broker is unavailable run inline so the UI never hangs."""
-    from django.conf import settings
+    """Run an import step in the background (Celery, thread or inline - see apps.core.background)."""
+    from apps.core.background import run_background
 
-    if settings.CELERY_TASK_ALWAYS_EAGER:
-        return task(*args)
-    try:
-        return task.delay(*args)
-    except Exception:
-        logger.exception("celery unavailable, running %s inline", task.name)
-        return task(*args)
+    return run_background(task, *args)

@@ -1,13 +1,13 @@
 # --- real data must never be committed (PDPA) ---
-data/
-media/
+/data/
+/media/
 *.xlsx
 *.xls
 *.csv
 !sample_data/*.xlsx
 !apps/imports/data/thai_postcodes.csv
 *.doc
-backups/
+/backups/
 *.sql
 *.dump
 
@@ -28,3 +28,7 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# local install (start-local)
+.venv/
+local.env

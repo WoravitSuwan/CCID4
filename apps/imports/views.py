@@ -1,6 +1,5 @@
 import io
 from pathlib import Path
-from urllib.parse import quote
 
 from django import forms
 from django.contrib import messages
@@ -12,6 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from apps.core import permissions as perms
+from apps.core.downloads import content_disposition
 from apps.core.audit import log
 from apps.core.models import AuditAction
 from apps.registry.forms import StyledForm
@@ -168,5 +168,5 @@ def import_issues_download(request, pk):
     log(request, AuditAction.DOWNLOAD, batch, f"ดาวน์โหลดรายการปัญหาการนำเข้า #{batch.pk}")
     resp = HttpResponse(buf.getvalue(),
                         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    resp["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(f'ปัญหาการนำเข้า_{batch.pk}.xlsx')}"
+    resp["Content-Disposition"] = content_disposition(f"ปัญหาการนำเข้า_{batch.pk}.xlsx")
     return resp

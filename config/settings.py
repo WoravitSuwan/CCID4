@@ -95,10 +95,17 @@ if env("POSTGRES_HOST"):
         }
     }
 else:
+    # Local install (start-local): one SQLite file in data/, WAL mode so the
+    # background thread and web requests do not block each other.
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "data" / "db.sqlite3",
+            "NAME": Path(env("SQLITE_PATH", BASE_DIR / "data" / "db.sqlite3")),
+            "OPTIONS": {
+                "timeout": 30,
+                "transaction_mode": "IMMEDIATE",
+                "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+            },
         }
     }
 
@@ -141,6 +148,8 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = None
 CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", False)
+# "celery" (Docker), "thread" (local install without Redis) or "inline"
+BACKGROUND_TASKS = env("BACKGROUND_TASKS", "celery")
 CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULE = {
@@ -151,7 +160,7 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 # Application settings
-SOFFICE_BIN = env("SOFFICE_BIN", "soffice")
+SOFFICE_BIN = env("SOFFICE_BIN", "")  # empty = auto-detect (PATH, then standard install folders)
 SOFFICE_TIMEOUT = env_int("SOFFICE_TIMEOUT", 600)
 EXPORT_ASYNC_THRESHOLD = env_int("EXPORT_ASYNC_THRESHOLD", 20)
 DEFAULT_RETENTION_DAYS = env_int("MEDIA_RETENTION_DAYS", 30)

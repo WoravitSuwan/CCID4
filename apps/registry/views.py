@@ -14,6 +14,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 from apps.core import permissions as perms
+from apps.core.downloads import content_disposition
 from apps.core.audit import log
 from apps.core.models import AuditAction
 from apps.documents.models import Summons, SummonsResult
@@ -287,7 +288,6 @@ def export_register(request):
     stamp = timezone.localtime().strftime("%Y%m%d_%H%M")
     response = HttpResponse(buf.getvalue(),
                             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    from urllib.parse import quote
 
-    response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(f'ทะเบียนคดี_{stamp}.xlsx')}"
+    response["Content-Disposition"] = content_disposition(f"ทะเบียนคดี_{stamp}.xlsx")
     return response

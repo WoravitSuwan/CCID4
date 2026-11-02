@@ -258,14 +258,13 @@ def template_action(request, pk):
 
 
 def template_download(request, pk):
-    from django.http import FileResponse
+    from .downloads import file_download
 
     if not perms.can_manage_settings(request.user):
         return redirect("dashboard")
     tpl = get_object_or_404(DocTemplate, pk=pk)
     log(request, AuditAction.DOWNLOAD, tpl, f"ดาวน์โหลดแบบฟอร์ม {tpl}")
-    return FileResponse(open(tpl.file.path, "rb"), as_attachment=True,
-                        filename=f"{tpl.get_kind_display()}_v{tpl.version}.docx")
+    return file_download(tpl.file.path, f"{tpl.get_kind_display()}_v{tpl.version}.docx")
 
 
 # --------------------------------------------------------------------------- users

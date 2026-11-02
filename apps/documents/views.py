@@ -7,13 +7,14 @@ from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.core import permissions as perms
+from apps.core.downloads import file_download
 from apps.core.audit import log
 from apps.core.models import AuditAction, SystemSetting
 from apps.registry.forms import StyledForm
@@ -200,7 +201,7 @@ def _summons_file(request, pk, kind):
     log(request, AuditAction.DOWNLOAD, summons,
         f"ดาวน์โหลดหมายเรียก {summons.case.receipt_no} ครั้งที่ {summons.number} ({kind})")
     filename = f"{summons.base_filename()}.{kind}"
-    return FileResponse(open(path, "rb"), as_attachment=kind != "pdf", filename=filename)
+    return file_download(path, filename, inline=kind == "pdf")
 
 
 def summons_docx(request, pk):
@@ -275,7 +276,7 @@ def export_download(request, pk):
     if not path.exists():
         raise Http404("ไฟล์ถูกลบตามกำหนดเวลาแล้ว กรุณาส่งออกใหม่")
     log(request, AuditAction.DOWNLOAD, job, f"ดาวน์โหลดไฟล์ส่งออก {path.name}")
-    return FileResponse(open(path, "rb"), as_attachment=path.suffix != ".pdf", filename=path.name)
+    return file_download(path, path.name, inline=path.suffix == ".pdf")
 
 
 def export_jobs(request):
