@@ -1,38 +1,97 @@
-{% extends "base.html" %}{% load humanize %}
-{% block title %}หน้าหลัก{% endblock %}
+{% extends "base.html" %}{% load humanize ui %}
+{% block title %}ภาพรวม{% endblock %}
 {% block content %}
-<h1 class="mb-4">ภาพรวม</h1>
+<div class="page-header">
+  <div>
+    <h1>ภาพรวมคดี</h1>
+    <p class="page-sub">สวัสดี {{ user.display_name }} — สถานะคดีและหมายเรียกทั้งหมดของกอง</p>
+  </div>
+  <div class="ml-auto flex flex-wrap gap-2">
+    {% if perm_import %}<a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} นำเข้าข้อมูล</a>{% endif %}
+    {% if perm_issue_any %}<a class="btn btn-primary" href="{% url 'case_list' %}?open=on&never=on">{% icon "document" "h-4 w-4" %} ออกหมายเรียก</a>{% endif %}
+  </div>
+</div>
+
 {% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases %}
-<div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-  {% if admin_alerts.new_statuses %}พบสถานะใหม่ {{ admin_alerts.new_statuses }} รายการจากการนำเข้า (ตั้งเป็น "ยังไม่สิ้นสุด" ไว้ก่อน) — <a href="{% url 'settings_statuses' %}">ตรวจสอบ</a><br>{% endif %}
-  {% if admin_alerts.unlinked_aliases %}มีชื่อพนักงานสอบสวนในทะเบียน {{ admin_alerts.unlinked_aliases }} ชื่อที่ยังไม่ได้ผูกกับข้อมูลผู้ลงนาม (ออกหมายคดีเหล่านี้ไม่ได้) — <a href="{% url 'settings_investigators' %}">ผูกชื่อ</a>{% endif %}
+<div class="alert alert-warning mb-5">
+  {% icon "alert" "h-5 w-5 shrink-0" %}
+  <div class="space-y-1">
+    {% if admin_alerts.new_statuses %}<div>พบสถานะใหม่ {{ admin_alerts.new_statuses }} รายการจากการนำเข้า (ตั้งเป็น "ยังไม่สิ้นสุด" ไว้ก่อน) — <a class="font-medium underline" href="{% url 'settings_statuses' %}">ตรวจสอบ</a></div>{% endif %}
+    {% if admin_alerts.unlinked_aliases %}<div>มีชื่อพนักงานสอบสวน {{ admin_alerts.unlinked_aliases }} ชื่อที่ยังไม่ได้ผูกกับผู้ลงนาม (คดีเหล่านี้ยังออกหมายไม่ได้) — <a class="font-medium underline" href="{% url 'settings_investigators' %}">ผูกชื่อ</a></div>{% endif %}
+  </div>
 </div>
 {% endif %}
-<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-  <a class="stat" href="{% url 'case_list' %}"><div class="stat-label">คดีทั้งหมด</div><div class="stat-value">{{ stats.total|intcomma }}</div></a>
-  <a class="stat" href="{% url 'case_list' %}?open=on"><div class="stat-label">ยังไม่สิ้นสุด</div><div class="stat-value">{{ stats.open|intcomma }}</div></a>
-  <a class="stat" href="{% url 'case_list' %}?open=on&never=on"><div class="stat-label">ยังไม่สิ้นสุด · ยังไม่เคยออกหมาย</div><div class="stat-value">{{ stats.never|intcomma }}</div></a>
-  <a class="stat" href="{% url 'case_list' %}?open=on&incomplete=on"><div class="stat-label">ยังไม่สิ้นสุด · ที่อยู่ไม่ครบ</div><div class="stat-value text-amber-700">{{ stats.incomplete|intcomma }}</div></a>
-  <a class="stat" href="{% url 'case_list' %}?open=on&unmatched=on"><div class="stat-label">ยังไม่สิ้นสุด · จับคู่ไฟล์ผู้แจ้งไม่ได้</div><div class="stat-value text-amber-700">{{ stats.unmatched|intcomma }}</div></a>
-  <a class="stat" href="{% url 'summons_list' %}?result=issued"><div class="stat-label">รอมาตามนัด</div><div class="stat-value">{{ stats.waiting|intcomma }}</div></a>
-  <a class="stat" href="{% url 'summons_list' %}?result=issued"><div class="stat-label">เลยวันนัด · ยังไม่บันทึกผล</div><div class="stat-value">{{ stats.overdue|intcomma }}</div></a>
-  <a class="stat" href="{% url 'summons_list' %}?result=absent"><div class="stat-label">ไม่มาตามนัด</div><div class="stat-value text-red-700">{{ stats.absent|intcomma }}</div></a>
-</div>
-<p class="mt-2 text-xs text-slate-500">ผู้แจ้งที่ไม่อยู่ในทะเบียนคดีของกอง: {{ stats.complainants_outside|intcomma }} ราย (เก็บไว้สำหรับจับคู่ แต่ไม่แสดงในทะเบียน)</p>
 
-<div class="card mt-6 overflow-x-auto p-0">
-  <h2 class="px-4 pt-4">สรุปตามพนักงานสอบสวน</h2>
-  <table class="table mt-3">
-    <thead><tr><th>พนักงานสอบสวน</th><th class="text-right">คดีทั้งหมด</th><th class="text-right">ยังไม่สิ้นสุด</th><th class="text-right">ยังไม่เคยออกหมาย</th><th class="text-right">รอมาตามนัด</th><th class="text-right">ไม่มาตามนัด</th></tr></thead>
-    <tbody>
-    {% for r in per_inv %}
-      <tr>
-        <td>{% if r.inv %}<a href="{% url 'case_list' %}?investigator={{ r.inv.pk }}&open=on">{{ r.inv }}</a>{% else %}<a href="{% url 'case_list' %}?investigator=none&open=on" class="text-amber-700">ยังไม่ได้ผูกผู้ลงนาม</a>{% endif %}</td>
-        <td class="text-right">{{ r.total|intcomma }}</td><td class="text-right">{{ r.open|intcomma }}</td>
-        <td class="text-right">{{ r.never|intcomma }}</td><td class="text-right">{{ r.waiting|intcomma }}</td><td class="text-right">{{ r.absent|intcomma }}</td>
-      </tr>
-    {% empty %}<tr><td colspan="6" class="text-slate-500">ยังไม่มีข้อมูล — เริ่มจาก <a href="{% url 'import_home' %}">นำเข้าข้อมูล</a></td></tr>{% endfor %}
-    </tbody>
-  </table>
+<div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+  <a class="stat" href="{% url 'case_list' %}">
+    <div class="stat-icon bg-slate-100 text-slate-600">{% icon "cases" "h-6 w-6" %}</div>
+    <div><div class="stat-label">คดีทั้งหมด</div><div class="stat-value">{{ stats.total|intcomma }}</div></div>
+  </a>
+  <a class="stat" href="{% url 'case_list' %}?open=on">
+    <div class="stat-icon bg-indigo-50 text-indigo-600">{% icon "refresh" "h-6 w-6" %}</div>
+    <div class="flex-1"><div class="stat-label">ยังไม่สิ้นสุด</div><div class="stat-value">{{ stats.open|intcomma }}</div>
+      <div class="mt-2 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ stats.open|percent:stats.total }}%"></div></div>
+      <div class="mt-1 text-xs text-slate-400">{{ stats.open|percent:stats.total }}% ของคดีทั้งหมด</div></div>
+  </a>
+  <a class="stat" href="{% url 'case_list' %}?open=on&never=on">
+    <div class="stat-icon bg-sky-50 text-sky-600">{% icon "document" "h-6 w-6" %}</div>
+    <div><div class="stat-label">ยังไม่เคยออกหมาย</div><div class="stat-value">{{ stats.never|intcomma }}</div><div class="text-xs text-slate-400">เฉพาะคดียังไม่สิ้นสุด</div></div>
+  </a>
+  <a class="stat" href="{% url 'summons_list' %}?result=issued">
+    <div class="stat-icon bg-emerald-50 text-emerald-600">{% icon "calendar" "h-6 w-6" %}</div>
+    <div><div class="stat-label">รอมาตามนัด</div><div class="stat-value">{{ stats.waiting|intcomma }}</div></div>
+  </a>
+  <a class="stat" href="{% url 'case_list' %}?open=on&incomplete=on">
+    <div class="stat-icon bg-amber-50 text-amber-600">{% icon "map-pin" "h-6 w-6" %}</div>
+    <div><div class="stat-label">ที่อยู่ไม่ครบ</div><div class="stat-value {% if stats.incomplete %}text-amber-700{% endif %}">{{ stats.incomplete|intcomma }}</div><div class="text-xs text-slate-400">ต้องแก้ก่อนออกหมาย</div></div>
+  </a>
+  <a class="stat" href="{% url 'case_list' %}?open=on&unmatched=on">
+    <div class="stat-icon bg-orange-50 text-orange-600">{% icon "alert" "h-6 w-6" %}</div>
+    <div><div class="stat-label">จับคู่ไฟล์ผู้แจ้งไม่ได้</div><div class="stat-value {% if stats.unmatched %}text-orange-700{% endif %}">{{ stats.unmatched|intcomma }}</div></div>
+  </a>
+  <a class="stat" href="{% url 'summons_list' %}?result=issued">
+    <div class="stat-icon bg-violet-50 text-violet-600">{% icon "clock" "h-6 w-6" %}</div>
+    <div><div class="stat-label">เลยวันนัด · ยังไม่บันทึกผล</div><div class="stat-value">{{ stats.overdue|intcomma }}</div></div>
+  </a>
+  <a class="stat" href="{% url 'summons_list' %}?result=absent">
+    <div class="stat-icon bg-rose-50 text-rose-600">{% icon "x" "h-6 w-6" %}</div>
+    <div><div class="stat-label">ไม่มาตามนัด</div><div class="stat-value {% if stats.absent %}text-rose-700{% endif %}">{{ stats.absent|intcomma }}</div></div>
+  </a>
+</div>
+
+<div class="mt-6 grid gap-6 xl:grid-cols-3">
+  <div class="table-wrap xl:col-span-2">
+    <div class="flex items-center gap-2 px-5 py-4"><span class="text-slate-400">{% icon "users" %}</span><h2>สรุปตามพนักงานสอบสวน</h2></div>
+    <table class="table">
+      <thead><tr><th>พนักงานสอบสวน</th><th class="text-right">ทั้งหมด</th><th>ยังไม่สิ้นสุด</th><th class="text-right">ยังไม่ออกหมาย</th><th class="text-right">รอนัด</th><th class="text-right">ไม่มา</th></tr></thead>
+      <tbody>
+      {% for r in per_inv %}
+        <tr>
+          <td>{% if r.inv %}<a class="font-medium" href="{% url 'case_list' %}?investigator={{ r.inv.pk }}&open=on">{{ r.inv.sign_name }}</a><div class="text-xs text-slate-400">{{ r.inv.rank_full }}</div>{% else %}<a href="{% url 'case_list' %}?investigator=none&open=on" class="font-medium text-amber-700">ยังไม่ได้ผูกผู้ลงนาม</a>{% endif %}</td>
+          <td class="text-right tabular-nums">{{ r.total|intcomma }}</td>
+          <td class="min-w-[140px]"><div class="flex items-center gap-2"><div class="h-1.5 flex-1 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ r.open|percent:r.total }}%"></div></div><span class="w-8 text-right tabular-nums">{{ r.open|intcomma }}</span></div></td>
+          <td class="text-right tabular-nums">{{ r.never|intcomma }}</td>
+          <td class="text-right tabular-nums">{{ r.waiting|intcomma }}</td>
+          <td class="text-right tabular-nums {% if r.absent %}font-semibold text-rose-700{% endif %}">{{ r.absent|intcomma }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="6" class="py-10 text-center text-slate-500">ยังไม่มีข้อมูล — เริ่มจาก <a href="{% url 'import_home' %}">นำเข้าข้อมูล</a></td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="space-y-4">
+    <div class="card">
+      <h2 class="mb-3">ขั้นตอนการทำงาน</h2>
+      <ol class="space-y-3 text-sm">
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">1</span><div><a href="{% url 'import_home' %}" class="font-medium">นำเข้าข้อมูล</a><div class="text-slate-500">ทะเบียนคดีและไฟล์ผู้แจ้ง (นำเข้าซ้ำได้)</div></div></li>
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">2</span><div><a href="{% url 'case_list' %}?open=on&incomplete=on" class="font-medium">แก้ที่อยู่ที่ไม่ครบ</a><div class="text-slate-500">กรอกที่อยู่เองในหน้าคดี</div></div></li>
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">3</span><div><a href="{% url 'case_list' %}?open=on&never=on" class="font-medium">เลือกคดีแล้วออกหมาย</a><div class="text-slate-500">ตรวจ ม.๕๓ และดูตัวอย่างก่อนยืนยัน</div></div></li>
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">4</span><div><a href="{% url 'export_jobs' %}" class="font-medium">ส่งออกและพิมพ์</a><div class="text-slate-500">Word / PDF พร้อมใบจ่าหน้าซอง</div></div></li>
+      </ol>
+    </div>
+    <div class="card text-sm text-slate-600">
+      <div class="flex items-center gap-2">{% icon "users" "h-5 w-5 text-slate-400" %} ผู้แจ้งที่ไม่อยู่ในทะเบียนคดีของกอง <span class="ml-auto font-semibold text-slate-900">{{ stats.complainants_outside|intcomma }}</span></div>
+      <p class="mt-1 text-xs text-slate-400">เก็บไว้สำหรับจับคู่ภายหลัง ไม่แสดงในทะเบียน</p>
+    </div>
+  </div>
 </div>
 {% endblock %}

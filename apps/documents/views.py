@@ -237,7 +237,9 @@ def export_new(request):
         request.session[SESSION_EXPORT] = [int(i) for i in request.GET.getlist("ids") if i.isdigit()]
     ids = request.session.get(SESSION_EXPORT) or []
     summonses = list(_export_queryset(request).filter(pk__in=ids).order_by("issuer__sign_name", "case__receipt_no"))
-    form = ExportForm(request.POST or None)
+    from .pdf import soffice_available
+
+    form = ExportForm(request.POST or None, initial={"format": "pdf" if soffice_available() else "docx"})
     if request.method == "POST" and form.is_valid():
         chosen = {int(i) for i in request.POST.getlist("ids") if i.isdigit()}
         selected = [s for s in summonses if s.pk in chosen] if chosen else summonses

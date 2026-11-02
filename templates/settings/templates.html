@@ -27,7 +27,7 @@
   <div class="space-y-4">
     <form method="post" enctype="multipart/form-data" class="card space-y-3">{% csrf_token %}
       <h2>อัปโหลดแบบฟอร์มเวอร์ชันใหม่</h2>
-      {% for f in form %}<div>{% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>{% elif f.field.widget.input_type == 'file' %}<label class="label">{{ f.label }}</label><input type="file" name="file" accept=".docx" class="text-sm" required>{% else %}<label class="label">{{ f.label }}</label>{{ f }}{% endif %}{{ f.errors }}</div>{% endfor %}
+      {% for f in form %}<div>{% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>{% elif f.field.widget.input_type == 'file' %}<label class="label">{{ f.label }}</label><input type="file" name="file" accept=".docx" class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" required>{% else %}<label class="label">{{ f.label }}</label>{{ f }}{% endif %}{{ f.errors }}</div>{% endfor %}
       <button class="btn btn-primary">อัปโหลด</button>
     </form>
     <div class="card text-sm">

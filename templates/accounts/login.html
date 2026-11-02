@@ -1,15 +1,52 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load ui %}
 {% block title %}เข้าสู่ระบบ{% endblock %}
-{% block content %}
-<div class="mx-auto mt-16 max-w-sm card">
-  <h1 class="mb-1 text-center">ระบบออกหมายเรียกผู้กล่าวหา</h1>
-  <p class="mb-6 text-center text-sm text-slate-500">บก.สอท.4 · ใช้งานภายในหน่วยงานเท่านั้น</p>
-  <form method="post" class="space-y-4">{% csrf_token %}
-    {% if form.non_field_errors %}<div class="rounded bg-red-50 p-2 text-sm text-red-800">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>{% endif %}
-    <div><label class="label" for="id_username">ชื่อผู้ใช้</label><input class="input" id="id_username" name="username" autofocus required></div>
-    <div><label class="label" for="id_password">รหัสผ่าน</label><input class="input" type="password" id="id_password" name="password" required></div>
-    <input type="hidden" name="next" value="{{ next }}">
-    <button class="btn btn-primary w-full">เข้าสู่ระบบ</button>
-  </form>
+{% block public %}
+<div class="flex min-h-full">
+  <div class="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-indigo-800 p-12 text-white lg:flex">
+    <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-indigo-500/20 blur-3xl"></div>
+    <div class="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-sky-400/10 blur-3xl"></div>
+    <div class="relative flex items-center gap-3">
+      <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">{% icon "shield" "h-7 w-7" %}</div>
+      <div><div class="font-semibold">กองบังคับการตำรวจสืบสวนสอบสวน</div><div class="text-sm text-indigo-200">อาชญากรรมทางเทคโนโลยี ๔</div></div>
+    </div>
+    <div class="relative">
+      <h1 class="text-4xl font-bold leading-tight text-white">ระบบออกหมายเรียก<br>ผู้กล่าวหา</h1>
+      <p class="mt-4 max-w-md text-indigo-100">นำเข้าทะเบียนคดี คัดคดีที่ยังไม่สิ้นสุด ออกหมายเรียกได้ทีละหลายร้อยฉบับจากแบบฟอร์มเดิมของหน่วย พร้อมใบจ่าหน้าซอง</p>
+      <ul class="mt-8 space-y-3 text-sm text-indigo-100">
+        <li class="flex items-center gap-2">{% icon "check" "h-5 w-5 text-emerald-300" %} ตรวจข้อความครบตาม ป.วิ.อ. มาตรา ๕๓ ก่อนออกหมาย</li>
+        <li class="flex items-center gap-2">{% icon "check" "h-5 w-5 text-emerald-300" %} วันที่และตัวเลขเป็นเลขไทย พ.ศ. อัตโนมัติ</li>
+        <li class="flex items-center gap-2">{% icon "check" "h-5 w-5 text-emerald-300" %} บันทึกการใช้งานทุกครั้งตาม PDPA</li>
+      </ul>
+    </div>
+    <div class="relative text-xs text-indigo-300">ใช้งานภายในหน่วยงานเท่านั้น</div>
+  </div>
+  <div class="flex flex-1 items-center justify-center px-6 py-12">
+    <div class="w-full max-w-sm">
+      <div class="mb-8 lg:hidden">
+        <div class="flex items-center gap-2 text-indigo-700">{% icon "shield" "h-7 w-7" %}<span class="font-semibold">บก.สอท.4</span></div>
+      </div>
+      <h2 class="text-2xl font-bold">เข้าสู่ระบบ</h2>
+      <p class="mt-1 text-sm text-slate-500">ระบบออกหมายเรียกผู้กล่าวหา</p>
+      <form method="post" class="mt-8 space-y-4">{% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert alert-error">{% icon "alert" "h-5 w-5" %} ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>{% endif %}
+        <div><label class="label" for="id_username">ชื่อผู้ใช้</label><input class="input py-2.5" id="id_username" name="username" autofocus required autocomplete="username"></div>
+        <div><label class="label" for="id_password">รหัสผ่าน</label><input class="input py-2.5" type="password" id="id_password" name="password" required autocomplete="current-password"></div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <button class="btn btn-primary w-full py-2.5 text-base">เข้าสู่ระบบ</button>
+      </form>
+      {% if demo_mode %}
+      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div class="mb-2 flex items-center gap-2 font-semibold">{% icon "info" "h-5 w-5" %} โหมดทดลอง (ข้อมูลสมมติ)</div>
+        <p class="mb-2 text-xs">กดชื่อบัญชีเพื่อกรอกให้อัตโนมัติ · รหัสผ่านทุกบัญชี <span class="font-mono font-semibold">demo12345</span></p>
+        <div class="grid grid-cols-2 gap-2">
+          {% for username, label in demo_accounts %}
+          <button type="button" class="btn btn-sm justify-start" onclick="document.getElementById('id_username').value='{{ username }}';document.getElementById('id_password').value='demo12345';document.getElementById('id_password').form.submit()">
+            <span class="font-mono">{{ username }}</span><span class="text-slate-500">· {{ label }}</span></button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
 </div>
 {% endblock %}

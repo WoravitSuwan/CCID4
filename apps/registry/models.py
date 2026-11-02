@@ -313,6 +313,13 @@ class Case(models.Model):
     detective = models.TextField("พนักงานสืบสวน", blank=True)
     status = models.ForeignKey(Status, verbose_name="สถานะ", null=True, blank=True,
                                on_delete=models.PROTECT)
+    # Set when staff change the status in the system. Re-importing a register that
+    # still says ``status_file_value`` keeps the manual status; a different value in
+    # the file (newer information) replaces it.
+    status_manual_at = models.DateTimeField("แก้สถานะเองเมื่อ", null=True, blank=True)
+    status_manual_by = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="ผู้แก้สถานะ", null=True,
+                                         blank=True, on_delete=models.SET_NULL, related_name="+")
+    status_file_value = models.TextField("สถานะในไฟล์ทะเบียนตอนแก้", blank=True)
     victim_phone = models.TextField("เบอร์โทรศัพท์ผู้เสียหาย", blank=True)
     bank_ref = models.TextField("เลขอ้างอิงธนาคาร", blank=True)
     contact_log = models.TextField("บันทึกการติดต่อ", blank=True)
@@ -371,6 +378,21 @@ class Case(models.Model):
         if not override or not self.complainant:
             return False
         return complainant_address_snapshot(self.complainant) != (override.source_snapshot or {})
+
+    def set_status(self, status: Status, user=None, note: str = "") -> bool:
+        """Change the status by hand (kept across re-imports of an unchanged register)."""
+        from django.utils import timezone
+
+        if self.status_id == (status.pk if status else None):
+            return False
+        if not self.status_manual_at:
+            self.status_file_value = self.status.name if self.status_id else ""
+        self.status = status
+        self.status_manual_at = timezone.now()
+        self.status_manual_by = user if getattr(user, "is_authenticated", False) else None
+        self.save(update_fields=["status", "status_manual_at", "status_manual_by", "status_file_value",
+                                 "updated_at"])
+        return True
 
     def issue_blockers(self) -> list[str]:
         """Reasons this case cannot get a summons yet (empty list = OK)."""

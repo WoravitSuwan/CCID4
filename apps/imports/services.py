@@ -158,6 +158,8 @@ class Analysis:
     new_aliases: list = field(default_factory=list)
     unlinked_aliases: list = field(default_factory=list)
     new_units: list = field(default_factory=list)
+    manual_status_kept: set = field(default_factory=set)
+    manual_status_released: set = field(default_factory=set)
     per_sheet: Counter = field(default_factory=Counter)
 
     def add_issue(self, row: ParsedRow | None, issue_type, message="", sheet="", row_number=None, key=""):
@@ -355,6 +357,13 @@ def _diff(analysis: Analysis):
         if obj is None:
             analysis.new_keys.append(key)
             continue
+        if analysis.kind == ImportKind.REGISTER and obj.status_manual_at:
+            if prow.values["status_name"] == obj.status_file_value:
+                # register unchanged since staff edited the status: keep their status
+                prow.values["status_name"] = obj.status.name if obj.status_id else ""
+                analysis.manual_status_kept.add(key)
+            else:
+                analysis.manual_status_released.add(key)
         cur = current(obj)
         changed = [f for f in compare if _norm_cmp(cur.get(f)) != _norm_cmp(prow.values.get(f))]
         if changed:
@@ -394,6 +403,7 @@ def summary_dict(analysis: Analysis) -> dict:
         "new_aliases": analysis.new_aliases,
         "unlinked_aliases": analysis.unlinked_aliases,
         "new_units": analysis.new_units,
+        "manual_status_kept": len(analysis.manual_status_kept),
         "per_sheet": dict(analysis.per_sheet),
     }
 
@@ -477,6 +487,10 @@ def _apply_register(batch, analysis: Analysis):
         elif key in updated:
             for name, value in attrs.items():
                 setattr(obj, name, value)
+            if key in analysis.manual_status_released:
+                obj.status_manual_at = None
+                obj.status_manual_by = None
+                obj.status_file_value = ""
             obj.updated_at = now
             to_update.append(obj)
         elif obj.investigator_alias_id is None and attrs["investigator_alias"] is not None:
@@ -486,6 +500,7 @@ def _apply_register(batch, analysis: Analysis):
     update_fields = CASE_TEXT_FIELDS + [
         "report_date", "report_year", "damage_amount", "daily_log_at", "source_sheet", "status",
         "unit", "investigator_alias", "last_batch", "updated_at",
+        "status_manual_at", "status_manual_by", "status_file_value",
     ]
     Case.objects.bulk_update(to_update, update_fields, batch_size=CHUNK)
 

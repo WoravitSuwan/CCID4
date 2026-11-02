@@ -23,6 +23,8 @@ urlpatterns = [
     path("cases/<int:pk>/address/resolve/", rv.case_address_resolve, name="case_address_resolve"),
     path("cases/<int:pk>/reveal-id/", rv.reveal_id, name="case_reveal_id"),
     path("cases/<int:pk>/issue/", dv.issue_from_case, name="case_issue"),
+    path("cases/<int:pk>/status/", rv.case_status_update, name="case_status_update"),
+    path("cases/status/bulk/", rv.case_status_bulk, name="case_status_bulk"),
     # imports
     path("imports/", iv.import_home, name="import_home"),
     path("imports/<int:pk>/sheets/", iv.import_sheets, name="import_sheets"),

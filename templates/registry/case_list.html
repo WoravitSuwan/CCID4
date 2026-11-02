@@ -1,71 +1,118 @@
-{% extends "base.html" %}{% load thai humanize %}
+{% extends "base.html" %}{% load thai humanize ui %}
 {% block title %}ทะเบียนคดี{% endblock %}
 {% block content %}
-<div class="mb-4 flex flex-wrap items-center gap-2">
-  <h1>ทะเบียนคดี</h1>
-  <span class="text-sm text-slate-500">{{ total|intcomma }} คดี</span>
-  <div class="ml-auto flex gap-2">
-    <a class="btn" href="?open=on">ยังไม่สิ้นสุด</a>
-    <a class="btn" href="?open=on&incomplete=on">ที่อยู่ไม่ครบ</a>
-    <a class="btn" href="?unmatched=on">จับคู่ไม่ได้</a>
-    {% if perm_export_register %}<a class="btn" href="{% url 'case_export' %}?{{ request.GET.urlencode }}">ส่งออก Excel</a>{% endif %}
+<div class="page-header">
+  <div>
+    <h1>ทะเบียนคดี</h1>
+    <p class="page-sub">พบ <span class="font-semibold text-slate-900">{{ total|intcomma }}</span> คดีตามเงื่อนไข</p>
+  </div>
+  <div class="ml-auto flex flex-wrap gap-2">
+    {% if perm_export_register %}<a class="btn" href="{% url 'case_export' %}?{{ request.GET.urlencode }}">{% icon "download" "h-4 w-4" %} ส่งออก Excel</a>{% endif %}
   </div>
 </div>
-<form method="get" class="card mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
-  <div class="col-span-2">{{ form.q }}</div>
-  <div>{{ form.status }}</div><div>{{ form.year }}</div><div>{{ form.unit }}</div><div>{{ form.investigator }}</div>
-  <div class="col-span-2">{{ form.case_type }}</div>
-  <div class="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm md:col-span-3">
-    <label class="flex items-center gap-1">{{ form.open }} ยังไม่สิ้นสุด</label>
-    <label class="flex items-center gap-1">{{ form.incomplete }} ที่อยู่ไม่ครบ</label>
-    <label class="flex items-center gap-1">{{ form.unmatched }} จับคู่ไม่ได้</label>
-    <label class="flex items-center gap-1">{{ form.never }} ยังไม่เคยออกหมาย</label>
-    <label class="flex items-center gap-1">{{ form.conflict }} ที่อยู่ในไฟล์เปลี่ยนหลังแก้เอง</label>
-  </div>
-  <div class="flex gap-2"><button class="btn btn-primary">ค้นหา</button><a class="btn" href="{% url 'case_list' %}">ล้าง</a></div>
-</form>
 
-<form method="post" action="{% url 'issue_start' %}" id="issue-form">{% csrf_token %}
+{% with g=request.GET %}
+<div class="mb-4 flex flex-wrap gap-2">
+  <a class="btn btn-sm {% if g.open and not g.incomplete and not g.unmatched and not g.never %}btn-primary{% endif %}" href="?open=on">ยังไม่สิ้นสุด</a>
+  <a class="btn btn-sm {% if g.never %}btn-primary{% endif %}" href="?open=on&never=on">ยังไม่เคยออกหมาย</a>
+  <a class="btn btn-sm {% if g.incomplete %}btn-primary{% endif %}" href="?open=on&incomplete=on">{% icon "map-pin" "h-3.5 w-3.5" %} ที่อยู่ไม่ครบ</a>
+  <a class="btn btn-sm {% if g.unmatched %}btn-primary{% endif %}" href="?unmatched=on">{% icon "alert" "h-3.5 w-3.5" %} จับคู่ไม่ได้</a>
+  <a class="btn btn-sm {% if not g %}btn-primary{% endif %}" href="{% url 'case_list' %}">ทั้งหมด</a>
+</div>
+{% endwith %}
+
+<details class="card mb-4 p-0" {% if request.GET.q or request.GET.status or request.GET.year or request.GET.unit or request.GET.investigator or request.GET.case_type %}open{% endif %}>
+  <summary class="flex cursor-pointer select-none items-center gap-2 px-5 py-3 text-sm font-medium text-slate-700">{% icon "filter" "h-4 w-4 text-slate-400" %} ค้นหาและตัวกรอง</summary>
+  <form method="get" class="grid grid-cols-1 gap-3 border-t border-slate-100 px-5 py-4 sm:grid-cols-2 lg:grid-cols-6">
+    <div class="relative lg:col-span-2"><span class="pointer-events-none absolute left-3 top-2.5 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
+      <input class="input pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ / เลขคดี / เบอร์โทร"></div>
+    <div>{{ form.status }}</div><div>{{ form.year }}</div><div>{{ form.unit }}</div><div>{{ form.investigator }}</div>
+    <div class="lg:col-span-2">{{ form.case_type }}</div>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm lg:col-span-3">
+      <label class="flex items-center gap-1.5">{{ form.open }} ยังไม่สิ้นสุด</label>
+      <label class="flex items-center gap-1.5">{{ form.incomplete }} ที่อยู่ไม่ครบ</label>
+      <label class="flex items-center gap-1.5">{{ form.unmatched }} จับคู่ไม่ได้</label>
+      <label class="flex items-center gap-1.5">{{ form.never }} ยังไม่เคยออกหมาย</label>
+      <label class="flex items-center gap-1.5">{{ form.conflict }} ที่อยู่ในไฟล์เปลี่ยนหลังแก้เอง</label>
+    </div>
+    <div class="flex gap-2"><button class="btn btn-primary">{% icon "search" "h-4 w-4" %} ค้นหา</button><a class="btn" href="{% url 'case_list' %}">ล้าง</a></div>
+  </form>
+</details>
+
+<form method="post" action="{% url 'issue_start' %}" id="case-form">{% csrf_token %}
   <input type="hidden" name="query" value="{{ request.GET.urlencode }}">
   <input type="hidden" name="next" value="{{ request.get_full_path }}">
-  {% if can_issue %}
-  <div class="mb-2 flex flex-wrap items-center gap-3 text-sm">
-    <button class="btn btn-primary" id="issue-btn" disabled>ออกหมายเรียก (<span id="sel-count">0</span> รายการ)</button>
-    {% if total %}<button class="btn" name="all_matching" value="1">ออกหมายทุกคดีที่ตรงตัวกรอง ({{ total|intcomma }})</button>{% endif %}
-    <span class="text-slate-500">คดีที่ข้อมูลไม่ครบจะถูกแสดงในหน้าถัดไปและไม่ถูกออกหมาย</span>
+
+  {% if can_issue and total %}
+  <div class="mb-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+    {% icon "info" "h-4 w-4" %} ติ๊กเลือกคดีเพื่อออกหมายหรือเปลี่ยนสถานะ หรือ
+    <button class="btn btn-sm" name="all_matching" value="1">ออกหมายทุกคดีที่ตรงตัวกรอง ({{ total|intcomma }})</button>
   </div>
   {% endif %}
-  <div class="card overflow-x-auto p-0">
+
+  <div class="table-wrap">
   <table class="table">
     <thead><tr>
-      {% if can_issue %}<th><input type="checkbox" class="h-4 w-4" onclick="document.querySelectorAll('.case-cb').forEach(c=>{c.checked=this.checked});updateCount()"></th>{% endif %}
-      <th>เลขรับแจ้ง</th><th>วันที่รับแจ้ง</th><th>ผู้เสียหาย / ผู้แจ้ง</th><th>ประเภทคดี</th><th>หน่วย</th><th>พนักงานสอบสวน</th><th>สถานะ</th><th>หมาย</th><th>ข้อมูล</th>
+      {% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="check-all" aria-label="เลือกทั้งหมด"></th>{% endif %}
+      <th>เลขรับแจ้ง</th><th>ผู้แจ้ง</th><th>ประเภทคดี</th><th>พนักงานสอบสวน</th><th>สถานะ</th><th class="text-center">หมาย</th><th></th>
     </tr></thead>
     <tbody>
     {% for c in page %}
-      <tr>
-        {% if can_issue %}<td><input type="checkbox" class="case-cb h-4 w-4" name="case_ids" value="{{ c.pk }}" onchange="updateCount()"></td>{% endif %}
-        <td class="whitespace-nowrap font-mono"><a href="{% url 'case_detail' c.pk %}">{{ c.receipt_no }}</a>{% if c.criminal_case_no %}<div class="text-xs text-slate-500">คดีอาญา {{ c.criminal_case_no }}</div>{% endif %}</td>
-        <td class="whitespace-nowrap">{{ c.report_date|thai_date }}</td>
-        <td>{% if c.complainant %}{{ c.complainant.full_name }}{% else %}{{ c.victim_name }}{% endif %}</td>
-        <td class="max-w-xs truncate" title="{{ c.case_type }}">{{ c.case_type }}</td>
-        <td class="whitespace-nowrap">{{ c.unit_raw }}</td>
-        <td>{% if c.investigator %}{{ c.investigator.sign_name }}{% else %}<span class="text-amber-700" title="ยังไม่ได้ผูกผู้ลงนาม">{{ c.investigator_raw|default:"-" }}</span>{% endif %}</td>
-        <td>{% if c.status %}<span class="badge {% if c.status.is_final %}badge-gray{% else %}badge-blue{% endif %}">{{ c.status.name }}</span>{% endif %}</td>
-        <td class="text-center">{% if c.summons_count %}<span class="badge badge-green">{{ c.summons_count }}</span>{% else %}-{% endif %}</td>
-        <td class="whitespace-nowrap text-xs">
+      <tr class="cursor-pointer" onclick="if(!event.target.closest('input,a,button,label'))location.href='{% url 'case_detail' c.pk %}'">
+        {% if can_issue %}<td><input type="checkbox" class="check case-cb" name="case_ids" value="{{ c.pk }}"></td>{% endif %}
+        <td class="whitespace-nowrap">
+          <a class="font-mono font-medium" href="{% url 'case_detail' c.pk %}">{{ c.receipt_no }}</a>
+          <div class="text-xs text-slate-400">{{ c.report_date|thai_date }}{% if c.criminal_case_no %} · คดีอาญา {{ c.criminal_case_no }}{% endif %}</div>
+        </td>
+        <td><div class="font-medium text-slate-800">{% if c.complainant %}{{ c.complainant.full_name }}{% else %}{{ c.victim_name }}{% endif %}</div><div class="text-xs text-slate-400">{{ c.unit_raw }}</div></td>
+        <td class="max-w-[16rem]"><div class="truncate" title="{{ c.case_type }}">{{ c.case_type }}</div></td>
+        <td class="whitespace-nowrap">{% if c.investigator %}{{ c.investigator.sign_name }}{% else %}<span class="inline-flex items-center gap-1 text-amber-700" title="ยังไม่ได้ผูกผู้ลงนาม">{% icon "alert" "h-3.5 w-3.5" %}{{ c.investigator_raw|default:"-" }}</span>{% endif %}</td>
+        <td>{% if c.status %}<span class="badge {{ c.status|status_class }}"><span class="dot"></span>{{ c.status.name }}</span>{% if c.status_manual_at %}<span class="ml-1 text-slate-400" title="แก้สถานะในระบบ">{% icon "pencil" "inline h-3.5 w-3.5" %}</span>{% endif %}{% endif %}</td>
+        <td class="text-center">{% if c.summons_count %}<span class="badge badge-green">{{ c.summons_count }}</span>{% else %}<span class="text-slate-300">–</span>{% endif %}</td>
+        <td class="whitespace-nowrap text-right">
           {% if not c.complainant and not c.has_override %}<span class="badge badge-red">จับคู่ไม่ได้</span>
           {% elif c.has_override %}<span class="badge badge-blue">ที่อยู่แก้เอง</span>
           {% elif c.complainant.address_incomplete %}<span class="badge badge-amber">ที่อยู่ไม่ครบ</span>{% endif %}
         </td>
       </tr>
-    {% empty %}<tr><td colspan="10" class="py-6 text-center text-slate-500">ไม่พบคดีตามเงื่อนไข</td></tr>{% endfor %}
+    {% empty %}
+      <tr><td colspan="8" class="py-16 text-center">
+        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">{% icon "search" "h-6 w-6" %}</div>
+        <div class="font-medium text-slate-700">ไม่พบคดีตามเงื่อนไข</div>
+        <div class="text-sm text-slate-500">ลองล้างตัวกรอง หรือ <a href="{% url 'import_home' %}">นำเข้าข้อมูล</a></div>
+      </td></tr>
+    {% endfor %}
     </tbody>
   </table>
   </div>
+  {% include "_pagination.html" %}
+
+  {% if can_issue %}
+  <!-- selection action bar -->
+  <div id="action-bar" class="pointer-events-none fixed inset-x-0 bottom-4 z-30 flex translate-y-24 justify-center px-4 opacity-0 transition-all lg:pl-64">
+    <div class="pointer-events-auto flex flex-wrap items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white shadow-2xl ring-1 ring-white/10">
+      <span>เลือกแล้ว <span id="sel-count" class="font-semibold">0</span> คดี</span>
+      <button class="btn btn-primary btn-sm" type="submit">{% icon "document" "h-4 w-4" %} ออกหมายเรียก</button>
+      <span class="hidden h-5 w-px bg-white/20 sm:block"></span>
+      <select name="status" class="rounded-md border-0 bg-white/10 py-1 pl-2 pr-8 text-sm text-white focus:ring-indigo-400" aria-label="สถานะใหม่">
+        <option value="" class="text-slate-900">เปลี่ยนสถานะเป็น…</option>
+        {% for s in statuses %}<option value="{{ s.pk }}" class="text-slate-900">{{ s.name }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-sm border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" type="submit" formaction="{% url 'case_status_bulk' %}"
+        onclick="if(!this.form.status.value){alert('เลือกสถานะใหม่ก่อน');return false;}return confirm('เปลี่ยนสถานะคดีที่เลือก?')">{% icon "tag" "h-4 w-4" %} บันทึกสถานะ</button>
+      <button type="button" class="btn btn-ghost btn-sm text-slate-300 hover:bg-white/10 hover:text-white" onclick="clearSel()">{% icon "x" "h-4 w-4" %}</button>
+    </div>
+  </div>
+  {% endif %}
 </form>
-{% include "_pagination.html" %}
 <script>
-function updateCount(){const n=document.querySelectorAll('.case-cb:checked').length;const s=document.getElementById('sel-count');if(s){s.textContent=n;document.getElementById('issue-btn').disabled=n===0;}}
+(function(){
+  const bar=document.getElementById('action-bar'); if(!bar) return;
+  const boxes=()=>document.querySelectorAll('.case-cb');
+  function update(){const n=document.querySelectorAll('.case-cb:checked').length;document.getElementById('sel-count').textContent=n;
+    bar.classList.toggle('opacity-0',n===0);bar.classList.toggle('translate-y-24',n===0);}
+  window.clearSel=function(){boxes().forEach(b=>b.checked=false);const a=document.getElementById('check-all');if(a)a.checked=false;update();};
+  document.addEventListener('change',e=>{if(e.target.id==='check-all'){boxes().forEach(b=>b.checked=e.target.checked);}update();});
+})();
 </script>
 {% endblock %}

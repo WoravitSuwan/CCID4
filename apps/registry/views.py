@@ -8,6 +8,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from openpyxl import Workbook
@@ -21,7 +22,7 @@ from apps.documents.models import Summons, SummonsResult
 
 from .forms import AddressOverrideForm, CaseFilterForm
 from .models import (
-    AddressOverride, Case, Complainant, Investigator, complainant_address_snapshot,
+    AddressOverride, Case, Complainant, Investigator, Status, complainant_address_snapshot,
 )
 
 PAGE_SIZE = 50
@@ -132,7 +133,8 @@ def case_list(request):
     page = Paginator(qs, PAGE_SIZE).get_page(request.GET.get("page"))
     return render(request, "registry/case_list.html", {
         "form": form, "page": page, "total": page.paginator.count,
-        "can_issue": perms.can_issue_any(request.user),
+        "can_issue": perms.can_issue_any(request.user), "statuses": Status.objects.all(),
+        "can_bulk_status": perms.can_issue_any(request.user),
     })
 
 
@@ -159,7 +161,7 @@ def case_detail(request, pk):
         "form": form, "can_edit": can_edit, "can_issue": perms.can_issue_for_case(request.user, case),
         "can_view_id": perms.can_view_full_id(request.user, case), "blockers": case.issue_blockers(),
         "conflict": case.address_conflict(), "results": SummonsResult.choices,
-        "effective": case.effective_address(),
+        "effective": case.effective_address(), "statuses": Status.objects.all(),
     })
 
 
@@ -291,3 +293,51 @@ def export_register(request):
 
     response["Content-Disposition"] = content_disposition(f"ทะเบียนคดี_{stamp}.xlsx")
     return response
+
+
+# --------------------------------------------------------------------------- status editing
+@require_POST
+def case_status_update(request, pk):
+    case = _case_or_404(pk)
+    if not perms.can_edit_case(request.user, case):
+        raise PermissionDenied
+    status = Status.objects.filter(pk=request.POST.get("status")).first()
+    if status is None:
+        messages.error(request, "กรุณาเลือกสถานะ")
+        return redirect("case_detail", pk=pk)
+    old = case.status.name if case.status_id else "-"
+    note = request.POST.get("note", "").strip()[:300]
+    if case.set_status(status, request.user, note):
+        log(request, AuditAction.EDIT, case,
+            f"เปลี่ยนสถานะ {case.receipt_no}: {old} → {status.name}" + (f" ({note})" if note else ""))
+        messages.success(request, f"เปลี่ยนสถานะเป็น '{status.name}' แล้ว")
+    return redirect(request.POST.get("next") or reverse("case_detail", args=[pk]))
+
+
+@require_POST
+def case_status_bulk(request):
+    status = Status.objects.filter(pk=request.POST.get("status")).first()
+    ids = [int(i) for i in request.POST.getlist("case_ids") if i.isdigit()]
+    back = request.POST.get("next") or reverse("case_list")
+    if status is None or not ids:
+        messages.error(request, "เลือกคดีและสถานะใหม่ก่อน")
+        return redirect(back)
+    changed = skipped = same = 0
+    cases = Case.objects.filter(pk__in=ids).select_related("status", "investigator_alias__investigator")
+    for case in cases:
+        if not perms.can_edit_case(request.user, case):
+            skipped += 1
+            continue
+        old = case.status.name if case.status_id else "-"
+        if case.set_status(status, request.user):
+            changed += 1
+            log(request, AuditAction.EDIT, case, f"เปลี่ยนสถานะ {case.receipt_no}: {old} → {status.name} (หลายคดี)")
+        else:
+            same += 1
+    msg = f"เปลี่ยนสถานะเป็น '{status.name}' แล้ว {changed} คดี"
+    if same:
+        msg += f" · {same} คดีมีสถานะนี้อยู่แล้ว"
+    if skipped:
+        msg += f" · ข้าม {skipped} คดีที่ไม่มีสิทธิ์แก้ไข"
+    messages.success(request, msg)
+    return redirect(back)

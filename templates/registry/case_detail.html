@@ -1,73 +1,105 @@
-{% extends "base.html" %}{% load thai %}
+{% extends "base.html" %}{% load thai ui %}
 {% block title %}คดี {{ case.receipt_no }}{% endblock %}
 {% block content %}
-<div class="mb-4 flex flex-wrap items-center gap-3">
-  <a href="{% url 'case_list' %}" class="text-sm">‹ ทะเบียนคดี</a>
-  <h1 class="font-mono">{{ case.receipt_no }}</h1>
-  {% if case.status %}<span class="badge {% if case.status.is_final %}badge-gray{% else %}badge-blue{% endif %}">{{ case.status.name }}</span>{% endif %}
-  <div class="ml-auto">
-    {% if can_issue %}
-      {% if blockers %}<button class="btn" disabled title="ข้อมูลยังไม่ครบ">ออกหมายครั้งที่ {{ summonses|length|add:1 }}</button>
-      {% else %}<a class="btn btn-primary" href="{% url 'case_issue' case.pk %}">ออกหมายครั้งที่ {{ summonses|length|add:1 }}</a>{% endif %}
-    {% endif %}
+<a href="{% url 'case_list' %}?open=on" class="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} ทะเบียนคดี</a>
+
+<!-- header -->
+<div class="card mb-5">
+  <div class="flex flex-wrap items-start gap-4">
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <h1 class="font-mono">{{ case.receipt_no }}</h1>
+        {% if case.status %}<span class="badge {{ case.status|status_class }}"><span class="dot"></span>{{ case.status.name }}</span>{% endif %}
+        {% if case.status.is_final %}<span class="badge badge-gray">สิ้นสุด</span>{% endif %}
+      </div>
+      <div class="mt-1 text-lg font-medium text-slate-800">{{ case.recipient_name|default:"-" }}</div>
+      <div class="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">
+        <span class="inline-flex items-center gap-1">{% icon "calendar" "h-4 w-4" %} รับแจ้ง {{ case.report_date|thai_date:"full" }}</span>
+        <span class="inline-flex items-center gap-1">{% icon "users" "h-4 w-4" %} {% if case.investigator %}{{ case.investigator }}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %}</span>
+        <span class="inline-flex items-center gap-1">{% icon "map-pin" "h-4 w-4" %} {{ case.unit_raw|default:"-" }}</span>
+      </div>
+    </div>
+    <div class="flex flex-col items-stretch gap-2 sm:items-end">
+      {% if can_issue %}
+        {% if blockers %}<button class="btn" disabled title="ข้อมูลยังไม่ครบ">{% icon "document" "h-4 w-4" %} ออกหมายครั้งที่ {{ summonses|length|add:1 }}</button>
+        {% else %}<a class="btn btn-primary" href="{% url 'case_issue' case.pk %}">{% icon "document" "h-4 w-4" %} ออกหมายครั้งที่ {{ summonses|length|add:1 }}</a>{% endif %}
+      {% endif %}
+    </div>
   </div>
-</div>
-{% if blockers %}
-<div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-  <div class="font-medium">ยังออกหมายไม่ได้:</div>
-  <ul class="ml-5 list-disc">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
-</div>
-{% endif %}
-{% if conflict %}
-<div class="mb-4 rounded-md border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900">
-  <div class="font-medium">ที่อยู่ในไฟล์ผู้แจ้งเปลี่ยนไปหลังจากเจ้าหน้าที่แก้ที่อยู่เอง — เลือกที่อยู่ที่จะใช้</div>
-  <div class="mt-2 grid gap-2 md:grid-cols-2">
-    <div class="rounded border bg-white p-2"><div class="text-xs text-slate-500">ที่อยู่ที่แก้เอง (ใช้อยู่ตอนนี้)</div>{{ override.address.format }}</div>
-    <div class="rounded border bg-white p-2"><div class="text-xs text-slate-500">ที่อยู่ใหม่จากไฟล์ผู้แจ้ง</div>{{ c.address.format }}</div>
-  </div>
+
   {% if can_edit %}
-  <form method="post" action="{% url 'case_address_resolve' case.pk %}" class="mt-2 flex gap-2">{% csrf_token %}
-    <button class="btn btn-sm" name="choice" value="override">ใช้ที่อยู่ที่แก้เองต่อ</button>
-    <button class="btn btn-sm" name="choice" value="file">ใช้ที่อยู่จากไฟล์</button>
+  <form method="post" action="{% url 'case_status_update' case.pk %}" class="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">{% csrf_token %}
+    <span class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700">{% icon "tag" "h-4 w-4 text-slate-400" %} สถานะคดี</span>
+    <select name="status" class="input w-auto py-1.5">
+      {% for s in statuses %}<option value="{{ s.pk }}" {% if s.pk == case.status_id %}selected{% endif %}>{{ s.name }}{% if s.is_final %} (สิ้นสุด){% endif %}</option>{% endfor %}
+    </select>
+    <input name="note" class="input w-full py-1.5 sm:w-64" placeholder="หมายเหตุ (ถ้ามี)">
+    <button class="btn btn-sm">{% icon "check" "h-4 w-4" %} บันทึกสถานะ</button>
+    {% if case.status_manual_at %}
+    <span class="text-xs text-slate-500">แก้ในระบบโดย {{ case.status_manual_by.display_name|default:"-" }} · {{ case.status_manual_at|thai_date:"datetime" }}{% if case.status_file_value %} · ในไฟล์ทะเบียน: "{{ case.status_file_value }}"{% endif %}</span>
+    {% endif %}
   </form>
   {% endif %}
 </div>
-{% endif %}
 
-<div class="grid gap-4 lg:grid-cols-2">
-  <div class="card">
-    <h2 class="mb-3">ผู้กล่าวหา</h2>
-    {% if c %}
-    <dl class="grid grid-cols-3 gap-y-2 text-sm">
-      <dt class="text-slate-500">ชื่อ</dt><dd class="col-span-2">{{ c.full_name|default:"-" }}{% if not c.prefix %} <span class="text-xs text-slate-400">(ไม่มีคำนำหน้าในไฟล์)</span>{% endif %}</dd>
-      <dt class="text-slate-500">อายุ</dt><dd class="col-span-2">{{ c.age|default:"-" }}</dd>
-      <dt class="text-slate-500">เลขประจำตัวประชาชน</dt>
-      <dd class="col-span-2" id="nid"><span class="font-mono">{{ c.national_id|mask_id }}</span>
-        {% if can_view_id and c.national_id %}<button class="btn btn-sm ml-2" hx-post="{% url 'case_reveal_id' case.pk %}" hx-target="#nid" hx-confirm="การดูเลขบัตรจะถูกบันทึกไว้ ต้องการดูหรือไม่?">แสดง</button>{% endif %}
-        {% if c.flag_bad_id %}<span class="badge badge-amber ml-1">ไม่ใช่ 13 หลัก</span>{% endif %}</dd>
-      <dt class="text-slate-500">โทรศัพท์</dt><dd class="col-span-2 font-mono">{{ c.phone|default:"-" }}</dd>
-      <dt class="text-slate-500">ที่อยู่ (ไฟล์ผู้แจ้ง)</dt><dd class="col-span-2">{{ c.address.format|default:"-" }}
-        {% if c.postcode_auto and not c.postcode %}<div class="text-xs text-slate-500">รหัสไปรษณีย์ {{ c.postcode_auto }} เติมโดยระบบจาก ตำบล/อำเภอ/จังหวัด</div>{% endif %}
-        {% if c.address_incomplete %}<span class="badge badge-amber">ไม่ครบ: {{ c.address.missing_labels|join:", " }}</span>{% endif %}</dd>
-      <dt class="text-slate-500">อาชีพ</dt><dd class="col-span-2">{{ c.occupation|default:"-" }}</dd>
-      <dt class="text-slate-500">ประเภทคดี (ไฟล์ผู้แจ้ง)</dt><dd class="col-span-2">{{ c.case_type|default:"-" }}</dd>
-    </dl>
-    {% else %}
-    <p class="text-sm text-red-700">ไม่พบเลขรับแจ้งนี้ในไฟล์ผู้แจ้ง (จะจับคู่อัตโนมัติเมื่อนำเข้าไฟล์ผู้แจ้งรอบถัดไป) ชื่อผู้เสียหายตามทะเบียน: {{ case.victim_name|default:"-" }}</p>
-    {% endif %}
-    <div class="mt-4 rounded-md bg-slate-50 p-3 text-sm">
-      <div class="text-xs text-slate-500">ที่อยู่ที่จะใช้ออกหมาย {% if override %}(แก้เองโดย {{ override.updated_by.display_name|default:"-" }} · {{ override.updated_at|thai_date:"datetime" }}){% endif %}</div>
-      <div class="font-medium">{{ case.recipient_name|default:"-" }}</div>
-      <div>{{ effective.format|default:"— ไม่มี —" }}</div>
+{% if blockers %}
+<div class="alert alert-warning mb-5">{% icon "alert" "h-5 w-5 shrink-0" %}
+  <div><div class="font-medium">ยังออกหมายไม่ได้</div><ul class="ml-4 mt-1 list-disc">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul></div>
+</div>
+{% endif %}
+{% if conflict %}
+<div class="alert alert-warning mb-5">{% icon "refresh" "h-5 w-5 shrink-0" %}
+  <div class="flex-1">
+    <div class="font-medium">ที่อยู่ในไฟล์ผู้แจ้งเปลี่ยนไปหลังจากเจ้าหน้าที่แก้ที่อยู่เอง — เลือกที่อยู่ที่จะใช้</div>
+    <div class="mt-2 grid gap-2 md:grid-cols-2">
+      <div class="rounded-lg bg-white p-3 ring-1 ring-amber-200"><div class="text-xs text-slate-500">ที่อยู่ที่แก้เอง (ใช้อยู่ตอนนี้)</div>{{ override.address.format }}</div>
+      <div class="rounded-lg bg-white p-3 ring-1 ring-amber-200"><div class="text-xs text-slate-500">ที่อยู่ใหม่จากไฟล์ผู้แจ้ง</div>{{ c.address.format }}</div>
     </div>
     {% if can_edit %}
-    <details class="mt-3" {% if not c or blockers %}open{% endif %}>
-      <summary class="cursor-pointer text-sm font-medium text-blue-700">{% if override %}แก้ไขที่อยู่ที่แก้เอง{% else %}แก้ไข/กรอกที่อยู่เอง{% endif %}</summary>
-      <form method="post" action="{% url 'case_address_save' case.pk %}" class="mt-3 grid grid-cols-2 gap-2 text-sm">{% csrf_token %}
+    <form method="post" action="{% url 'case_address_resolve' case.pk %}" class="mt-3 flex gap-2">{% csrf_token %}
+      <button class="btn btn-sm" name="choice" value="override">ใช้ที่อยู่ที่แก้เองต่อ</button>
+      <button class="btn btn-sm" name="choice" value="file">ใช้ที่อยู่จากไฟล์</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="grid gap-5 lg:grid-cols-2">
+  <div class="card">
+    <div class="card-header">{% icon "users" "h-5 w-5 text-slate-400" %}<h2>ผู้กล่าวหา</h2></div>
+    {% if c %}
+    <dl class="dl">
+      <dt>ชื่อ</dt><dd>{{ c.full_name|default:"-" }}{% if not c.prefix %} <span class="text-xs text-slate-400">(ไม่มีคำนำหน้าในไฟล์)</span>{% endif %}</dd>
+      <dt>อายุ</dt><dd>{{ c.age|default:"-" }}</dd>
+      <dt>เลขประจำตัวประชาชน</dt>
+      <dd id="nid" class="flex flex-wrap items-center gap-2"><span class="font-mono">{{ c.national_id|mask_id }}</span>
+        {% if can_view_id and c.national_id %}<button class="btn btn-sm" hx-post="{% url 'case_reveal_id' case.pk %}" hx-target="#nid" hx-confirm="การดูเลขบัตรจะถูกบันทึกไว้ ต้องการดูหรือไม่?">{% icon "eye" "h-3.5 w-3.5" %} แสดง</button>{% endif %}
+        {% if c.flag_bad_id %}<span class="badge badge-amber">ไม่ใช่ 13 หลัก</span>{% endif %}</dd>
+      <dt>โทรศัพท์</dt><dd class="font-mono">{{ c.phone|default:"-" }}</dd>
+      <dt>ที่อยู่ (ไฟล์ผู้แจ้ง)</dt><dd>{{ c.address.format|default:"-" }}
+        {% if c.postcode_auto and not c.postcode %}<div class="text-xs text-slate-400">รหัสไปรษณีย์ {{ c.postcode_auto }} เติมโดยระบบ</div>{% endif %}
+        {% if c.address_incomplete %}<div class="mt-1"><span class="badge badge-amber">ไม่ครบ: {{ c.address.missing_labels|join:", " }}</span></div>{% endif %}</dd>
+      <dt>อาชีพ</dt><dd>{{ c.occupation|default:"-" }}</dd>
+    </dl>
+    {% else %}
+    <div class="alert alert-error">{% icon "alert" "h-5 w-5 shrink-0" %}<div>ไม่พบเลขรับแจ้งนี้ในไฟล์ผู้แจ้ง (จะจับคู่อัตโนมัติเมื่อนำเข้าไฟล์ผู้แจ้งรอบถัดไป)<br>ชื่อผู้เสียหายตามทะเบียน: {{ case.victim_name|default:"-" }}</div></div>
+    {% endif %}
+
+    <div class="mt-5 rounded-lg bg-indigo-50/60 p-4 ring-1 ring-indigo-100">
+      <div class="flex items-center gap-1.5 text-xs font-medium text-indigo-700">{% icon "envelope" "h-4 w-4" %} ที่อยู่ที่จะใช้ออกหมาย{% if override %} · แก้เองโดย {{ override.updated_by.display_name|default:"-" }} ({{ override.updated_at|thai_date }}){% endif %}</div>
+      <div class="mt-1 font-medium">{{ case.recipient_name|default:"-" }}</div>
+      <div class="text-sm">{{ effective.format|default:"— ไม่มี —" }}</div>
+    </div>
+
+    {% if can_edit %}
+    <details class="mt-4" {% if not override %}{% if not c or c.address_incomplete %}open{% endif %}{% endif %}>
+      <summary class="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-indigo-700">{% icon "pencil" "h-4 w-4" %} {% if override %}แก้ไขที่อยู่ที่แก้เอง{% else %}แก้ไข / กรอกที่อยู่เอง{% endif %}</summary>
+      <form method="post" action="{% url 'case_address_save' case.pk %}" class="mt-3 grid grid-cols-2 gap-3 text-sm">{% csrf_token %}
         {% for f in form %}
         <div class="{% if f.name == 'recipient_name' or f.name == 'note' %}col-span-2{% endif %}"><label class="label">{{ f.label }}</label>{{ f }}{% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}</div>
         {% endfor %}
-        <div class="col-span-2 text-xs text-slate-500">ที่อยู่ที่แก้เองจะไม่ถูกทับเมื่อนำเข้าไฟล์ผู้แจ้งใหม่ ถ้าไฟล์ใหม่มีที่อยู่ต่างไป ระบบจะแจ้งให้เลือก</div>
+        <p class="col-span-2 text-xs text-slate-500">ที่อยู่ที่แก้เองจะไม่ถูกทับเมื่อนำเข้าไฟล์ผู้แจ้งใหม่ ถ้าไฟล์ใหม่มีที่อยู่ต่างไป ระบบจะแจ้งให้เลือก</p>
         <div class="col-span-2"><button class="btn btn-primary">บันทึกที่อยู่</button></div>
       </form>
     </details>
@@ -75,48 +107,46 @@
   </div>
 
   <div class="card">
-    <h2 class="mb-3">ข้อมูลคดี</h2>
-    <dl class="grid grid-cols-3 gap-y-2 text-sm">
-      <dt class="text-slate-500">เลขคดีอาญา</dt><dd class="col-span-2">{{ case.criminal_case_no|default:"-" }}</dd>
-      <dt class="text-slate-500">วันที่รับแจ้ง</dt><dd class="col-span-2">{{ case.report_date|thai_date:"full" }}</dd>
-      <dt class="text-slate-500">ผู้เสียหาย (ทะเบียน)</dt><dd class="col-span-2">{{ case.victim_name }} {% if case.gender %}({{ case.gender }}){% endif %}</dd>
-      <dt class="text-slate-500">ประเภทคดี</dt><dd class="col-span-2">{{ case.case_type }}<div class="text-xs text-slate-500">{{ case.case_type_l1 }} › {{ case.case_type_l2 }} › {{ case.case_type_l3 }} · {{ case.case_group }}</div></dd>
-      <dt class="text-slate-500">มูลค่าความเสียหาย</dt><dd class="col-span-2">{{ case.damage_amount|money }} บาท</dd>
-      <dt class="text-slate-500">หน่วย</dt><dd class="col-span-2">{{ case.unit_raw|default:"-" }}</dd>
-      <dt class="text-slate-500">พนักงานสอบสวน</dt><dd class="col-span-2">{{ case.investigator_raw|default:"-" }}{% if case.investigator %} → ผู้ลงนาม: {{ case.investigator }}{% else %} <span class="badge badge-amber">ยังไม่ได้ผูกผู้ลงนาม</span>{% endif %}</dd>
-      <dt class="text-slate-500">พนักงานสืบสวน</dt><dd class="col-span-2">{{ case.detective|default:"-" }}</dd>
-      <dt class="text-slate-500">เบอร์ผู้เสียหาย</dt><dd class="col-span-2 font-mono">{{ case.victim_phone|default:"-" }}</dd>
-      <dt class="text-slate-500">เลขอ้างอิงธนาคาร</dt><dd class="col-span-2">{{ case.bank_ref|default:"-" }}</dd>
-      <dt class="text-slate-500">บันทึกการติดต่อ</dt><dd class="col-span-2 whitespace-pre-line">{{ case.contact_log|default:"-" }}</dd>
-      <dt class="text-slate-500">ประจำวัน</dt><dd class="col-span-2">{{ case.daily_log|default:"-" }}</dd>
-      <dt class="text-slate-500">รายละเอียด</dt><dd class="col-span-2 whitespace-pre-line">{{ case.detail|default:"-" }}</dd>
-      <dt class="text-slate-500">หมายเหตุ</dt><dd class="col-span-2">{{ case.remark|default:"-" }}</dd>
-      <dt class="text-slate-500">ชีตต้นทาง</dt><dd class="col-span-2">{{ case.source_sheet }}</dd>
+    <div class="card-header">{% icon "cases" "h-5 w-5 text-slate-400" %}<h2>ข้อมูลคดี</h2></div>
+    <dl class="dl">
+      <dt>เลขคดีอาญา</dt><dd>{{ case.criminal_case_no|default:"-" }}</dd>
+      <dt>ผู้เสียหาย (ทะเบียน)</dt><dd>{{ case.victim_name }} {% if case.gender %}({{ case.gender }}){% endif %}</dd>
+      <dt>ประเภทคดี</dt><dd>{{ case.case_type }}<div class="text-xs text-slate-400">{{ case.case_type_l1 }} › {{ case.case_type_l2 }} › {{ case.case_type_l3 }}</div></dd>
+      <dt>มูลค่าความเสียหาย</dt><dd class="font-medium">{{ case.damage_amount|money }} บาท</dd>
+      <dt>พนักงานสอบสวน</dt><dd>{{ case.investigator_raw|default:"-" }}{% if case.investigator %}<div class="text-xs text-slate-500">ผู้ลงนาม: {{ case.investigator }}</div>{% else %} <span class="badge badge-amber">ยังไม่ได้ผูกผู้ลงนาม</span>{% endif %}</dd>
+      <dt>พนักงานสืบสวน</dt><dd>{{ case.detective|default:"-" }}</dd>
+      <dt>เบอร์ผู้เสียหาย</dt><dd class="font-mono">{{ case.victim_phone|default:"-" }}</dd>
+      <dt>เลขอ้างอิงธนาคาร</dt><dd>{{ case.bank_ref|default:"-" }}</dd>
+      <dt>บันทึกการติดต่อ</dt><dd class="whitespace-pre-line">{{ case.contact_log|default:"-" }}</dd>
+      <dt>ประจำวัน</dt><dd>{{ case.daily_log|default:"-" }}</dd>
+      <dt>รายละเอียด</dt><dd class="whitespace-pre-line">{{ case.detail|default:"-" }}</dd>
+      <dt>หมายเหตุ</dt><dd>{{ case.remark|default:"-" }}</dd>
+      <dt>ชีตต้นทาง</dt><dd>{{ case.source_sheet }}</dd>
     </dl>
   </div>
 </div>
 
-<div class="card mt-4 overflow-x-auto">
-  <h2 class="mb-3">ประวัติหมายเรียก</h2>
+<div class="table-wrap mt-5">
+  <div class="flex items-center gap-2 px-5 py-4">{% icon "document" "h-5 w-5 text-slate-400" %}<h2>ประวัติหมายเรียก</h2></div>
   <table class="table">
-    <thead><tr><th>ครั้งที่</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>แบบฟอร์ม</th><th>ผล</th><th>ไฟล์</th></tr></thead>
+    <thead><tr><th>ครั้งที่</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>ผล</th><th>ไฟล์</th></tr></thead>
     <tbody>
     {% for s in summonses %}
       <tr>
-        <td>{{ s.number }}</td><td>{{ s.issue_date|thai_date }}</td><td>{{ s.appointment_at|thai_date:"datetime" }}</td>
-        <td>{{ s.issuer }}</td><td>{{ s.created_by.display_name|default:"-" }}</td><td>v{{ s.template_version }}</td>
+        <td class="font-semibold">{{ s.number }}</td><td>{{ s.issue_date|thai_date }}</td><td class="whitespace-nowrap">{{ s.appointment_at|thai_date:"datetime" }}</td>
+        <td>{{ s.issuer }}</td><td>{{ s.created_by.display_name|default:"-" }}</td>
         <td>
           {% if can_edit %}
-          <form method="post" action="{% url 'summons_result' s.pk %}" class="flex items-center gap-1">{% csrf_token %}
-            <select name="result" class="rounded border-slate-300 py-1 text-xs" onchange="this.form.submit()">
+          <form method="post" action="{% url 'summons_result' s.pk %}">{% csrf_token %}
+            <select name="result" class="input w-auto py-1 text-xs" onchange="this.form.submit()">
               {% for v, l in results %}<option value="{{ v }}" {% if v == s.result %}selected{% endif %}>{{ l }}</option>{% endfor %}
             </select>
           </form>
           {% else %}{{ s.get_result_display }}{% endif %}
         </td>
-        <td class="whitespace-nowrap"><a href="{% url 'summons_pdf' s.pk %}" target="_blank">PDF</a> · <a href="{% url 'summons_docx' s.pk %}">Word</a></td>
+        <td class="whitespace-nowrap">{% if pdf_available %}<a class="btn btn-sm" href="{% url 'summons_pdf' s.pk %}" target="_blank">PDF</a>{% endif %} <a class="btn btn-sm" href="{% url 'summons_docx' s.pk %}">Word</a></td>
       </tr>
-    {% empty %}<tr><td colspan="8" class="text-slate-500">ยังไม่เคยออกหมายเรียก</td></tr>{% endfor %}
+    {% empty %}<tr><td colspan="7" class="py-8 text-center text-slate-500">ยังไม่เคยออกหมายเรียก</td></tr>{% endfor %}
     </tbody>
   </table>
 </div>

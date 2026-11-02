@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load thai %}
 {% block title %}หมายเรียก{% endblock %}
 {% block content %}
-<div class="mb-4 flex items-center gap-2"><h1>หมายเรียกที่ออกแล้ว</h1><span class="text-sm text-slate-500">{{ page.paginator.count }} ฉบับ</span></div>
+<div class="page-header"><div><h1>หมายเรียกที่ออกแล้ว</h1><p class="page-sub">{{ page.paginator.count }} ฉบับ · เลือกรายการเพื่อส่งออกหรือพิมพ์ซ้ำ</p></div></div>
 <form method="get" class="card mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
   <input class="input md:col-span-2" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ">
   <select name="result" class="input"><option value="">ทุกผล</option>{% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
@@ -23,7 +23,7 @@
         <td>{{ s.number }}</td><td>{{ s.recipient_name }}</td><td>{{ s.issue_date|thai_date }}</td>
         <td class="whitespace-nowrap">{{ s.appointment_at|thai_date:"datetime" }}</td><td>{{ s.issuer }}</td><td>{{ s.created_by.display_name|default:"-" }}</td>
         <td><span class="badge {% if s.result == 'attended' %}badge-green{% elif s.result == 'absent' %}badge-red{% elif s.result == 'cancelled' %}badge-gray{% else %}badge-blue{% endif %}">{{ s.get_result_display }}</span></td>
-        <td class="whitespace-nowrap"><a href="{% url 'summons_pdf' s.pk %}" target="_blank">PDF</a> · <a href="{% url 'summons_docx' s.pk %}">Word</a></td>
+        <td class="whitespace-nowrap">{% if pdf_available %}<a href="{% url 'summons_pdf' s.pk %}" target="_blank">PDF</a> · {% endif %}<a href="{% url 'summons_docx' s.pk %}">Word</a></td>
       </tr>
     {% empty %}<tr><td colspan="10" class="text-slate-500">ยังไม่มีหมายเรียก</td></tr>{% endfor %}
     </tbody>

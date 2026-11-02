@@ -1,7 +1,8 @@
 {% extends "base.html" %}{% load thai %}
 {% block title %}ส่งออกหมายเรียก{% endblock %}
 {% block content %}
-<h1 class="mb-4">ส่งออกหมายเรียก</h1>
+<div class="page-header"><div><h1>ส่งออกหมายเรียก</h1><p class="page-sub">เลือกรูปแบบไฟล์ แล้วกดส่งออก</p></div></div>
+{% if not pdf_available %}<div class="alert alert-info mb-4">เซิร์ฟเวอร์นี้ไม่มี LibreOffice จึงส่งออกได้เฉพาะ Word (.docx)</div>{% endif %}
 {% if not summonses %}
 <div class="card text-sm">ยังไม่ได้เลือกหมายเรียก — ไปที่ <a href="{% url 'summons_list' %}">หมายเรียก</a> แล้วเลือกรายการที่ต้องการส่งออก</div>
 {% else %}

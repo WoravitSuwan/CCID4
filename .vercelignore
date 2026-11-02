@@ -1,0 +1,12 @@
+.venv
+media
+data
+backups
+staticfiles
+node_modules
+tests
+docker
+Dockerfile
+docker-compose.yml
+*.bat
+*.sh

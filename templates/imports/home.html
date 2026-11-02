@@ -9,7 +9,7 @@
       {% for r in form.kind %}<label class="mb-1 flex items-center gap-2 text-sm">{{ r.tag }} {{ r.choice_label }}</label>{% endfor %}
       {{ form.kind.errors }}
     </div>
-    <div><label class="label">{{ form.file.label }}</label><input type="file" name="file" accept=".xlsx" class="text-sm" required>{{ form.file.errors }}</div>
+    <div><label class="label">{{ form.file.label }}</label><input type="file" name="file" accept=".xlsx" class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" required>{{ form.file.errors }}</div>
     <ul class="list-disc pl-5 text-xs text-slate-500">
       <li>ข้อมูลผู้แจ้ง: ไฟล์ที่ส่งออกจากระบบรับแจ้งความออนไลน์ (ชีต Grid)</li>
       <li>ทะเบียนคดี: ไฟล์ทะเบียนของกอง เลือกได้ว่าจะนำเข้าชีตปีไหน</li>

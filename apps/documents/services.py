@@ -267,8 +267,7 @@ def issue(user, plan: IssuePlan, opts: IssueOptions, request=None) -> list[Summo
         ensure_docx(summons)
         if status and case.status_id != status.pk:
             old = case.status.name if case.status_id else "-"
-            case.status = status
-            case.save(update_fields=["status", "updated_at"])
+            case.set_status(status, user)
             log(request or user, AuditAction.EDIT, case, f"เปลี่ยนสถานะ {old} → {status.name} (ออกหมายเรียก)")
         log(request or user, AuditAction.ISSUE, summons,
             f"ออกหมายเรียก {case.receipt_no} ครั้งที่ {number} ผู้ลงนาม {summons.issuer} "

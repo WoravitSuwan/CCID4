@@ -2,39 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Sarabun (SIL OFL) bundled locally - no external font requests */
+@font-face { font-family: "Sarabun"; font-weight: 400; font-display: swap; src: url("../fonts/sarabun-thai-400-normal.woff2") format("woff2"); unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-weight: 400; font-display: swap; src: url("../fonts/sarabun-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215; }
+@font-face { font-family: "Sarabun"; font-weight: 500; font-display: swap; src: url("../fonts/sarabun-thai-500-normal.woff2") format("woff2"); unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-weight: 500; font-display: swap; src: url("../fonts/sarabun-latin-500-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+@font-face { font-family: "Sarabun"; font-weight: 600; font-display: swap; src: url("../fonts/sarabun-thai-600-normal.woff2") format("woff2"); unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-weight: 600; font-display: swap; src: url("../fonts/sarabun-latin-600-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+@font-face { font-family: "Sarabun"; font-weight: 700; font-display: swap; src: url("../fonts/sarabun-thai-700-normal.woff2") format("woff2"); unicode-range: U+0E01-0E5B, U+200C-200D, U+25CC; }
+@font-face { font-family: "Sarabun"; font-weight: 700; font-display: swap; src: url("../fonts/sarabun-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+
 @layer base {
-  html { font-family: "Sarabun", "TH Sarabun New", "Leelawadee UI", "Tahoma", system-ui, sans-serif; }
-  body { @apply bg-slate-50 text-slate-800; }
-  h1 { @apply text-2xl font-semibold text-slate-900; }
-  h2 { @apply text-lg font-semibold text-slate-900; }
-  a { @apply text-blue-700 hover:underline; }
+  html { font-family: "Sarabun", "Leelawadee UI", "Tahoma", system-ui, sans-serif; font-size: 15.5px; }
+  body { @apply bg-slate-100 text-slate-800 antialiased; }
+  h1 { @apply text-2xl font-semibold tracking-tight text-slate-900; }
+  h2 { @apply text-base font-semibold text-slate-900; }
+  a { @apply text-indigo-700 hover:text-indigo-900; }
+  [x-cloak] { display: none !important; }
+  .font-mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.92em; }
 }
 
 @layer components {
-  .btn { @apply inline-flex items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:no-underline disabled:cursor-not-allowed disabled:opacity-50; }
-  .btn-primary { @apply border-blue-700 bg-blue-700 text-white hover:bg-blue-800; }
-  .btn-danger { @apply border-red-600 bg-red-600 text-white hover:bg-red-700; }
-  .btn-sm { @apply px-2 py-1 text-xs; }
-  .card { @apply rounded-lg border border-slate-200 bg-white p-4 shadow-sm; }
-  .input { @apply w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600; }
+  /* buttons */
+  .btn { @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700 hover:text-white; }
+  .btn-success { @apply border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white; }
+  .btn-danger { @apply border-rose-600 bg-rose-600 text-white hover:bg-rose-700 hover:text-white; }
+  .btn-ghost { @apply border-transparent bg-transparent shadow-none hover:bg-slate-200/60; }
+  .btn-sm { @apply gap-1 rounded-md px-2.5 py-1 text-xs; }
+
+  /* surfaces */
+  .card { @apply rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/80; }
+  .card-header { @apply -mx-5 -mt-5 mb-4 flex items-center gap-2 border-b border-slate-100 px-5 py-3.5; }
+  .page-header { @apply mb-6 flex flex-wrap items-end gap-3; }
+  .page-sub { @apply mt-1 text-sm text-slate-500; }
+
+  /* forms */
+  .input { @apply w-full rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500; }
   .label { @apply mb-1 block text-sm font-medium text-slate-700; }
-  .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
-  .badge-gray { @apply bg-slate-100 text-slate-700; }
-  .badge-green { @apply bg-green-100 text-green-800; }
-  .badge-red { @apply bg-red-100 text-red-800; }
-  .badge-amber { @apply bg-amber-100 text-amber-800; }
-  .badge-blue { @apply bg-blue-100 text-blue-800; }
-  .table { @apply min-w-full divide-y divide-slate-200 text-sm; }
-  .table th { @apply bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600; }
-  .table td { @apply px-3 py-2 align-top; }
-  .table tbody tr { @apply border-t border-slate-100 hover:bg-slate-50; }
-  .nav-link { @apply rounded-md px-3 py-2 text-sm font-medium text-slate-200 hover:bg-blue-800 hover:text-white hover:no-underline; }
-  .nav-link.active { @apply bg-blue-900 text-white; }
-  .tab { @apply border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:no-underline; }
-  .tab.active { @apply border-blue-700 text-blue-800; }
-  .stat { @apply card block hover:border-blue-300 hover:no-underline; }
-  .stat-value { @apply mt-1 text-3xl font-semibold text-slate-900; }
-  .stat-label { @apply text-sm text-slate-500; }
-  .errorlist { @apply mt-1 text-xs text-red-700; }
   .helptext { @apply mt-1 block text-xs text-slate-500; }
+  .errorlist { @apply mt-1 text-xs text-rose-700; }
+  .check { @apply h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500; }
+
+  /* badges */
+  .badge { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset; }
+  .badge-gray { @apply bg-slate-100 text-slate-700 ring-slate-200; }
+  .badge-green { @apply bg-emerald-50 text-emerald-700 ring-emerald-200; }
+  .badge-red { @apply bg-rose-50 text-rose-700 ring-rose-200; }
+  .badge-amber { @apply bg-amber-50 text-amber-800 ring-amber-200; }
+  .badge-blue { @apply bg-indigo-50 text-indigo-700 ring-indigo-200; }
+  .status-gray { @apply bg-slate-100 text-slate-600 ring-slate-200; }
+  .status-amber { @apply bg-amber-50 text-amber-800 ring-amber-200; }
+  .status-sky { @apply bg-sky-50 text-sky-700 ring-sky-200; }
+  .status-indigo { @apply bg-indigo-50 text-indigo-700 ring-indigo-200; }
+  .status-violet { @apply bg-violet-50 text-violet-700 ring-violet-200; }
+  .status-blue { @apply bg-blue-50 text-blue-700 ring-blue-200; }
+  .status-emerald { @apply bg-emerald-50 text-emerald-700 ring-emerald-200; }
+  .status-rose { @apply bg-rose-50 text-rose-700 ring-rose-200; }
+  .status-teal { @apply bg-teal-50 text-teal-700 ring-teal-200; }
+  .status-orange { @apply bg-orange-50 text-orange-700 ring-orange-200; }
+  .status-pink { @apply bg-pink-50 text-pink-700 ring-pink-200; }
+  .status-lime { @apply bg-lime-50 text-lime-800 ring-lime-200; }
+  .dot { @apply inline-block h-1.5 w-1.5 rounded-full bg-current; }
+
+  /* tables */
+  .table-wrap { @apply overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-slate-200/80; }
+  .table { @apply min-w-full text-sm; }
+  .table thead th { @apply sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur; }
+  .table td { @apply border-b border-slate-100 px-3 py-2.5 align-top; }
+  .table tbody tr { @apply transition-colors hover:bg-indigo-50/40; }
+  .table tbody tr:last-child td { @apply border-b-0; }
+
+  /* navigation */
+  .side-link { @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white; }
+  .side-link.active { @apply bg-white/15 text-white shadow-inner; }
+  .side-link .count { @apply ml-auto rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-slate-900; }
+  .tab { @apply -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:border-slate-300 hover:text-slate-800; }
+  .tab.active { @apply border-indigo-600 text-indigo-700; }
+
+  /* stats */
+  .stat { @apply flex items-start gap-4 rounded-xl bg-white p-3.5 sm:p-4 shadow-sm ring-1 ring-slate-200/80 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200; }
+  .stat-icon { @apply hidden h-11 w-11 sm:flex shrink-0 items-center justify-center rounded-lg; }
+  .stat-value { @apply text-2xl font-bold leading-tight text-slate-900; }
+  .stat-label { @apply text-sm text-slate-500; }
+
+  /* alerts */
+  .alert { @apply flex items-start gap-3 rounded-xl border px-4 py-3 text-sm; }
+  .alert-info { @apply border-indigo-200 bg-indigo-50 text-indigo-900; }
+  .alert-success { @apply border-emerald-200 bg-emerald-50 text-emerald-900; }
+  .alert-warning { @apply border-amber-200 bg-amber-50 text-amber-900; }
+  .alert-error { @apply border-rose-200 bg-rose-50 text-rose-900; }
+
+  .dl { @apply grid grid-cols-3 gap-x-3 gap-y-2.5 text-sm; }
+  .dl dt { @apply text-slate-500; }
+  .dl dd { @apply col-span-2 text-slate-800; }
 }

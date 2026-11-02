@@ -2,15 +2,17 @@ from django import forms
 
 from .models import AddressOverride, Investigator, Status, Unit
 
-INPUT = "w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600"
+INPUT = "input"
 
 
 class StyledFormMixin:
     def _style(self):
         for field in self.fields.values():
             widget = field.widget
-            if isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple, forms.RadioSelect)):
-                widget.attrs.setdefault("class", "h-4 w-4 rounded border-slate-300 text-blue-700")
+            if isinstance(widget, forms.RadioSelect):
+                widget.attrs.setdefault("class", "h-4 w-4 border-slate-300 text-indigo-600 focus:ring-indigo-500")
+            elif isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
+                widget.attrs.setdefault("class", "check")
             else:
                 widget.attrs.setdefault("class", INPUT)
 
@@ -35,6 +37,7 @@ class AddressOverrideForm(StyledModelForm):
         widgets = {name: forms.TextInput() for name in
                    ["house_no", "moo", "building", "soi", "road", "subdistrict", "district", "province",
                     "recipient_name"]}
+        widgets["note"] = forms.TextInput()
 
 
 class CaseFilterForm(StyledForm):

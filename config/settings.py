@@ -27,6 +27,16 @@ def env_int(name, default):
         return default
 
 
+# Vercel (serverless) = try-out mode: no persistent storage, data is rebuilt from the
+# fictional sample files on every cold start. See api/index.py.
+VERCEL = bool(env("VERCEL"))
+DEMO_MODE = env_bool("DEMO_MODE", VERCEL)
+if VERCEL:
+    os.environ.setdefault("SQLITE_PATH", "/tmp/summons-demo.sqlite3")
+    os.environ.setdefault("MEDIA_ROOT", "/tmp/summons-media")
+    os.environ.setdefault("BACKGROUND_TASKS", "inline")  # no work may run after the response
+    os.environ.setdefault("DJANGO_SECRET_KEY", "demo-only-set-DJANGO_SECRET_KEY-in-vercel-env-7f3a9c")
+
 SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-insecure-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = [h.strip() for h in env("DJANGO_ALLOWED_HOSTS", "*").split(",") if h.strip()]
@@ -177,3 +187,17 @@ if not DEBUG:
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = False
     X_FRAME_OPTIONS = "SAMEORIGIN"
+
+if VERCEL:
+    # Each serverless instance has its own /tmp database, so keep the login in a
+    # signed cookie instead of the database; serve static files straight from the
+    # source folders (no collectstatic step on Vercel).
+    SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+    WHITENOISE_USE_FINDERS = True
+    STORAGES["staticfiles"] = {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    import warnings
+
+    warnings.filterwarnings("ignore", message="No directory at", module="whitenoise.base")

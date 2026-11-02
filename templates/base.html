@@ -1,45 +1,87 @@
-{% load static %}<!doctype html>
-<html lang="th">
+{% load static ui %}<!doctype html>
+<html lang="th" class="h-full">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}ระบบออกหมายเรียก{% endblock %} · บก.สอท.4</title>
+  <link rel="preload" href="{% static 'fonts/sarabun-thai-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
 </head>
-<body class="min-h-screen" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body class="h-full" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 {% if user.is_authenticated %}
-<header class="bg-blue-950 text-white">
-  <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-2">
-    <a href="{% url 'dashboard' %}" class="mr-4 text-base font-semibold text-white hover:no-underline">ระบบออกหมายเรียก บก.สอท.4</a>
-    {% with u=request.resolver_match.url_name %}
-    <nav class="flex flex-wrap gap-1">
-      <a class="nav-link {% if u == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">หน้าหลัก</a>
-      <a class="nav-link {% if u == 'case_list' or u == 'case_detail' %}active{% endif %}" href="{% url 'case_list' %}">ทะเบียนคดี</a>
-      <a class="nav-link {% if u == 'summons_list' or u == 'issue_form' %}active{% endif %}" href="{% url 'summons_list' %}">หมายเรียก</a>
-      <a class="nav-link {% if 'export' in u %}active{% endif %}" href="{% url 'export_jobs' %}">ส่งออก</a>
-      {% if perm_import %}<a class="nav-link {% if 'import' in u %}active{% endif %}" href="{% url 'import_home' %}">นำเข้าข้อมูล</a>{% endif %}
-      {% if perm_settings %}<a class="nav-link {% if 'settings' in u %}active{% endif %}" href="{% url 'settings_home' %}">ตั้งค่า
-        {% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases %}<span class="ml-1 rounded-full bg-amber-400 px-1.5 text-xs text-blue-950">{{ admin_alerts.new_statuses|add:admin_alerts.unlinked_aliases }}</span>{% endif %}</a>{% endif %}
-    </nav>
-    {% endwith %}
-    <div class="ml-auto flex items-center gap-3 text-sm">
-      <span class="text-blue-100">{{ user.display_name }} · {{ user.role_label }}</span>
-      <a class="text-blue-100 hover:text-white" href="{% url 'password_change' %}">เปลี่ยนรหัสผ่าน</a>
-      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="text-blue-100 hover:text-white">ออกจากระบบ</button></form>
+{% with u=request.resolver_match.url_name %}
+<div class="min-h-full lg:pl-64">
+  <!-- sidebar -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 text-white transition-transform lg:translate-x-0">
+    <div class="flex items-center gap-3 px-5 py-5">
+      <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-400/30">{% icon "shield" "h-6 w-6" %}</div>
+      <div class="leading-tight">
+        <div class="text-sm font-semibold">ระบบออกหมายเรียก</div>
+        <div class="text-xs text-slate-400">ผู้กล่าวหา · บก.สอท.4</div>
+      </div>
     </div>
+    <nav class="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
+      <a class="side-link {% if u == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">{% icon "home" %} ภาพรวม</a>
+      <a class="side-link {% if u == 'case_list' or u == 'case_detail' %}active{% endif %}" href="{% url 'case_list' %}?open=on">{% icon "cases" %} ทะเบียนคดี</a>
+      <a class="side-link {% if u == 'summons_list' or u == 'issue_form' %}active{% endif %}" href="{% url 'summons_list' %}">{% icon "document" %} หมายเรียก</a>
+      <a class="side-link {% if u and 'export' in u %}active{% endif %}" href="{% url 'export_jobs' %}">{% icon "download" %} ส่งออกเอกสาร</a>
+      {% if perm_import %}<a class="side-link {% if u and 'import' in u %}active{% endif %}" href="{% url 'import_home' %}">{% icon "upload" %} นำเข้าข้อมูล</a>{% endif %}
+      {% if perm_settings %}
+      <div class="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">ผู้ดูแลระบบ</div>
+      <a class="side-link {% if u and 'settings' in u %}active{% endif %}" href="{% url 'settings_home' %}">{% icon "settings" %} ตั้งค่า
+        {% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases %}<span class="count">{{ admin_alerts.new_statuses|add:admin_alerts.unlinked_aliases }}</span>{% endif %}</a>
+      <a class="side-link {% if u == 'settings_audit' %}active{% endif %}" href="{% url 'settings_audit' %}">{% icon "eye" %} บันทึกการใช้งาน</a>
+      {% endif %}
+    </nav>
+    <div class="border-t border-white/10 p-4">
+      <div class="flex items-center gap-3">
+        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold">{{ user.display_name|slice:":1" }}</div>
+        <div class="min-w-0 flex-1 leading-tight">
+          <div class="truncate text-sm font-medium">{{ user.display_name }}</div>
+          <div class="text-xs text-slate-400">{{ user.role_label }}</div>
+        </div>
+      </div>
+      <div class="mt-3 flex gap-2">
+        <a class="btn btn-sm flex-1 border-white/20 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white" href="{% url 'password_change' %}">รหัสผ่าน</a>
+        <form method="post" action="{% url 'logout' %}" class="flex-1">{% csrf_token %}<button class="btn btn-sm w-full border-white/20 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white">{% icon "logout" "h-4 w-4" %} ออก</button></form>
+      </div>
+    </div>
+  </aside>
+  <div id="backdrop" class="fixed inset-0 z-30 hidden bg-slate-900/50 lg:hidden" onclick="toggleNav()"></div>
+
+  <!-- mobile top bar -->
+  <div class="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur lg:hidden">
+    <button class="btn btn-ghost btn-sm" onclick="toggleNav()" aria-label="เมนู">{% icon "menu" %}</button>
+    <span class="text-sm font-semibold">ระบบออกหมายเรียก บก.สอท.4</span>
   </div>
-</header>
-{% endif %}
-<main class="mx-auto max-w-7xl px-4 py-6">
-  {% if messages %}
-  <div class="mb-4 space-y-2">
-    {% for m in messages %}
-    <div class="rounded-md border px-4 py-2 text-sm {% if m.tags == 'error' %}border-red-200 bg-red-50 text-red-800{% elif m.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-900{% elif m.tags == 'success' %}border-green-200 bg-green-50 text-green-800{% else %}border-blue-200 bg-blue-50 text-blue-900{% endif %}">{{ m }}</div>
-    {% endfor %}
+
+  {% if demo_mode %}
+  <div class="flex items-center justify-center gap-2 bg-amber-400 px-4 py-1.5 text-center text-xs font-medium text-amber-950">
+    {% icon "info" "h-4 w-4" %} โหมดทดลอง: ข้อมูลทั้งหมดเป็นข้อมูลสมมติ และจะถูกรีเซ็ตเมื่อเซิร์ฟเวอร์เริ่มใหม่{% if not pdf_available %} · สร้าง PDF ไม่ได้ในโหมดนี้ (ส่งออก Word ได้){% endif %}
   </div>
   {% endif %}
-  {% block content %}{% endblock %}
-</main>
+
+  <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    {% if messages %}
+    <div class="mb-5 space-y-2">
+      {% for m in messages %}
+      <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% elif m.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">
+        {% if m.tags == 'success' %}{% icon "check" "h-5 w-5 shrink-0" %}{% elif m.tags == 'error' or m.tags == 'warning' %}{% icon "alert" "h-5 w-5 shrink-0" %}{% else %}{% icon "info" "h-5 w-5 shrink-0" %}{% endif %}
+        <div>{{ m }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endwith %}
+<script>
+function toggleNav(){document.getElementById('sidebar').classList.toggle('-translate-x-full');document.getElementById('backdrop').classList.toggle('hidden');}
+</script>
+{% else %}
+  {% block public %}{% endblock %}
+{% endif %}
 </body>
 </html>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% load thai %}
 {% block title %}ออกหมายเรียก{% endblock %}
 {% block content %}
-<h1 class="mb-4">ออกหมายเรียก ({{ cases|length }} คดีที่เลือก)</h1>
+<div class="page-header"><div><h1>ออกหมายเรียก</h1><p class="page-sub">{{ cases|length }} คดีที่เลือก · จัดกลุ่มตามผู้ลงนาม</p></div></div>
 {% if error %}<div class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>{% endif %}
 <form method="post" id="issue-form">{% csrf_token %}
   {% for x in excluded %}<input type="hidden" name="exclude" value="{{ x }}">{% endfor %}
@@ -19,7 +19,8 @@
     </div>
     <div class="flex flex-wrap gap-2 md:col-span-4">
       <button class="btn" name="action" value="refresh">คำนวณใหม่ตามค่าที่แก้</button>
-      <button class="btn" name="action" value="preview" formtarget="_blank">ดูตัวอย่าง PDF</button>
+      {% if pdf_available %}<button class="btn" name="action" value="preview" formtarget="_blank">ดูตัวอย่าง PDF</button>
+      {% else %}<button class="btn" type="button" disabled title="เซิร์ฟเวอร์นี้ไม่มี LibreOffice">ดูตัวอย่าง PDF (ไม่พร้อมใช้งาน)</button>{% endif %}
       <button class="btn btn-primary" name="action" value="confirm" {% if not plan or not plan.ok_items %}disabled{% endif %}
         onclick="return confirm('ยืนยันออกหมายเรียก {{ plan.ok_items|length }} ฉบับ?')">ยืนยันออกหมาย ({{ plan.ok_items|length|default:0 }} ฉบับ)</button>
     </div>
