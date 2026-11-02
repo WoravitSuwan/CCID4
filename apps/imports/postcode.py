@@ -6,6 +6,7 @@ No network access is ever made.
 from __future__ import annotations
 
 import csv
+import logging
 import re
 from collections import defaultdict
 from functools import lru_cache
@@ -14,6 +15,7 @@ from pathlib import Path
 from apps.registry.address import BANGKOK_NAMES, strip_prefix
 
 DATA_FILE = Path(__file__).parent / "data" / "thai_postcodes.csv"
+logger = logging.getLogger(__name__)
 
 
 def _key(text: str) -> str:
@@ -43,6 +45,9 @@ class PostcodeLookup:
         self.by_full: dict[tuple, set] = defaultdict(set)
         self.by_district: dict[tuple, set] = defaultdict(set)
         self.by_province_sub: dict[tuple, set] = defaultdict(set)
+        if not Path(path).exists():
+            logger.error("postcode table missing: %s (postcodes will not be auto-filled)", path)
+            return
         with open(path, encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
                 p = norm_province(row["province"])

@@ -1,12 +1,14 @@
-.venv
-media
-data
-backups
-staticfiles
-node_modules
-tests
-docker
-Dockerfile
-docker-compose.yml
-*.bat
-*.sh
+# Same syntax as .gitignore: a leading "/" anchors to the project root.
+# (Without it, e.g. "data" would also drop apps/imports/data with the postcode table.)
+/.venv
+/media
+/data
+/backups
+/staticfiles
+/node_modules
+/tests
+/docker
+/Dockerfile
+/docker-compose.yml
+/*.bat
+/*.sh

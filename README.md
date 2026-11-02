@@ -52,6 +52,17 @@ git clone https://github.com/WoravitSuwan/CCID4.git
 
 รายละเอียดเพิ่มเติมอยู่ในข้อ 1
 
+### แบบที่ 3: Vercel (โหมดทดลอง ไม่เก็บข้อมูล)
+1. import repo ที่ <https://vercel.com/new> เลือก Framework Preset = **Other**
+2. ตั้ง Environment Variable `DJANGO_SECRET_KEY` เป็นข้อความสุ่มยาวๆ แล้วกด Deploy
+
+ข้อจำกัดของโหมดนี้:
+- ทุกครั้งที่เซิร์ฟเวอร์เริ่มใหม่ ระบบสร้างฐานข้อมูลชั่วคราวและโหลดข้อมูลสมมติให้เอง การแก้ไขจะหายเมื่อรีสตาร์ต
+- บัญชีทดลองมีปุ่มกดในหน้าล็อกอิน (รหัสผ่าน `demo12345`)
+- Vercel ไม่มี LibreOffice จึงส่งออกได้เฉพาะ Word
+- ห้ามใช้กับข้อมูลจริง
+- Vercel ติดตั้งเฉพาะ `requirements.txt` (แพ็กเกจหลักประมาณ 100 MB) ส่วน Docker ใช้ `requirements-server.txt` และ start-local ใช้ `requirements-local.txt`
+
 ---
 
 ## 1. ติดตั้งบน Windows ด้วย Docker Desktop

@@ -1,6 +1,6 @@
 import logging
 
-from celery import shared_task
+from apps.core.tasking import shared_task
 
 from .models import BatchStatus, ImportBatch
 

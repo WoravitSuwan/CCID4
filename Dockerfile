@@ -16,8 +16,8 @@ COPY docker/65-th-sarabun-fallback.conf /etc/fonts/conf.d/65-th-sarabun-fallback
 RUN fc-cache -f && (fc-list | grep -i sarabun || echo "WARNING: TH Sarabun fonts not found in fonts/ - using Laksaman fallback")
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+COPY requirements.txt requirements-server.txt ./
+RUN pip install -r requirements-server.txt
 
 COPY . .
 RUN DJANGO_SECRET_KEY=build python manage.py collectstatic --noinput -v0 \

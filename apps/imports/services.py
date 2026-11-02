@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
 import openpyxl
-import pandas as pd
 from django.db import transaction
 from django.utils import timezone
 
@@ -66,7 +65,7 @@ def cell_text(value) -> str:
         if value.is_integer():
             return str(int(value))
         return repr(value)
-    if isinstance(value, (pd.Timestamp, dt.datetime)):
+    if isinstance(value, dt.datetime):
         if value.hour or value.minute:
             return value.strftime("%d/%m/%Y %H:%M")
         return value.strftime("%d/%m/%Y")
@@ -76,15 +75,30 @@ def cell_text(value) -> str:
 
 
 def read_sheet(path, sheet: str) -> tuple[list[str], list[tuple[int, dict]]]:
-    """Return (headers, [(excel_row_number, {header: raw_value})])."""
-    df = pd.read_excel(path, sheet_name=sheet, dtype=object, header=0, engine="openpyxl")
-    df.columns = [clean_text(c) for c in df.columns]
-    df = df.astype(object).where(pd.notna(df), None)
-    headers = list(df.columns)
-    rows = []
-    for idx, record in enumerate(df.itertuples(index=False, name=None)):
-        rows.append((idx + 2, dict(zip(headers, record))))
-    return headers, rows
+    """Return (headers, [(excel_row_number, {header: raw_value})]).
+
+    Read with openpyxl directly (streaming, values only): cells keep their Excel
+    type (int / float / str / datetime) so leading zeros of text cells survive.
+    """
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        ws = wb[sheet]
+        values = ws.iter_rows(values_only=True)
+        header_row = next(values, ()) or ()
+        headers = []
+        for idx, cell in enumerate(header_row):
+            name = clean_text(cell) or f"Unnamed: {idx}"
+            while name in headers:  # duplicate header names stay distinct
+                name += "_"
+            headers.append(name)
+        rows = []
+        for idx, record in enumerate(values):
+            if record is None or all(v is None or (isinstance(v, str) and not v.strip()) for v in record):
+                continue
+            rows.append((idx + 2, dict(zip(headers, record))))
+        return headers, rows
+    finally:
+        wb.close()
 
 
 # --------------------------------------------------------------------------- parsing helpers
@@ -114,9 +128,8 @@ def parse_decimal(value):
 
 def parse_log_datetime(value):
     """'dd/mm/yyyy HH:MM' (ค.ศ., or พ.ศ. if year > 2400) -> aware datetime."""
-    if isinstance(value, (pd.Timestamp, dt.datetime)):
-        naive = value.to_pydatetime() if isinstance(value, pd.Timestamp) else value
-        return timezone.make_aware(naive.replace(tzinfo=None))
+    if isinstance(value, dt.datetime):
+        return timezone.make_aware(value.replace(tzinfo=None))
     text = cell_text(value)
     m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})(?:\s+(\d{1,2})[:.](\d{2}))?", text)
     if not m:
@@ -206,8 +219,8 @@ def parse_register_row(raw: dict, mapping: dict, sheet: str, analysis: Analysis,
     year = parse_int(_get(raw, mapping, "report_year"))
     report_date = None
     raw_day = _get(raw, mapping, "report_day")
-    if isinstance(raw_day, (pd.Timestamp, dt.datetime)):
-        report_date = raw_day.date() if hasattr(raw_day, "date") else raw_day
+    if isinstance(raw_day, dt.datetime):
+        report_date = raw_day.date()
     elif day and month and year:
         try:
             report_date = dt.date(normalize_year_to_ce(year), month, day)

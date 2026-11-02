@@ -1,0 +1,4 @@
+# start-local (one computer, no Docker): waitress web server; psycopg for an optional PostgreSQL in local.env
+-r requirements.txt
+waitress==3.0.2
+psycopg[binary]==3.3.6

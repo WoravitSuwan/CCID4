@@ -34,7 +34,9 @@ def run_background(task, *args):
     mode = "inline" if settings.CELERY_TASK_ALWAYS_EAGER else settings.BACKGROUND_TASKS
     if mode == "inline":
         return task(*args)
-    if mode == "celery":
+    from .tasking import HAS_CELERY
+
+    if mode == "celery" and HAS_CELERY:
         try:
             return task.delay(*args)
         except Exception:

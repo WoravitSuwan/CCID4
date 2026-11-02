@@ -69,14 +69,14 @@ def ensure_venv():
     if not VENV_PY.exists():
         say("• สร้าง virtual environment (.venv) ...")
         venv.EnvBuilder(with_pip=True, clear=False).create(VENV)
-    req = (ROOT / "requirements.txt").read_bytes()
+    req = (ROOT / "requirements.txt").read_bytes() + (ROOT / "requirements-local.txt").read_bytes()
     digest = hashlib.sha256(req + sys.version.encode()).hexdigest()
     marker = VENV / ".requirements.sha256"
     if marker.exists() and marker.read_text().strip() == digest:
         return
     say("• ติดตั้งแพ็กเกจ (ครั้งแรกใช้เวลาสักครู่) ...")
     run([VENV_PY, "-m", "pip", "install", "--disable-pip-version-check", "-q", "--upgrade", "pip"], check=False)
-    run([VENV_PY, "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", ROOT / "requirements.txt"])
+    run([VENV_PY, "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", ROOT / "requirements-local.txt"])
     marker.write_text(digest)
 
 

@@ -29,3 +29,21 @@ def test_soffice_autodetect(settings):
     assert soffice_path()  # LibreOffice is installed on the test machine
     settings.SOFFICE_BIN = "/nonexistent/soffice"
     assert soffice_path()  # falls back to PATH
+
+
+def test_vercelignore_keeps_runtime_files(tmp_path):
+    """.vercelignore uses .gitignore rules: make sure no runtime file is dropped from the deployment."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    files = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True).stdout.split()
+    if not files:
+        pytest.skip("not a git checkout")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    shutil.copy(root / ".vercelignore", tmp_path / ".gitignore")
+    ignored = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=tmp_path,
+                             input="\n".join(files), capture_output=True, text=True).stdout.split()
+    runtime = ("apps/", "config/", "templates/", "static/", "templates_docx/", "sample_data/", "api/")
+    assert [f for f in ignored if f.startswith(runtime) or f in ("manage.py", "requirements.txt")] == []

@@ -17,9 +17,14 @@ import django  # noqa: E402
 
 django.setup()
 
+import logging  # noqa: E402
+
 from apps.core.demo import bootstrap_demo  # noqa: E402
 
-bootstrap_demo()
+try:
+    bootstrap_demo()
+except Exception:  # keep serving; the traceback shows up in the Vercel function logs
+    logging.getLogger("api").exception("demo bootstrap failed")
 
 from django.core.wsgi import get_wsgi_application  # noqa: E402
 
