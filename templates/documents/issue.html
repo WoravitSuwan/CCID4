@@ -2,6 +2,8 @@
 {% block title %}ออกหมายเรียก{% endblock %}
 {% block content %}
 <div class="page-header"><div><h1>ออกหมายเรียก</h1><p class="page-sub">{{ cases|length }} คดีที่เลือก · จัดกลุ่มตามผู้ลงนาม</p></div></div>
+{% if thai_font == "missing" %}<div class="alert alert-warning mb-4">เครื่องนี้ไม่มีฟอนต์ TH SarabunIT๙ — PDF จะใช้ฟอนต์อื่นแทน ตัวอักษรจะใหญ่กว่าแบบฟอร์มและอาจล้นหน้า (ไฟล์ Word ไม่มีปัญหา) ติดตั้งฟอนต์ TH SarabunIT๙ แล้วเปิดระบบใหม่</div>
+{% elif thai_font == "compat" %}<div class="alert alert-info mb-4">PDF ใช้ฟอนต์สำรองที่ขนาดเท่า TH SarabunIT๙ (รูปตัวอักษรต่างเล็กน้อย) — ใส่ฟอนต์จริงในโฟลเดอร์ fonts/ เพื่อให้ตรงแบบฟอร์มทุกตัวอักษร</div>{% endif %}
 {% if error %}<div class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>{% endif %}
 <form method="post" id="issue-form">{% csrf_token %}
   {% for x in excluded %}<input type="hidden" name="exclude" value="{{ x }}">{% endfor %}

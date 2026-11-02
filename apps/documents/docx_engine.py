@@ -73,9 +73,20 @@ def paragraph_text_nodes(p):
 
 
 def _set_text(node, text):
-    node.text = text
-    if text and (text[0].isspace() or text[-1].isspace()):
+    """Set a w:t's text; '\n' in the text becomes a line break (w:br) in the same run."""
+    first, *rest = (text or "").split("\n")
+    node.text = first
+    if first and (first[0].isspace() or first[-1].isspace()):
         node.set(XML_SPACE, "preserve")
+    anchor = node
+    for line in rest:
+        br = node.makeelement(qn("w:br"), {})
+        anchor.addnext(br)
+        t = node.makeelement(qn("w:t"), {})
+        t.text = line
+        t.set(XML_SPACE, "preserve")
+        br.addnext(t)
+        anchor = t
 
 
 def replace_in_paragraph(p, resolver) -> int:
@@ -234,7 +245,7 @@ def unhide_text(root) -> int:
 
 
 def render(template_path, values: dict, out_path, literals: dict | None = None,
-           show_hidden: bool = False) -> RenderReport:
+           show_hidden: bool = False, optional=frozenset()) -> RenderReport:
     """Fill ``template_path`` with ``values`` ({name: text}) and save to ``out_path``.
 
     ``literals`` maps exact strings to replacements (used for '+14' and for
@@ -269,7 +280,7 @@ def render(template_path, values: dict, out_path, literals: dict | None = None,
                 continue
             value = values[name]
             report.used.add(name)
-            if value is None or str(value).strip() == "":
+            if (value is None or str(value).strip() == "") and name not in optional:
                 report.missing.add(name)
                 value = ""
             spans.append((m.start(), m.end(), str(value)))

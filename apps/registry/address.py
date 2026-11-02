@@ -97,26 +97,38 @@ class Address:
                 labels.append(label)
         return labels
 
-    def format(self, include_postcode: bool = True) -> str:
-        """Join the address parts with Thai labels, skipping blank parts."""
+    def _parts(self, house_label: bool = True):
+        """(street_parts, area_parts) with Thai labels, blank parts skipped."""
         bkk = is_bangkok(self.province)
-        parts = []
+        street, area = [], []
 
-        def add(kind, label, glue=" "):
+        def add(target, kind, label, glue=" "):
             value = strip_prefix(kind, getattr(self, kind))
             if not is_blank_value(value):
-                parts.append(f"{label}{glue}{value}" if label else value)
+                target.append(f"{label}{glue}{value}" if label else value)
 
-        add("house_no", "บ้านเลขที่")
-        add("moo", "หมู่")
-        add("building", "อาคาร")
-        add("soi", "ซอย")
-        add("road", "ถนน")
-        add("subdistrict", "แขวง" if bkk else "ตำบล", "")
-        add("district", "เขต" if bkk else "อำเภอ", "")
+        add(street, "house_no", "บ้านเลขที่" if house_label else "")
+        add(street, "moo", "หมู่")
+        add(street, "building", "อาคาร", "")
+        add(street, "soi", "ซอย", "")
+        add(street, "road", "ถนน", "")
+        add(area, "subdistrict", "แขวง" if bkk else "ตำบล", "")
+        add(area, "district", "เขต" if bkk else "อำเภอ", "")
         province = strip_prefix("province", self.province)
+        province_text = ""
         if not is_blank_value(province):
-            parts.append("กรุงเทพมหานคร" if bkk else f"จังหวัด{province}")
+            province_text = "กรุงเทพมหานคร" if bkk else f"จังหวัด{province}"
+        return street, area, province_text
+
+    def format(self, include_postcode: bool = True, house_label: bool = True) -> str:
+        """One line: 'บ้านเลขที่ 12 หมู่ 3 ... ตำบลx อำเภอy จังหวัดz 50000'."""
+        street, area, province = self._parts(house_label)
+        parts = street + area + ([province] if province else [])
         if include_postcode and not is_blank_value(self.postcode):
             parts.append(clean_text(self.postcode))
         return " ".join(parts)
+
+    def lines(self) -> list[str]:
+        """Envelope style without postcode: ['12 หมู่ 3 ถนน...', 'ตำบลx อำเภอy', 'จังหวัดz']."""
+        street, area, province = self._parts(house_label=False)
+        return [line for line in (" ".join(street), " ".join(area), province) if line]

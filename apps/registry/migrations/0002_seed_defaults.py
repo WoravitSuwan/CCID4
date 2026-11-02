@@ -8,8 +8,10 @@ def seed(apps, schema_editor):
     Unit = apps.get_model("registry", "Unit")
     for order, (name, final) in enumerate(DEFAULT_STATUSES):
         Status.objects.get_or_create(name=name, defaults={"is_final": final, "sort_order": order})
+    fields = {f.name for f in Unit._meta.get_fields()}
     for unit in DEFAULT_UNITS:
-        Unit.objects.get_or_create(name=unit["name"], defaults=unit)
+        values = {k: v for k, v in unit.items() if k in fields}  # later fields are set by later migrations
+        Unit.objects.get_or_create(name=values["name"], defaults=values)
 
 
 class Migration(migrations.Migration):

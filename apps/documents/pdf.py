@@ -87,3 +87,34 @@ def convert_many(docx_paths, out_dir) -> list[Path]:
 def convert(docx_path, out_dir=None) -> Path:
     docx_path = Path(docx_path)
     return convert_many([docx_path], out_dir or docx_path.parent)[0]
+
+
+_font_status_cache: dict = {}
+
+
+def thai_font_status() -> str:
+    """'real' (TH SarabunIT๙ installed), 'compat' (Sarabun Compat fallback) or 'missing'."""
+    if "status" in _font_status_cache:
+        return _font_status_cache["status"]
+    names = ""
+    if shutil.which("fc-list"):
+        try:
+            names = subprocess.run(["fc-list", ":", "family"], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            names = ""
+    else:  # Windows: look at the font folders
+        import os
+
+        for folder in (Path(os.environ.get("WINDIR", r"C:\\Windows")) / "Fonts",
+                       Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Windows" / "Fonts"):
+            if folder.exists():
+                names += " ".join(p.name for p in folder.iterdir())
+    compact = names.lower().replace(" ", "")
+    if "sarabunit" in compact:
+        status = "real"
+    elif "sarabuncompat" in compact:
+        status = "compat"
+    else:
+        status = "missing"
+    _font_status_cache["status"] = status
+    return status

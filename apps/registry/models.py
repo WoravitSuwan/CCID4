@@ -47,6 +47,10 @@ class Unit(models.Model):
     )
     sender_address = models.TextField("ที่อยู่ผู้ส่ง (บนซอง)", blank=True,
                                       help_text="ใช้เป็น {ที่อยู่หน่วย} บนใบจ่าหน้าซอง")
+    postage_permit = models.TextField(
+        "ข้อความกรอบชำระค่าฝากส่ง (บนซอง)", blank=True,
+        help_text="ใช้เป็น {ใบอนุญาตฝากส่ง} เช่น ชำระฝากส่งเป็นรายเดือน / ใบอนุญาตที่ ๑๙/๒๕๖๘ / ไปรษณีย์ ศาลากลาง ชม. "
+                  "(ขึ้นบรรทัดใหม่ได้)")
 
     class Meta:
         ordering = ["name"]

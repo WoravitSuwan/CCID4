@@ -10,10 +10,16 @@ RUN apt-get update \
       libreoffice-writer-nogui fonts-tlwg-laksaman-ttf fontconfig poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 
-# Agency fonts (TH SarabunIT๙ / TH Sarabun New) from fonts/, plus fallback mapping
+# Agency fonts (TH SarabunIT๙ / TH Sarabun New) from fonts/ win; otherwise "Sarabun Compat"
+# (Laksaman shrunk to TH Sarabun's metrics, built here - see tools/make_fallback_font.py)
 COPY fonts/ /usr/share/fonts/truetype/agency/
-COPY docker/65-th-sarabun-fallback.conf /etc/fonts/conf.d/65-th-sarabun-fallback.conf
-RUN fc-cache -f && (fc-list | grep -i sarabun || echo "WARNING: TH Sarabun fonts not found in fonts/ - using Laksaman fallback")
+COPY tools/make_fallback_font.py /tmp/make_fallback_font.py
+RUN pip install --no-cache-dir fonttools==4.68.0 \
+ && python /tmp/make_fallback_font.py /usr/share/fonts/truetype/tlwg /usr/share/fonts/truetype/sarabun-compat \
+ && pip uninstall -y fonttools && rm /tmp/make_fallback_font.py
+COPY docker/90-th-sarabun-fallback.conf /etc/fonts/conf.d/90-th-sarabun-fallback.conf
+RUN fc-cache -f && (fc-list | grep -i "SarabunIT" || echo "NOTE: TH SarabunIT๙ not in fonts/ - PDFs use the Sarabun Compat fallback") \
+ && fc-match "TH SarabunIT๙"
 
 WORKDIR /app
 COPY requirements.txt requirements-server.txt ./

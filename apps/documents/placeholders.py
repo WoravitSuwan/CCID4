@@ -16,6 +16,9 @@ SUMMONS_PLACEHOLDERS = {
     "ชื่อผู้แจ้ง": "คำนำหน้า + ชื่อ + นามสกุล ของผู้ถูกเรียก",
     "ที่อยู่": "ที่อยู่ผู้ถูกเรียก รวมรหัสไปรษณีย์",
     "ที่อยู่ไม่รวมรหัส": "ที่อยู่ผู้ถูกเรียก ไม่รวมรหัสไปรษณีย์",
+    "ที่อยู่หลังบ้านเลขที่": "ที่อยู่ที่ไม่มีคำว่า 'บ้านเลขที่' นำหน้า (ใช้ต่อจากป้าย 'บ้านเลขที่' ในแบบฟอร์ม)",
+    "ที่อยู่หลายบรรทัด": "ที่อยู่แบบหน้าซอง: เลขที่/หมู่/ถนน, ตำบล อำเภอ, จังหวัด (คนละบรรทัด ไม่รวมรหัสไปรษณีย์)",
+    "ใบอนุญาตฝากส่ง": "ข้อความในกรอบชำระค่าฝากส่ง (จากการตั้งค่าหน่วย)",
     "รหัสไปรษณีย์": "รหัสไปรษณีย์ผู้ถูกเรียก",
     "เลขรับแจ้ง": "เลขรับแจ้งความออนไลน์",
     "เลขคดีอาญา": "เลขคดีอาญา (ถ้ามี)",
@@ -68,6 +71,9 @@ def build_values(*, case, issue_date: dt.date, appointment_at: dt.datetime, plac
         "ชื่อผู้แจ้ง": data(case.recipient_name()),
         "ที่อยู่": data(full_address),
         "ที่อยู่ไม่รวมรหัส": data(short_address),
+        "ที่อยู่หลังบ้านเลขที่": data(addr.format(include_postcode=True, house_label=False) if addr else ""),
+        "ที่อยู่หลายบรรทัด": data("\n".join(addr.lines()) if addr else ""),
+        "ใบอนุญาตฝากส่ง": data(unit.postage_permit) if unit else "",
         "รหัสไปรษณีย์": data(postcode),
         "เลขรับแจ้ง": data(case.receipt_no),
         "เลขคดีอาญา": data(case.criminal_case_no) or "-",
@@ -110,12 +116,20 @@ FIXED_EQUIVALENTS = {
 }
 
 
+# Placeholders that carry the same information as the one required above
+ALTERNATIVES = {
+    "ที่อยู่": ["ที่อยู่หลังบ้านเลขที่", "ที่อยู่ไม่รวมรหัส", "ที่อยู่หลายบรรทัด"],
+}
+
+
 def check_section_53(values: dict, template_info: dict, template_text: str) -> list[str]:
     """Return missing items required by ป.วิ.อ. ม.53 (empty list = complete)."""
     used = set(template_info.get("placeholders", []))
     problems = []
     for label, names in SECTION_53:
         for name in names:
+            if name not in used:
+                name = next((alt for alt in ALTERNATIVES.get(name, []) if alt in used), name)
             in_template = name in used
             if not in_template:
                 fixed = FIXED_EQUIVALENTS.get(name, [])

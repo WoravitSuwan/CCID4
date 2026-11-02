@@ -12,7 +12,9 @@ summons: from the agency's original form, writes
 The original file is never modified. Signer data is located by pattern, so no
 personal data appears in this script.
 
-envelope: writes templates_docx/envelope_template.docx (A4 portrait, 1 recipient).
+envelope: writes templates_docx/envelope_template.docx (A4 portrait, simple) and
+  templates_docx/envelope_official.docx (A4 landscape government envelope: Garuda,
+  sender, '(ใช้ในราชการ...)', postage-permit box, dashed fold line).
 """
 from __future__ import annotations
 
@@ -134,7 +136,7 @@ def build_summons(original: Path):
             texts = ["".join(t.text or "" for t in tc.iter(qn("w:t"))).strip() for tc in cells]
             if texts and texts[0] == "บ้านเลขที่" and len(cells) > 1 and not texts[1]:
                 source = rows[idx - 1].findall(qn("w:tc"))[-1]
-                _put_text_in_cell(cells[1], "{ที่อยู่}", source)
+                _put_text_in_cell(cells[1], "{ที่อยู่หลังบ้านเลขที่}", source)
     clear_metadata(doc)
     v2 = OUT / "summons_template_v2.docx"
     doc.save(str(v2))
@@ -208,11 +210,123 @@ def build_envelope():
     print(f"wrote {out}")
 
 
+# --------------------------------------------------------------------------- official envelope
+def _borders(element_pr, tag, **edges):
+    """Set w:tblBorders / w:tcBorders: edges like top='nil' or bottom=('dashed', 8)."""
+    box = element_pr.find(qn(tag))
+    if box is None:
+        box = OxmlElement(tag)
+        element_pr.append(box)
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        if edge not in edges:
+            continue
+        el = box.find(qn(f"w:{edge}"))
+        if el is None:
+            el = OxmlElement(f"w:{edge}")
+            box.append(el)
+        spec = edges[edge]
+        val, size = (spec, 4) if isinstance(spec, str) else spec
+        el.set(qn("w:val"), val)
+        el.set(qn("w:sz"), str(size))
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), "000000")
+
+
+def _fixed_table(container, widths_cm):
+    table = container.add_table(rows=1, cols=len(widths_cm))
+    table.autofit = False
+    tbl_pr = table._tbl.tblPr
+    layout = OxmlElement("w:tblLayout")
+    layout.set(qn("w:type"), "fixed")
+    tbl_pr.append(layout)
+    _borders(tbl_pr, "w:tblBorders", top="nil", left="nil", bottom="nil", right="nil", insideH="nil", insideV="nil")
+    for cell, width in zip(table.rows[0].cells, widths_cm):
+        cell.width = Cm(width)
+    for col, width in zip(table.columns, widths_cm):
+        col.width = Cm(width)
+    return table
+
+
+def _cell_para(cell, text, size, bold=False, align=None, first=False, space_before=0, indent_cm=0.0):
+    p = cell.paragraphs[0] if first else cell.add_paragraph()
+    fmt = p.paragraph_format
+    fmt.space_before = Pt(space_before)
+    fmt.space_after = Pt(0)
+    fmt.line_spacing = 1.0
+    fmt.left_indent = Cm(indent_cm)
+    if align is not None:
+        p.alignment = align
+    _set_run_font(p.add_run(text), size, bold)
+    return p
+
+
+def build_envelope_official():
+    """A4 landscape; upper half is the envelope face, a dashed line marks the fold/cut.
+
+    Modelled on the agency's printed envelope: Garuda + sender (top left),
+    '(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)' (top centre), postage-permit box (top
+    right) and 'กรุณาส่ง' + recipient on the right.
+    """
+    import io
+    import zipfile
+
+    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    garuda = zipfile.ZipFile(OUT / "summons_template_v2.docx").read("word/media/image1.png")
+    doc = Document()
+    sec = doc.sections[0]
+    sec.orientation = WD_ORIENT.LANDSCAPE
+    sec.page_width, sec.page_height = Cm(29.7), Cm(21.0)
+    sec.top_margin, sec.bottom_margin = Cm(1.0), Cm(1.0)
+    sec.left_margin, sec.right_margin = Cm(1.5), Cm(1.5)
+    normal = doc.styles["Normal"]
+    normal.font.name = FONT
+    normal.font.size = Pt(14)
+    fonts = normal.element.get_or_add_rPr().find(qn("w:rFonts"))
+    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+        fonts.set(qn(attr), FONT)
+
+    # outer frame = the envelope face, exactly half of the page, dashed bottom edge
+    outer = _fixed_table(doc, [26.7])
+    row = outer.rows[0]
+    row.height = Cm(9.5)
+    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST  # never clip the address; the line moves down if needed
+    _borders(outer._tbl.tblPr, "w:tblBorders", bottom=("dashed", 8))
+    face = row.cells[0]
+
+    header = _fixed_table(face, [2.3, 10.6, 7.2, 6.2])
+    c_logo, c_sender, c_center, c_box = header.rows[0].cells
+    logo_p = c_logo.paragraphs[0]
+    logo_p.add_run().add_picture(io.BytesIO(garuda), height=Cm(2.0))
+    _cell_para(c_sender, "{ชื่อหน่วย}", 14, bold=True, first=True)
+    _cell_para(c_sender, "{ที่อยู่หน่วย}", 14, bold=True)
+    _cell_para(c_center, "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)", 14, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER,
+               first=True)
+    _cell_para(c_box, "{ใบอนุญาตฝากส่ง}", 14, align=WD_ALIGN_PARAGRAPH.CENTER, first=True)
+    c_box.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    _borders(c_box._tc.get_or_add_tcPr(), "w:tcBorders",
+             top=("single", 8), left=("single", 8), bottom=("single", 8), right=("single", 8))
+
+    # recipient: right half
+    _cell_para(face, "กรุณาส่ง", 16, bold=True, space_before=12, indent_cm=12.0)
+    _cell_para(face, "{ชื่อผู้แจ้ง}", 18, space_before=4, indent_cm=12.0)
+    _cell_para(face, "{ที่อยู่หลายบรรทัด}", 18, indent_cm=12.0)
+    _cell_para(face, "{รหัสไปรษณีย์}", 18, indent_cm=12.0)
+
+    doc.core_properties.title = "ใบจ่าหน้าซองราชการ"
+    doc.core_properties.author = ""
+    out = OUT / "envelope_official.docx"
+    doc.save(str(out))
+    print(f"wrote {out}")
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "summons":
         build_summons(Path(sys.argv[2]))
     elif len(sys.argv) >= 2 and sys.argv[1] == "envelope":
         build_envelope()
+        build_envelope_official()
     else:
         print(__doc__)
         raise SystemExit(2)

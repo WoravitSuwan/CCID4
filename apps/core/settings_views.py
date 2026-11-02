@@ -129,9 +129,10 @@ def alias_unlink(request, pk):
 class UnitForm(StyledModelForm):
     class Meta:
         model = Unit
-        fields = ["name", "full_name", "appointment_place", "sender_address"]
+        fields = ["name", "full_name", "appointment_place", "sender_address", "postage_permit"]
         widgets = {"appointment_place": forms.Textarea(attrs={"rows": 3}),
-                   "sender_address": forms.Textarea(attrs={"rows": 3})}
+                   "sender_address": forms.Textarea(attrs={"rows": 3}),
+                   "postage_permit": forms.Textarea(attrs={"rows": 3})}
 
 
 @admin_only

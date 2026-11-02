@@ -13,6 +13,8 @@ DEFAULT_STATUSES = [
 FINAL_BY_DEFAULT = {name for name, final in DEFAULT_STATUSES if final}
 SUMMONS_STATUS_NAME = "ออกหมายเรียก"
 
+POSTAGE_PERMIT = "ชำระฝากส่งเป็นรายเดือน\nใบอนุญาตที่ ๑๙/๒๕๖๘\nไปรษณีย์ ศาลากลาง ชม."
+
 DEFAULT_UNITS = [
     {
         "name": "กก.1 บก.สอท.4",
@@ -22,6 +24,7 @@ DEFAULT_UNITS = [
             "เลขที่ ๓๗๐ หมู่ ๓ ตำบลดอนแก้ว อำเภอแม่ริม จังหวัดเชียงใหม่ ๕๐๑๘๐"
         ),
         "sender_address": "เลขที่ ๓๗๐ หมู่ ๓ ตำบลดอนแก้ว อำเภอแม่ริม จังหวัดเชียงใหม่ ๕๐๑๘๐",
+        "postage_permit": POSTAGE_PERMIT,
     },
     {
         # Address of กก.2 is not in the provided form: administrators must fill it in

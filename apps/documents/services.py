@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import io
 import datetime as dt
 import logging
 import shutil
@@ -37,27 +38,50 @@ class TemplateMissing(Exception):
     pass
 
 
+BUNDLED_TEMPLATES = [
+    # kind, version, name, file in templates_docx/, make active
+    (TemplateKind.SUMMONS, 1, "แบบฟอร์มเดิม (วันนัด +14)", "summons_template_sanitized.docx", False),
+    (TemplateKind.SUMMONS, 2, "แบบฟอร์มเวอร์ชันใหม่ (วัน/เดือน/ปีนัด ครบ)", "summons_template_v2.docx", True),
+    (TemplateKind.ENVELOPE, 1, "ใบจ่าหน้าซอง A4 แนวตั้ง (แบบง่าย)", "envelope_template.docx", False),
+    (TemplateKind.ENVELOPE, 2, "ใบจ่าหน้าซองราชการ A4 แนวนอน (ครุฑ + กรอบฝากส่ง)", "envelope_official.docx", True),
+]
+
+
 def ensure_default_templates(user=None) -> list[DocTemplate]:
-    """Register the bundled templates (templates_docx/) if none exist for a kind."""
+    """Register the bundled templates (templates_docx/) and keep them up to date.
+
+    Bundled rows (uploaded_by is empty) are system-managed: when the file in
+    templates_docx/ changes, the stored copy is replaced. Templates uploaded by
+    staff are never touched.
+    """
     created = []
-    bundled = [
-        (TemplateKind.SUMMONS, 1, "แบบฟอร์มเดิม (วันนัด +14)", "summons_template_sanitized.docx", False),
-        (TemplateKind.SUMMONS, 2, "แบบฟอร์มเวอร์ชันใหม่ (วัน/เดือน/ปีนัด ครบ)", "summons_template_v2.docx", True),
-        (TemplateKind.ENVELOPE, 1, "ใบจ่าหน้าซอง A4", "envelope_template.docx", True),
-    ]
-    for kind, version, name, filename, active in bundled:
-        if DocTemplate.objects.filter(kind=kind, version=version).exists():
-            continue
+    for kind, version, name, filename, make_active in BUNDLED_TEMPLATES:
         src = Path(settings.TEMPLATES_DOCX_DIR) / filename
         if not src.exists():
             continue
-        tpl = DocTemplate(kind=kind, version=version, name=name, uploaded_by=user,
-                          is_active=active and not DocTemplate.objects.filter(kind=kind, is_active=True).exists())
-        with open(src, "rb") as fh:
-            tpl.file.save(filename, File(fh), save=False)
-        tpl.placeholders = docx_engine.scan_placeholders(tpl.file.path)["placeholders"]
-        tpl.save()
-        created.append(tpl)
+        content = src.read_bytes()
+        tpl = DocTemplate.objects.filter(kind=kind, version=version).first()
+        if tpl is None:
+            tpl = DocTemplate(kind=kind, version=version, name=name, uploaded_by=user,
+                              show_hidden_text=kind == TemplateKind.SUMMONS)
+            tpl.file.save(filename, File(io.BytesIO(content)), save=False)
+            tpl.placeholders = docx_engine.scan_placeholders(tpl.file.path)["placeholders"]
+            tpl.save()
+            created.append(tpl)
+        elif tpl.uploaded_by_id is None:
+            path = Path(tpl.file.path) if tpl.file else None
+            if path is None or not path.exists() or path.read_bytes() != content:
+                if tpl.file:
+                    tpl.file.delete(save=False)
+                tpl.file.save(filename, File(io.BytesIO(content)), save=False)
+                tpl.placeholders = docx_engine.scan_placeholders(tpl.file.path)["placeholders"]
+                tpl.name = name
+                tpl.save()
+                _template_cache.clear()
+        if make_active:
+            current = DocTemplate.active(kind)
+            if current is None or (current.uploaded_by_id is None and current.version < version):
+                tpl.activate()
     return created
 
 
@@ -185,8 +209,9 @@ def _dedupe(items):
 
 
 # --------------------------------------------------------------------------- rendering
-def render_docx(tpl: DocTemplate, values: dict, out_path) -> docx_engine.RenderReport:
-    report = docx_engine.render(tpl.file.path, values, out_path, show_hidden=tpl.show_hidden_text)
+def render_docx(tpl: DocTemplate, values: dict, out_path, optional=frozenset()) -> docx_engine.RenderReport:
+    report = docx_engine.render(tpl.file.path, values, out_path, show_hidden=tpl.show_hidden_text,
+                                optional=optional)
     if not report.ok:
         raise ValueError("; ".join(report.problems()))
     return report
@@ -218,7 +243,7 @@ def ensure_docx(summons: Summons) -> Path:
         return Path(summons.docx_file.path)
     rel = f"summons/{summons.issue_date:%Y%m}/{summons.pk}_{summons.base_filename()}.docx"
     out = _media_path(rel)
-    render_docx(summons.template, summons.context, out)
+    render_docx(summons.template, complete_context(summons), out)
     summons.docx_file.name = rel
     summons.save(update_fields=["docx_file"])
     return out
@@ -234,9 +259,38 @@ def ensure_pdf(summons: Summons) -> Path:
     return pdf
 
 
+# Envelope fields that may legitimately be empty (no postcode found, no permit box text, ...)
+ENVELOPE_OPTIONAL = frozenset({"รหัสไปรษณีย์", "ใบอนุญาตฝากส่ง", "เลขคดีอาญา", "ที่อยู่หน่วย"})
+
+
+def complete_context(summons: Summons) -> dict:
+    """Stored values + placeholders added after the summons was issued (older summonses)."""
+    from apps.core.thai_format import to_thai_digits
+    from apps.registry.models import Case
+
+    values = dict(summons.context)
+    needed = {"ที่อยู่หลายบรรทัด", "ใบอนุญาตฝากส่ง", "ที่อยู่หลังบ้านเลขที่"}
+    if needed <= values.keys():
+        return values
+    case = Case.objects.select_related("unit", "complainant").get(pk=summons.case_id)
+    addr = case.effective_address()
+    digits = to_thai_digits if summons.thai_digits else (lambda x: x or "")
+    values.setdefault("ที่อยู่หลายบรรทัด", digits("\n".join(addr.lines()) if addr else ""))
+    values.setdefault("ใบอนุญาตฝากส่ง", digits(case.unit.postage_permit if case.unit else ""))
+    values.setdefault("ที่อยู่หลังบ้านเลขที่", digits(addr.format(house_label=False) if addr else ""))
+    return values
+
+
+def envelope_values(summons: Summons) -> dict:
+    """Envelope text uses Arabic digits, like the agency's printed envelopes."""
+    from apps.core.thai_format import to_arabic_digits
+
+    return {k: to_arabic_digits(v) for k, v in complete_context(summons).items()}
+
+
 def render_envelope(summons: Summons, out_path, tpl: DocTemplate | None = None) -> Path:
     tpl = tpl or get_template(TemplateKind.ENVELOPE)
-    render_docx(tpl, summons.context, out_path)
+    render_docx(tpl, envelope_values(summons), out_path, optional=ENVELOPE_OPTIONAL)
     return Path(out_path)
 
 

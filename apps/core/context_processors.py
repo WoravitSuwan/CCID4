@@ -9,6 +9,12 @@ def pdf_available() -> bool:
     return soffice_available()
 
 
+def thai_font() -> str:
+    from apps.documents.pdf import thai_font_status
+
+    return thai_font_status() if pdf_available() else "n/a"
+
+
 def app_context(request):
     base = {"demo_mode": settings.DEMO_MODE}
     user = getattr(request, "user", None)
@@ -25,6 +31,7 @@ def app_context(request):
         "perm_settings": perms.can_manage_settings(user),
         "perm_issue_any": perms.can_issue_any(user),
         "pdf_available": pdf_available(),
+        "thai_font": thai_font(),
         "perm_calls_manage": perms.can_manage_calls(user),
         "is_outsource": perms.is_outsource(user),
     }
