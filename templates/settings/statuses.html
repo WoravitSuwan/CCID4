@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% load humanize thai %}
+{% block title %}สถานะคดี{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<div class="grid gap-4 lg:grid-cols-3">
+  <div class="card overflow-x-auto p-0 lg:col-span-2">
+    <h2 class="px-4 pt-4">สถานะคดี</h2>
+    <p class="px-4 text-sm text-slate-500">สถานะที่ "สิ้นสุด" จะไม่ถูกนับในคดียังไม่สิ้นสุด</p>
+    <table class="table mt-2">
+      <thead><tr><th>สถานะ</th><th class="text-right">คดี</th><th>ถือว่าสิ้นสุด</th><th></th></tr></thead>
+      <tbody>
+      {% for s in statuses %}
+        <tr class="{% if s.needs_review %}bg-amber-50{% endif %}"><td>{{ s.name }}{% if s.needs_review %} <span class="badge badge-amber">ใหม่ รอตรวจสอบ</span>{% endif %}</td>
+          <td class="text-right">{{ counts|get_item:s.pk|default:0|intcomma }}</td>
+          <td><form method="post" action="{% url 'settings_status_toggle' s.pk %}" class="flex items-center gap-2">{% csrf_token %}
+            <select name="is_final" class="input py-1" onchange="this.form.submit()"><option value="0" {% if not s.is_final %}selected{% endif %}>ยังไม่สิ้นสุด</option><option value="1" {% if s.is_final %}selected{% endif %}>สิ้นสุด</option></select>
+            {% if s.needs_review %}<button class="btn btn-sm">รับทราบ</button>{% endif %}</form></td><td></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form method="post" class="card space-y-3">{% csrf_token %}
+    <h2>เพิ่มสถานะ</h2>
+    {% for f in form %}<div>{% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>{% else %}<label class="label">{{ f.label }}</label>{{ f }}{% endif %}{{ f.errors }}</div>{% endfor %}
+    <button class="btn btn-primary">เพิ่ม</button>
+  </form>
+</div>
+{% endblock %}

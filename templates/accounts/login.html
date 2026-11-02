@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}เข้าสู่ระบบ{% endblock %}
+{% block content %}
+<div class="mx-auto mt-16 max-w-sm card">
+  <h1 class="mb-1 text-center">ระบบออกหมายเรียกผู้กล่าวหา</h1>
+  <p class="mb-6 text-center text-sm text-slate-500">บก.สอท.4 · ใช้งานภายในหน่วยงานเท่านั้น</p>
+  <form method="post" class="space-y-4">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="rounded bg-red-50 p-2 text-sm text-red-800">ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>{% endif %}
+    <div><label class="label" for="id_username">ชื่อผู้ใช้</label><input class="input" id="id_username" name="username" autofocus required></div>
+    <div><label class="label" for="id_password">รหัสผ่าน</label><input class="input" type="password" id="id_password" name="password" required></div>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn btn-primary w-full">เข้าสู่ระบบ</button>
+  </form>
+</div>
+{% endblock %}

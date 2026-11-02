@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% load thai %}
+{% block title %}ส่งออกหมายเรียก{% endblock %}
+{% block content %}
+<h1 class="mb-4">ส่งออกหมายเรียก</h1>
+{% if not summonses %}
+<div class="card text-sm">ยังไม่ได้เลือกหมายเรียก — ไปที่ <a href="{% url 'summons_list' %}">หมายเรียก</a> แล้วเลือกรายการที่ต้องการส่งออก</div>
+{% else %}
+<form method="post">{% csrf_token %}
+  <div class="card grid gap-4 md:grid-cols-3">
+    <div><span class="label">{{ form.format.label }}</span>{% for r in form.format %}<label class="flex items-center gap-2 text-sm">{{ r.tag }} {{ r.choice_label }}</label>{% endfor %}</div>
+    <div><span class="label">{{ form.mode.label }}</span>{% for r in form.mode %}<label class="flex items-center gap-2 text-sm">{{ r.tag }} {{ r.choice_label }}</label>{% endfor %}
+      <span class="helptext">รวมไฟล์เดียว: ขึ้นหน้าใหม่ทุกคน แปลงเป็น PDF ครั้งเดียว (เร็ว) · แยกรายคน: ตั้งชื่อไฟล์ เลขรับแจ้ง_ชื่อ_หมายเรียกครั้งที่n</span></div>
+    <div><span class="label">เอกสาร</span>
+      <label class="flex items-center gap-2 text-sm">{{ form.include_summons }} {{ form.include_summons.label }}</label>
+      <label class="flex items-center gap-2 text-sm">{{ form.include_envelope }} {{ form.include_envelope.label }} (A4 หน้าละ 1 ผู้รับ)</label></div>
+    <div class="md:col-span-3"><button class="btn btn-primary">ส่งออก ({{ summonses|length }} ฉบับ)</button>
+      <span class="ml-2 text-xs text-slate-500">เกิน 20 ฉบับระบบจะทำงานเบื้องหลังและแสดงความคืบหน้า</span></div>
+  </div>
+  <div class="card mt-4 overflow-x-auto p-0">
+    <table class="table">
+      <thead><tr><th><input type="checkbox" checked class="h-4 w-4" onclick="document.querySelectorAll('.s-cb').forEach(c=>c.checked=this.checked)"></th><th>เลขรับแจ้ง</th><th>ครั้งที่</th><th>ผู้ถูกเรียก</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th></tr></thead>
+      <tbody>{% for s in summonses %}<tr><td><input type="checkbox" class="s-cb h-4 w-4" name="ids" value="{{ s.pk }}" checked></td><td class="font-mono">{{ s.case.receipt_no }}</td><td>{{ s.number }}</td><td>{{ s.recipient_name }}</td><td>{{ s.appointment_at|thai_date:"datetime" }}</td><td>{{ s.issuer }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

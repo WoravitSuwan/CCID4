@@ -1,0 +1,11 @@
+<div id="job" {% if job.status == 'pending' or job.status == 'running' %}hx-get="{% url 'export_job' job.pk %}" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %} class="card">
+  {% if job.status == 'done' %}
+    <div class="text-sm text-green-800">{{ job.message }}</div>
+    <a class="btn btn-primary mt-3" href="{% url 'export_download' job.pk %}">ดาวน์โหลดไฟล์</a>
+  {% elif job.status == 'failed' %}
+    <div class="text-sm text-red-800">ส่งออกไม่สำเร็จ: {{ job.message }}</div>
+  {% else %}
+    <div class="mb-2 text-sm">กำลังสร้างเอกสาร {{ job.done }} / {{ job.total }} ({{ job.percent }}%)</div>
+    <div class="h-2 w-full rounded bg-slate-200"><div class="h-2 rounded bg-blue-600" style="width: {{ job.percent }}%"></div></div>
+  {% endif %}
+</div>

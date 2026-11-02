@@ -1,0 +1,4 @@
+<div id="batch-status" hx-get="{% url 'import_preview' batch.pk %}" hx-trigger="every 1s" hx-swap="outerHTML" class="card">
+  <div class="mb-2 text-sm">{% if batch.status == 'analyzing' %}กำลังอ่านและตรวจสอบไฟล์...{% else %}กำลังบันทึกข้อมูล...{% endif %} {{ batch.progress }}%</div>
+  <div class="h-2 w-full rounded bg-slate-200"><div class="h-2 rounded bg-blue-600" style="width: {{ batch.progress }}%"></div></div>
+</div>

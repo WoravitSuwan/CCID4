@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}หน่วย{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<div class="card overflow-x-auto p-0">
+  <div class="flex items-center px-4 pt-4"><h2>หน่วย</h2><a class="btn btn-sm ml-auto" href="{% url 'settings_unit_new' %}">+ เพิ่ม</a></div>
+  <table class="table mt-2">
+    <thead><tr><th>ชื่อตามทะเบียน</th><th>ชื่อเต็ม</th><th>สถานที่นัด ("ไป ณ ที่ ...")</th><th>ที่อยู่ผู้ส่ง (ซอง)</th><th></th></tr></thead>
+    <tbody>
+    {% for u in units %}
+      <tr><td class="whitespace-nowrap">{{ u.name }}</td><td>{{ u.full_name|default:"-" }}</td>
+        <td>{% if u.appointment_place %}{{ u.appointment_place }}{% else %}<span class="badge badge-red">ยังไม่ได้ตั้งค่า (ออกหมายไม่ได้)</span>{% endif %}</td>
+        <td>{{ u.sender_address|default:"-" }}</td><td><a class="btn btn-sm" href="{% url 'settings_unit_edit' u.pk %}">แก้ไข</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

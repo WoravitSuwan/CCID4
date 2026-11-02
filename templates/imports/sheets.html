@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}เลือกชีต{% endblock %}
+{% block content %}
+<h1 class="mb-2">นำเข้าข้อมูล</h1>
+{% include "imports/_steps.html" %}
+<form method="post" class="card max-w-xl space-y-3">{% csrf_token %}
+  <h2>เลือกชีตที่จะนำเข้า</h2>
+  {% for s in batch.available_sheets %}
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="h-4 w-4" name="sheets" value="{{ s }}" {% if s in batch.sheets %}checked{% endif %}> {{ s }}</label>
+  {% endfor %}
+  <div class="flex gap-2 pt-2"><button class="btn btn-primary">ถัดไป</button></div>
+</form>
+<form method="post" action="{% url 'import_cancel' batch.pk %}" class="mt-2">{% csrf_token %}<button class="btn btn-sm">ยกเลิก</button></form>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% load thai %}
+{% block title %}แบบฟอร์ม{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<div class="grid gap-4 lg:grid-cols-3">
+  <div class="card overflow-x-auto p-0 lg:col-span-2">
+    <h2 class="px-4 pt-4">แบบฟอร์ม Word</h2>
+    <table class="table mt-2">
+      <thead><tr><th>ประเภท</th><th>เวอร์ชัน</th><th>ชื่อ</th><th>ตัวแทนในไฟล์</th><th>สถานะ</th><th></th></tr></thead>
+      <tbody>
+      {% for t in templates %}
+        <tr><td>{{ t.get_kind_display }}</td><td>v{{ t.version }}</td><td>{{ t.name }}<div class="text-xs text-slate-500">{{ t.created_at|thai_date }}</div></td>
+          <td class="text-xs">{% for p in t.placeholders %}<span class="badge {% if p in t.unknown %}badge-red{% else %}badge-gray{% endif %} mb-1">{{ "{" }}{{ p }}{{ "}" }}</span> {% endfor %}
+            {% if t.unknown %}<div class="text-red-700">ตัวแทนสีแดงระบบไม่รู้จัก ต้องแก้ไฟล์ก่อนใช้งาน</div>{% endif %}</td>
+          <td>{% if t.is_active %}<span class="badge badge-green">ใช้งานอยู่</span>{% endif %}
+            <div class="text-xs text-slate-500">{% if t.show_hidden_text %}แสดงข้อความที่ซ่อน{% else %}ซ่อนป้าย (พิมพ์ลงแบบพิมพ์){% endif %}</div></td>
+          <td class="space-y-1">
+            <form method="post" action="{% url 'settings_template_action' t.pk %}">{% csrf_token %}
+              {% if not t.is_active %}<button class="btn btn-sm" name="action" value="activate">ใช้งาน</button>{% endif %}
+              <button class="btn btn-sm" name="action" value="toggle_hidden">{% if t.show_hidden_text %}ซ่อนป้าย{% else %}แสดงป้าย{% endif %}</button>
+            </form>
+            <a class="btn btn-sm" href="{% url 'settings_template_download' t.pk %}">ดาวน์โหลด</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="space-y-4">
+    <form method="post" enctype="multipart/form-data" class="card space-y-3">{% csrf_token %}
+      <h2>อัปโหลดแบบฟอร์มเวอร์ชันใหม่</h2>
+      {% for f in form %}<div>{% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>{% elif f.field.widget.input_type == 'file' %}<label class="label">{{ f.label }}</label><input type="file" name="file" accept=".docx" class="text-sm" required>{% else %}<label class="label">{{ f.label }}</label>{{ f }}{% endif %}{{ f.errors }}</div>{% endfor %}
+      <button class="btn btn-primary">อัปโหลด</button>
+    </form>
+    <div class="card text-sm">
+      <h2 class="mb-2">ตัวแทนที่ใช้ได้</h2>
+      <p class="mb-2 text-xs text-slate-500">พิมพ์ในแบบฟอร์ม Word ด้วยปีกกาเดียว เช่น {ชื่อผู้แจ้ง} · แบบฟอร์มเดิมที่มี "+14" ในช่องวันนัดก็ยังใช้ได้</p>
+      <dl class="space-y-1">{% for k, v in supported.items %}<div><dt class="inline font-mono">{{ "{" }}{{ k }}{{ "}" }}</dt> <dd class="inline text-slate-600">— {{ v }}</dd></div>{% endfor %}</dl>
+    </div>
+  </div>
+</div>
+{% endblock %}

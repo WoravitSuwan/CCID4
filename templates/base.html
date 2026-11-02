@@ -1,0 +1,45 @@
+{% load static %}<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ระบบออกหมายเรียก{% endblock %} · บก.สอท.4</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'js/htmx.min.js' %}" defer></script>
+</head>
+<body class="min-h-screen" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+{% if user.is_authenticated %}
+<header class="bg-blue-950 text-white">
+  <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-2">
+    <a href="{% url 'dashboard' %}" class="mr-4 text-base font-semibold text-white hover:no-underline">ระบบออกหมายเรียก บก.สอท.4</a>
+    {% with u=request.resolver_match.url_name %}
+    <nav class="flex flex-wrap gap-1">
+      <a class="nav-link {% if u == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">หน้าหลัก</a>
+      <a class="nav-link {% if u == 'case_list' or u == 'case_detail' %}active{% endif %}" href="{% url 'case_list' %}">ทะเบียนคดี</a>
+      <a class="nav-link {% if u == 'summons_list' or u == 'issue_form' %}active{% endif %}" href="{% url 'summons_list' %}">หมายเรียก</a>
+      <a class="nav-link {% if 'export' in u %}active{% endif %}" href="{% url 'export_jobs' %}">ส่งออก</a>
+      {% if perm_import %}<a class="nav-link {% if 'import' in u %}active{% endif %}" href="{% url 'import_home' %}">นำเข้าข้อมูล</a>{% endif %}
+      {% if perm_settings %}<a class="nav-link {% if 'settings' in u %}active{% endif %}" href="{% url 'settings_home' %}">ตั้งค่า
+        {% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases %}<span class="ml-1 rounded-full bg-amber-400 px-1.5 text-xs text-blue-950">{{ admin_alerts.new_statuses|add:admin_alerts.unlinked_aliases }}</span>{% endif %}</a>{% endif %}
+    </nav>
+    {% endwith %}
+    <div class="ml-auto flex items-center gap-3 text-sm">
+      <span class="text-blue-100">{{ user.display_name }} · {{ user.role_label }}</span>
+      <a class="text-blue-100 hover:text-white" href="{% url 'password_change' %}">เปลี่ยนรหัสผ่าน</a>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="text-blue-100 hover:text-white">ออกจากระบบ</button></form>
+    </div>
+  </div>
+</header>
+{% endif %}
+<main class="mx-auto max-w-7xl px-4 py-6">
+  {% if messages %}
+  <div class="mb-4 space-y-2">
+    {% for m in messages %}
+    <div class="rounded-md border px-4 py-2 text-sm {% if m.tags == 'error' %}border-red-200 bg-red-50 text-red-800{% elif m.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-900{% elif m.tags == 'success' %}border-green-200 bg-green-50 text-green-800{% else %}border-blue-200 bg-blue-50 text-blue-900{% endif %}">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

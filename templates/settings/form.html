@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<form method="post" class="card max-w-2xl space-y-3">{% csrf_token %}
+  <h2>{{ title }}</h2>
+  {% if help %}<p class="text-sm text-slate-500">{{ help }}</p>{% endif %}
+  {% if form.non_field_errors %}<div class="text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
+  {% for f in form %}
+  <div>
+    {% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>
+    {% else %}<label class="label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
+    {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}{{ f.errors }}
+  </div>
+  {% endfor %}
+  {% if suggestions %}<div class="rounded bg-blue-50 p-2 text-sm text-blue-900">ชื่อที่ใกล้เคียง: {% for s in suggestions %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %} (เลือกในช่อง "พนักงานสอบสวนที่ผูกไว้" ด้วยตนเอง)</div>{% endif %}
+  <div class="flex gap-2"><button class="btn btn-primary">บันทึก</button><a class="btn" href="{% url back %}">ยกเลิก</a></div>
+</form>
+{% endblock %}

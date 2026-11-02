@@ -1,0 +1,10 @@
+<h1 class="mb-3">ตั้งค่า</h1>
+<nav class="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
+  <a class="tab {% if tab == 'investigators' %}active{% endif %}" href="{% url 'settings_investigators' %}">พนักงานสอบสวน{% if admin_alerts.unlinked_aliases %} <span class="badge badge-amber">{{ admin_alerts.unlinked_aliases }}</span>{% endif %}</a>
+  <a class="tab {% if tab == 'units' %}active{% endif %}" href="{% url 'settings_units' %}">หน่วย</a>
+  <a class="tab {% if tab == 'statuses' %}active{% endif %}" href="{% url 'settings_statuses' %}">สถานะคดี{% if admin_alerts.new_statuses %} <span class="badge badge-amber">{{ admin_alerts.new_statuses }}</span>{% endif %}</a>
+  <a class="tab {% if tab == 'templates' %}active{% endif %}" href="{% url 'settings_templates' %}">แบบฟอร์ม</a>
+  <a class="tab {% if tab == 'users' %}active{% endif %}" href="{% url 'settings_users' %}">ผู้ใช้และสิทธิ์</a>
+  <a class="tab {% if tab == 'system' %}active{% endif %}" href="{% url 'settings_system' %}">ระบบ</a>
+  <a class="tab {% if tab == 'audit' %}active{% endif %}" href="{% url 'settings_audit' %}">บันทึกการใช้งาน</a>
+</nav>

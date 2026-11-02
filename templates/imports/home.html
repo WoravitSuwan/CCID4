@@ -1,0 +1,41 @@
+{% extends "base.html" %}{% load thai humanize %}
+{% block title %}นำเข้าข้อมูล{% endblock %}
+{% block content %}
+<h1 class="mb-4">นำเข้าข้อมูล</h1>
+<div class="grid gap-4 lg:grid-cols-3">
+  <form method="post" enctype="multipart/form-data" class="card space-y-4">{% csrf_token %}
+    <h2>1. อัปโหลดไฟล์</h2>
+    <div><span class="label">ประเภทไฟล์</span>
+      {% for r in form.kind %}<label class="mb-1 flex items-center gap-2 text-sm">{{ r.tag }} {{ r.choice_label }}</label>{% endfor %}
+      {{ form.kind.errors }}
+    </div>
+    <div><label class="label">{{ form.file.label }}</label><input type="file" name="file" accept=".xlsx" class="text-sm" required>{{ form.file.errors }}</div>
+    <ul class="list-disc pl-5 text-xs text-slate-500">
+      <li>ข้อมูลผู้แจ้ง: ไฟล์ที่ส่งออกจากระบบรับแจ้งความออนไลน์ (ชีต Grid)</li>
+      <li>ทะเบียนคดี: ไฟล์ทะเบียนของกอง เลือกได้ว่าจะนำเข้าชีตปีไหน</li>
+      <li>นำเข้าซ้ำได้ ระบบจะอัปเดตของเดิมโดยใช้เลขรับแจ้ง ไม่สร้างซ้ำ</li>
+    </ul>
+    <button class="btn btn-primary">ถัดไป</button>
+  </form>
+  <div class="card overflow-x-auto p-0 lg:col-span-2">
+    <h2 class="px-4 pt-4">ประวัติการนำเข้า</h2>
+    <table class="table mt-3">
+      <thead><tr><th>เวลา</th><th>ไฟล์</th><th>ชีต</th><th>ผู้นำเข้า</th><th class="text-right">ใหม่</th><th class="text-right">อัปเดต</th><th class="text-right">มีปัญหา</th><th class="text-right">จับคู่ไม่ได้</th><th>สถานะ</th></tr></thead>
+      <tbody>
+      {% for b in history %}
+        <tr>
+          <td class="whitespace-nowrap">{{ b.committed_at|default:b.created_at|thai_date:"datetime" }}</td>
+          <td><div class="text-xs text-slate-500">{{ b.get_kind_display }}</div>{{ b.original_filename }}</td>
+          <td class="text-xs">{{ b.sheets|join:", " }}</td>
+          <td>{{ b.created_by.display_name|default:"-" }}</td>
+          <td class="text-right">{{ b.new_count|intcomma }}</td><td class="text-right">{{ b.updated_count|intcomma }}</td>
+          <td class="text-right">{{ b.issue_count|intcomma }}</td><td class="text-right">{{ b.unmatched_count|intcomma }}</td>
+          <td><a href="{% url 'import_preview' b.pk %}" class="badge {% if b.status == 'done' %}badge-green{% elif b.status == 'failed' %}badge-red{% elif b.status == 'cancelled' %}badge-gray{% else %}badge-amber{% endif %}">{{ b.get_status_display }}</a></td>
+        </tr>
+      {% empty %}<tr><td colspan="9" class="text-slate-500">ยังไม่มีการนำเข้า</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% with page=history %}{% include "_pagination.html" %}{% endwith %}
+{% endblock %}

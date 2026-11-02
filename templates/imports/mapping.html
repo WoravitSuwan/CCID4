@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}จับคู่คอลัมน์{% endblock %}
+{% block content %}
+<h1 class="mb-2">นำเข้าข้อมูล</h1>
+{% include "imports/_steps.html" %}
+<form method="post" class="card max-w-3xl">{% csrf_token %}
+  <h2>จับคู่คอลัมน์</h2>
+  {% if all_auto %}<p class="mt-1 text-sm text-green-700">ระบบจับคู่คอลัมน์ที่จำเป็นได้ครบอัตโนมัติ ตรวจดูแล้วกด "ตรวจสอบข้อมูล" ได้เลย</p>
+  {% else %}<p class="mt-1 text-sm text-amber-800">หัวตารางบางคอลัมน์ไม่ตรงกับที่ระบบรู้จัก กรุณาเลือกให้ครบ (ระบบจะจำไว้ใช้ครั้งหน้า)</p>{% endif %}
+  {% if differing %}<p class="mt-1 text-sm text-amber-800">หมายเหตุ: ชีต {{ differing|join:", " }} มีหัวตารางไม่เหมือนชีตอื่น</p>{% endif %}
+  <table class="table mt-3">
+    <thead><tr><th>ข้อมูลในระบบ</th><th>คอลัมน์ในไฟล์</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td>{{ r.label }}{% if r.required %} <span class="text-red-600">*</span>{% endif %}</td>
+        <td><select name="map_{{ r.field }}" class="input py-1 {% if r.required and not r.selected %}border-red-400{% endif %}">
+          <option value="">— ไม่ใช้ —</option>
+          {% for h in headers %}<option value="{{ h }}" {% if h == r.selected %}selected{% endif %}>{{ h }}</option>{% endfor %}
+        </select></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="mt-4 flex gap-2"><button class="btn btn-primary">ตรวจสอบข้อมูล</button><a class="btn" href="{% url 'import_sheets' batch.pk %}">ย้อนกลับ</a></div>
+</form>
+{% endblock %}

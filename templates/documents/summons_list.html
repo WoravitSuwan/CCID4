@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% load thai %}
+{% block title %}หมายเรียก{% endblock %}
+{% block content %}
+<div class="mb-4 flex items-center gap-2"><h1>หมายเรียกที่ออกแล้ว</h1><span class="text-sm text-slate-500">{{ page.paginator.count }} ฉบับ</span></div>
+<form method="get" class="card mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
+  <input class="input md:col-span-2" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ">
+  <select name="result" class="input"><option value="">ทุกผล</option>{% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <select name="issuer" class="input"><option value="">ผู้ลงนามทุกคน</option>{% for i in issuers %}<option value="{{ i.pk }}" {% if request.GET.issuer == i.pk|stringformat:"s" %}selected{% endif %}>{{ i }}</option>{% endfor %}</select>
+  <input class="input" type="date" name="from" value="{{ request.GET.from }}" title="ออกหมายตั้งแต่">
+  <input class="input" type="date" name="to" value="{{ request.GET.to }}" title="ถึง">
+  <div class="flex gap-2 md:col-span-6"><button class="btn btn-primary">ค้นหา</button><a class="btn" href="{% url 'summons_list' %}">ล้าง</a></div>
+</form>
+<form method="get" action="{% url 'export_new' %}">
+  <div class="mb-2"><button class="btn btn-primary">ส่งออกรายการที่เลือก</button></div>
+  <div class="card overflow-x-auto p-0">
+  <table class="table">
+    <thead><tr><th><input type="checkbox" class="h-4 w-4" onclick="document.querySelectorAll('.s-cb').forEach(c=>c.checked=this.checked)"></th><th>เลขรับแจ้ง</th><th>ครั้งที่</th><th>ผู้ถูกเรียก</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>ผล</th><th>ไฟล์</th></tr></thead>
+    <tbody>
+    {% for s in page %}
+      <tr>
+        <td><input type="checkbox" class="s-cb h-4 w-4" name="ids" value="{{ s.pk }}"></td>
+        <td class="font-mono"><a href="{% url 'case_detail' s.case_id %}">{{ s.case.receipt_no }}</a></td>
+        <td>{{ s.number }}</td><td>{{ s.recipient_name }}</td><td>{{ s.issue_date|thai_date }}</td>
+        <td class="whitespace-nowrap">{{ s.appointment_at|thai_date:"datetime" }}</td><td>{{ s.issuer }}</td><td>{{ s.created_by.display_name|default:"-" }}</td>
+        <td><span class="badge {% if s.result == 'attended' %}badge-green{% elif s.result == 'absent' %}badge-red{% elif s.result == 'cancelled' %}badge-gray{% else %}badge-blue{% endif %}">{{ s.get_result_display }}</span></td>
+        <td class="whitespace-nowrap"><a href="{% url 'summons_pdf' s.pk %}" target="_blank">PDF</a> · <a href="{% url 'summons_docx' s.pk %}">Word</a></td>
+      </tr>
+    {% empty %}<tr><td colspan="10" class="text-slate-500">ยังไม่มีหมายเรียก</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</form>
+{% include "_pagination.html" %}
+{% endblock %}

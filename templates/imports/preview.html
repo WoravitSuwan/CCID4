@@ -1,0 +1,51 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}ตรวจสอบการนำเข้า{% endblock %}
+{% block content %}
+<h1 class="mb-2">นำเข้าข้อมูล</h1>
+{% include "imports/_steps.html" %}
+{% if batch.is_running %}
+  {% include "imports/_progress.html" %}
+{% elif batch.status == 'failed' %}
+  <div class="card border-red-200 bg-red-50 text-sm text-red-800">นำเข้าไม่สำเร็จ: {{ batch.error }}</div>
+{% else %}
+  {% with s=batch.summary %}
+  {% if batch.status == 'done' %}<div class="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">นำเข้าสำเร็จ{% if s.linked %} · จับคู่คดีกับผู้แจ้งเพิ่ม {{ s.linked|intcomma }} คดี{% endif %}</div>{% endif %}
+  <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+    <div class="card"><div class="stat-label">จำนวนแถว</div><div class="stat-value">{{ s.total_rows|intcomma }}</div><div class="text-xs text-slate-500">ข้ามแถวว่าง {{ s.skipped_blank|intcomma }}</div></div>
+    <div class="card"><div class="stat-label">เพิ่มใหม่</div><div class="stat-value text-green-700">{{ s.new|intcomma }}</div></div>
+    <div class="card"><div class="stat-label">อัปเดต</div><div class="stat-value text-blue-700">{{ s.updated|intcomma }}</div><div class="text-xs text-slate-500">ไม่เปลี่ยน {{ s.unchanged|intcomma }}</div></div>
+    <div class="card"><div class="stat-label">มีปัญหา (ยังนำเข้าได้)</div><div class="stat-value text-amber-700">{{ s.issue_rows|intcomma }}</div></div>
+    <div class="card"><div class="stat-label">{% if batch.kind == 'register' %}จับคู่กับไฟล์ผู้แจ้งไม่ได้{% else %}ผู้แจ้งที่ไม่อยู่ในทะเบียน{% endif %}</div><div class="stat-value">{{ s.unmatched|intcomma }}</div></div>
+  </div>
+  <div class="mt-4 grid gap-4 lg:grid-cols-2">
+    <div class="card text-sm">
+      <h2 class="mb-2">สรุปการเปลี่ยนแปลง</h2>
+      {% if s.changes %}<ul class="list-disc pl-5">{% for c in s.changes %}<li>{{ c }}</li>{% endfor %}</ul>{% else %}<p class="text-slate-500">ไม่มีข้อมูลเดิมที่เปลี่ยน</p>{% endif %}
+      {% if s.per_sheet %}<h3 class="mt-3 font-medium">จำนวนตามชีต</h3><ul class="list-disc pl-5">{% for k, v in s.per_sheet.items %}<li>{{ k }}: {{ v|intcomma }}</li>{% endfor %}</ul>{% endif %}
+      {% if s.new_statuses %}<p class="mt-3 text-amber-800">สถานะใหม่ (จะสร้างเป็น "ยังไม่สิ้นสุด" และแจ้งผู้ดูแล): {{ s.new_statuses|join:", " }}</p>{% endif %}
+      {% if s.new_aliases %}<p class="mt-3 text-amber-800">ชื่อพนักงานสอบสวนที่ยังไม่รู้จัก {{ s.new_aliases|length }} ชื่อ (ผู้ดูแลต้องผูกกับข้อมูลผู้ลงนามก่อนออกหมาย): {{ s.new_aliases|join:", " }}</p>{% endif %}
+      {% if s.new_units %}<p class="mt-3 text-amber-800">หน่วยใหม่: {{ s.new_units|join:", " }} (ต้องตั้งค่าสถานที่นัด)</p>{% endif %}
+    </div>
+    <div class="card text-sm">
+      <h2 class="mb-2">ปัญหาที่พบ</h2>
+      {% if s.issue_counts %}<ul class="list-disc pl-5">{% for k, v in s.issue_counts.items %}<li>{{ k }}: {{ v|intcomma }}</li>{% endfor %}</ul>
+      <a class="btn btn-sm mt-3" href="{% url 'import_issues' batch.pk %}">ดาวน์โหลดรายการปัญหา (Excel)</a>{% else %}<p class="text-slate-500">ไม่พบปัญหา</p>{% endif %}
+    </div>
+  </div>
+  {% if issues %}
+  <details class="card mt-4 text-sm"><summary class="cursor-pointer font-medium">ดูตัวอย่างรายการปัญหา (สูงสุด 200 รายการ)</summary>
+    <table class="table mt-2"><thead><tr><th>ชีต</th><th>แถว</th><th>เลขรับแจ้ง</th><th>ปัญหา</th><th>รายละเอียด</th></tr></thead><tbody>
+    {% for i in issues %}<tr><td>{{ i.sheet }}</td><td>{{ i.row_number }}</td><td class="font-mono">{{ i.receipt_no }}</td><td>{{ i.get_issue_type_display }}</td><td>{{ i.message }}</td></tr>{% endfor %}
+    </tbody></table>
+  </details>
+  {% endif %}
+  {% if batch.status == 'analyzed' %}
+  <div class="mt-4 flex gap-2">
+    <form method="post" action="{% url 'import_confirm' batch.pk %}">{% csrf_token %}<button class="btn btn-primary">ยืนยันนำเข้า</button></form>
+    <a class="btn" href="{% url 'import_mapping' batch.pk %}">ย้อนกลับ</a>
+    <form method="post" action="{% url 'import_cancel' batch.pk %}">{% csrf_token %}<button class="btn">ยกเลิก</button></form>
+  </div>
+  {% else %}<a class="btn mt-4" href="{% url 'import_home' %}">กลับหน้านำเข้าข้อมูล</a>{% endif %}
+  {% endwith %}
+{% endif %}
+{% endblock %}

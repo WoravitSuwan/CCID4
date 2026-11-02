@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}งานส่งออก{% endblock %}
+{% block content %}
+<h1 class="mb-1">งานส่งออก #{{ job.pk }}</h1>
+<p class="mb-4 text-sm text-slate-500">{{ job.summonses.count }} ฉบับ · {{ job.get_format_display }} · {{ job.get_mode_display }}{% if job.include_envelope %} · พร้อมใบจ่าหน้าซอง{% endif %}</p>
+{% include "documents/_job_status.html" %}
+<a class="btn mt-4" href="{% url 'export_jobs' %}">งานส่งออกทั้งหมด</a>
+{% endblock %}

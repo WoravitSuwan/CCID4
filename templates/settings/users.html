@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% load thai %}
+{% block title %}ผู้ใช้{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<div class="card overflow-x-auto p-0">
+  <div class="flex items-center px-4 pt-4"><h2>ผู้ใช้และสิทธิ์</h2><a class="btn btn-sm ml-auto" href="{% url 'settings_user_new' %}">+ เพิ่มผู้ใช้</a></div>
+  <table class="table mt-2">
+    <thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>พนักงานสอบสวนที่ผูก</th><th>ใช้งาน</th><th>เข้าระบบล่าสุด</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr class="{% if not u.is_active %}opacity-50{% endif %}"><td>{{ u.username }}</td><td>{{ u.first_name }} {{ u.last_name }}</td><td>{{ u.role_label }}</td>
+        <td>{{ u.investigator|default:"-" }}</td><td>{% if u.is_active %}✓{% else %}ปิด{% endif %}</td><td>{{ u.last_login|thai_date:"datetime" }}</td>
+        <td><a class="btn btn-sm" href="{% url 'settings_user_edit' u.pk %}">แก้ไข</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

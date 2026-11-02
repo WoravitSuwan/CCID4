@@ -1,0 +1,57 @@
+# ระบบออกหมายเรียกผู้กล่าวหา บก.สอท.4
+#   docker compose up -d --build
+# เปิด http://localhost:8000 (หรือ http://<IP เครื่องนี้>:8000 จากเครื่องอื่นในเครือข่ายภายใน)
+
+x-app: &app
+  build: .
+  image: ccid4-summons:latest
+  env_file: .env
+  environment:
+    POSTGRES_HOST: db
+    CELERY_BROKER_URL: redis://redis:6379/0
+  volumes:
+    - media:/app/media
+    - appdata:/app/data
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_started
+  restart: unless-stopped
+
+services:
+  web:
+    <<: *app
+    command: ["web"]
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["worker"]
+
+  db:
+    image: postgres:16-alpine
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:
+  appdata:

@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% load humanize %}
+{% block title %}หน้าหลัก{% endblock %}
+{% block content %}
+<h1 class="mb-4">ภาพรวม</h1>
+{% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases %}
+<div class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+  {% if admin_alerts.new_statuses %}พบสถานะใหม่ {{ admin_alerts.new_statuses }} รายการจากการนำเข้า (ตั้งเป็น "ยังไม่สิ้นสุด" ไว้ก่อน) — <a href="{% url 'settings_statuses' %}">ตรวจสอบ</a><br>{% endif %}
+  {% if admin_alerts.unlinked_aliases %}มีชื่อพนักงานสอบสวนในทะเบียน {{ admin_alerts.unlinked_aliases }} ชื่อที่ยังไม่ได้ผูกกับข้อมูลผู้ลงนาม (ออกหมายคดีเหล่านี้ไม่ได้) — <a href="{% url 'settings_investigators' %}">ผูกชื่อ</a>{% endif %}
+</div>
+{% endif %}
+<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+  <a class="stat" href="{% url 'case_list' %}"><div class="stat-label">คดีทั้งหมด</div><div class="stat-value">{{ stats.total|intcomma }}</div></a>
+  <a class="stat" href="{% url 'case_list' %}?open=on"><div class="stat-label">ยังไม่สิ้นสุด</div><div class="stat-value">{{ stats.open|intcomma }}</div></a>
+  <a class="stat" href="{% url 'case_list' %}?open=on&never=on"><div class="stat-label">ยังไม่สิ้นสุด · ยังไม่เคยออกหมาย</div><div class="stat-value">{{ stats.never|intcomma }}</div></a>
+  <a class="stat" href="{% url 'case_list' %}?open=on&incomplete=on"><div class="stat-label">ยังไม่สิ้นสุด · ที่อยู่ไม่ครบ</div><div class="stat-value text-amber-700">{{ stats.incomplete|intcomma }}</div></a>
+  <a class="stat" href="{% url 'case_list' %}?open=on&unmatched=on"><div class="stat-label">ยังไม่สิ้นสุด · จับคู่ไฟล์ผู้แจ้งไม่ได้</div><div class="stat-value text-amber-700">{{ stats.unmatched|intcomma }}</div></a>
+  <a class="stat" href="{% url 'summons_list' %}?result=issued"><div class="stat-label">รอมาตามนัด</div><div class="stat-value">{{ stats.waiting|intcomma }}</div></a>
+  <a class="stat" href="{% url 'summons_list' %}?result=issued"><div class="stat-label">เลยวันนัด · ยังไม่บันทึกผล</div><div class="stat-value">{{ stats.overdue|intcomma }}</div></a>
+  <a class="stat" href="{% url 'summons_list' %}?result=absent"><div class="stat-label">ไม่มาตามนัด</div><div class="stat-value text-red-700">{{ stats.absent|intcomma }}</div></a>
+</div>
+<p class="mt-2 text-xs text-slate-500">ผู้แจ้งที่ไม่อยู่ในทะเบียนคดีของกอง: {{ stats.complainants_outside|intcomma }} ราย (เก็บไว้สำหรับจับคู่ แต่ไม่แสดงในทะเบียน)</p>
+
+<div class="card mt-6 overflow-x-auto p-0">
+  <h2 class="px-4 pt-4">สรุปตามพนักงานสอบสวน</h2>
+  <table class="table mt-3">
+    <thead><tr><th>พนักงานสอบสวน</th><th class="text-right">คดีทั้งหมด</th><th class="text-right">ยังไม่สิ้นสุด</th><th class="text-right">ยังไม่เคยออกหมาย</th><th class="text-right">รอมาตามนัด</th><th class="text-right">ไม่มาตามนัด</th></tr></thead>
+    <tbody>
+    {% for r in per_inv %}
+      <tr>
+        <td>{% if r.inv %}<a href="{% url 'case_list' %}?investigator={{ r.inv.pk }}&open=on">{{ r.inv }}</a>{% else %}<a href="{% url 'case_list' %}?investigator=none&open=on" class="text-amber-700">ยังไม่ได้ผูกผู้ลงนาม</a>{% endif %}</td>
+        <td class="text-right">{{ r.total|intcomma }}</td><td class="text-right">{{ r.open|intcomma }}</td>
+        <td class="text-right">{{ r.never|intcomma }}</td><td class="text-right">{{ r.waiting|intcomma }}</td><td class="text-right">{{ r.absent|intcomma }}</td>
+      </tr>
+    {% empty %}<tr><td colspan="6" class="text-slate-500">ยังไม่มีข้อมูล — เริ่มจาก <a href="{% url 'import_home' %}">นำเข้าข้อมูล</a></td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

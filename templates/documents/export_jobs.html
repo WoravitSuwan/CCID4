@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load thai %}
+{% block title %}งานส่งออก{% endblock %}
+{% block content %}
+<div class="mb-4 flex items-center gap-2"><h1>งานส่งออกของฉัน</h1><a class="btn ml-auto" href="{% url 'summons_list' %}">เลือกหมายเรียกเพื่อส่งออก</a></div>
+<div class="card overflow-x-auto p-0">
+<table class="table">
+  <thead><tr><th>#</th><th>เวลา</th><th>จำนวน</th><th>รูปแบบ</th><th>สถานะ</th><th></th></tr></thead>
+  <tbody>
+  {% for j in jobs %}
+    <tr><td>{{ j.pk }}</td><td>{{ j.created_at|thai_date:"datetime" }}</td><td>{{ j.summonses.all|length }}</td>
+      <td>{{ j.get_format_display }} · {{ j.get_mode_display }}{% if j.include_envelope %} · ซอง{% endif %}</td>
+      <td><span class="badge {% if j.status == 'done' %}badge-green{% elif j.status == 'failed' %}badge-red{% else %}badge-amber{% endif %}">{{ j.get_status_display }}</span></td>
+      <td>{% if j.status == 'done' and j.result_file %}<a href="{% url 'export_download' j.pk %}">ดาวน์โหลด</a>{% else %}<a href="{% url 'export_job' j.pk %}">ดู</a>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="6" class="text-slate-500">ยังไม่มีงานส่งออก</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="mt-2 text-xs text-slate-500">ไฟล์ที่ส่งออกจะถูกลบอัตโนมัติตามจำนวนวันที่ผู้ดูแลกำหนด (สร้างใหม่ได้เสมอจากหน้าหมายเรียก)</p>
+{% endblock %}

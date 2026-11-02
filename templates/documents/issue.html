@@ -1,0 +1,59 @@
+{% extends "base.html" %}{% load thai %}
+{% block title %}ออกหมายเรียก{% endblock %}
+{% block content %}
+<h1 class="mb-4">ออกหมายเรียก ({{ cases|length }} คดีที่เลือก)</h1>
+{% if error %}<div class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>{% endif %}
+<form method="post" id="issue-form">{% csrf_token %}
+  {% for x in excluded %}<input type="hidden" name="exclude" value="{{ x }}">{% endfor %}
+  <div class="card grid gap-4 md:grid-cols-4">
+    <div><label class="label">{{ form.issue_date.label }}</label>{{ form.issue_date }}{{ form.issue_date.errors }}</div>
+    <div><label class="label">{{ form.appointment_date.label }}</label>{{ form.appointment_date }}{{ form.appointment_date.errors }}
+      <span class="helptext">ค่าเริ่มต้น = วันออกหมาย + 14 วัน (เสาร์/อาทิตย์เลื่อนเป็นวันจันทร์)</span></div>
+    <div><label class="label">{{ form.start_time.label }}</label>{{ form.start_time }}
+      <label class="mt-2 flex items-center gap-2 text-sm">{{ form.stagger }} {{ form.stagger.label }}</label></div>
+    <div><label class="label">{{ form.template.label }}</label>{{ form.template }}</div>
+    <div class="md:col-span-4"><label class="label">{{ form.reason.label }}</label>{{ form.reason }}{{ form.reason.errors }}</div>
+    <div class="flex flex-wrap gap-6 text-sm md:col-span-4">
+      <label class="flex items-center gap-2">{{ form.thai_digits }} {{ form.thai_digits.label }}</label>
+      <label class="flex items-center gap-2">{{ form.change_status }} {{ form.change_status.label }}</label>
+    </div>
+    <div class="flex flex-wrap gap-2 md:col-span-4">
+      <button class="btn" name="action" value="refresh">คำนวณใหม่ตามค่าที่แก้</button>
+      <button class="btn" name="action" value="preview" formtarget="_blank">ดูตัวอย่าง PDF</button>
+      <button class="btn btn-primary" name="action" value="confirm" {% if not plan or not plan.ok_items %}disabled{% endif %}
+        onclick="return confirm('ยืนยันออกหมายเรียก {{ plan.ok_items|length }} ฉบับ?')">ยืนยันออกหมาย ({{ plan.ok_items|length|default:0 }} ฉบับ)</button>
+    </div>
+    <p class="text-xs text-slate-500 md:col-span-4">ระบบตรวจข้อความที่ต้องมีตาม ป.วิ.อ. มาตรา ๕๓ (สถานที่และวันที่ออกหมาย ชื่อและที่อยู่ผู้ถูกเรียก เหตุที่เรียก สถานที่และวันเวลาที่ให้มา ลายมือชื่อและตำแหน่งผู้ออกหมาย) รายการที่ไม่ครบจะไม่ถูกออกหมาย · ผู้ลงนามคือพนักงานสอบสวนเจ้าของคดีเสมอ</p>
+  </div>
+
+  {% if plan %}
+  {% if plan.blocked_items %}
+  <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+    <div class="font-medium">ออกหมายไม่ได้ {{ plan.blocked_items|length }} รายการ (จะถูกข้าม)</div>
+  </div>
+  {% endif %}
+  {% for inv, items in plan.groups.items %}
+  <div class="card mt-4 overflow-x-auto p-0">
+    <div class="flex items-center gap-2 px-4 pt-4"><h2>ผู้ลงนาม: {% if inv %}{{ inv }}{% else %}<span class="text-amber-700">ยังไม่ได้ผูกผู้ลงนาม</span>{% endif %}</h2>
+      {% if inv %}<span class="text-sm text-slate-500">{{ inv.position }}</span>{% endif %}</div>
+    <table class="table mt-2">
+      <thead><tr><th></th><th>เลขรับแจ้ง</th><th>ครั้งที่</th><th>ผู้ถูกเรียก</th><th>ที่อยู่</th><th>วันเวลานัด</th><th>ผลตรวจ</th></tr></thead>
+      <tbody>
+      {% for it in items %}
+        <tr class="{% if not it.ok %}bg-amber-50{% endif %}">
+          <td><button class="btn btn-sm" name="exclude" value="{{ it.case.pk }}" title="นำออกจากรายการ">✕</button></td>
+          <td class="font-mono"><a href="{% url 'case_detail' it.case.pk %}" target="_blank">{{ it.case.receipt_no }}</a></td>
+          <td>{{ it.number }}</td>
+          <td>{{ it.values|get_item:"ชื่อผู้แจ้ง" }}</td>
+          <td class="max-w-md text-xs">{{ it.values|get_item:"ที่อยู่" }}</td>
+          <td class="whitespace-nowrap">{{ it.appointment_at|thai_date:"datetime" }}</td>
+          <td class="text-xs">{% if it.ok %}<span class="badge badge-green">พร้อมออก</span>{% else %}<ul class="list-disc pl-4 text-amber-900">{% for p in it.problems %}<li>{{ p }}</li>{% endfor %}</ul>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+  {% endif %}
+</form>
+{% endblock %}

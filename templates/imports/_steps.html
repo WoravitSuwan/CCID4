@@ -1,0 +1,8 @@
+<ol class="mb-4 flex flex-wrap gap-2 text-sm">
+  <li class="badge {% if step == 1 %}badge-blue{% else %}badge-gray{% endif %}">1. อัปโหลด</li>
+  <li class="badge {% if step == 2 %}badge-blue{% else %}badge-gray{% endif %}">2. เลือกชีต</li>
+  <li class="badge {% if step == 3 %}badge-blue{% else %}badge-gray{% endif %}">3. จับคู่คอลัมน์</li>
+  <li class="badge {% if step == 4 %}badge-blue{% else %}badge-gray{% endif %}">4. ตรวจสอบ</li>
+  <li class="badge {% if step == 5 %}badge-blue{% else %}badge-gray{% endif %}">5. ยืนยัน</li>
+</ol>
+<div class="mb-4 text-sm text-slate-600">{{ batch.get_kind_display }} · <span class="font-medium">{{ batch.original_filename }}</span></div>

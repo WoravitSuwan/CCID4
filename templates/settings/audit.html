@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load thai %}
+{% block title %}บันทึกการใช้งาน{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<form method="get" class="card mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+  <select name="action" class="input"><option value="">ทุกการกระทำ</option>{% for v, l in actions %}<option value="{{ v }}" {% if request.GET.action == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <select name="user" class="input"><option value="">ทุกคน</option>{% for u in users %}<option value="{{ u.pk }}" {% if request.GET.user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.username }}</option>{% endfor %}</select>
+  <input class="input md:col-span-2" name="q" value="{{ request.GET.q }}" placeholder="ค้นหาในรายละเอียด เช่น เลขรับแจ้ง">
+  <button class="btn btn-primary">ค้นหา</button>
+</form>
+<div class="card overflow-x-auto p-0">
+<table class="table">
+  <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>รายละเอียด</th><th>IP</th></tr></thead>
+  <tbody>{% for a in page %}<tr><td class="whitespace-nowrap">{{ a.created_at|thai_date:"datetime" }}</td><td>{{ a.user.username|default:"ระบบ" }}</td><td><span class="badge badge-gray">{{ a.get_action_display }}</span></td><td>{{ a.detail }}</td><td class="text-xs">{{ a.ip_address|default:"" }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="text-slate-500">ไม่มีข้อมูล</td></tr>{% endfor %}</tbody>
+</table>
+</div>
+{% include "_pagination.html" %}
+{% endblock %}

@@ -1,0 +1,30 @@
+# --- real data must never be committed (PDPA) ---
+data/
+media/
+*.xlsx
+*.xls
+*.csv
+!sample_data/*.xlsx
+!apps/imports/data/thai_postcodes.csv
+*.doc
+backups/
+*.sql
+*.dump
+
+# fonts are licensed separately: put them in fonts/ locally
+fonts/*
+!fonts/README.md
+
+# environment / secrets
+.env
+
+# python / tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+staticfiles/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

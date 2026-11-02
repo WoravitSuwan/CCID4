@@ -1,0 +1,9 @@
+{% load thai %}{% if page.paginator.num_pages > 1 %}
+<div class="mt-4 flex items-center justify-between text-sm">
+  <span class="text-slate-500">หน้า {{ page.number }} / {{ page.paginator.num_pages }}</span>
+  <div class="flex gap-1">
+    {% if page.has_previous %}<a class="btn btn-sm" href="?{% query_replace page=1 %}">« แรก</a><a class="btn btn-sm" href="?{% query_replace page=page.previous_page_number %}">‹ ก่อนหน้า</a>{% endif %}
+    {% if page.has_next %}<a class="btn btn-sm" href="?{% query_replace page=page.next_page_number %}">ถัดไป ›</a><a class="btn btn-sm" href="?{% query_replace page=page.paginator.num_pages %}">สุดท้าย »</a>{% endif %}
+  </div>
+</div>
+{% endif %}
