@@ -40,6 +40,21 @@
       {% endif %}
     </div>
 
+    <div class="card scroll-mt-6" id="address">
+      <div class="card-header">{% icon "envelope" "h-5 w-5 text-slate-400" %}<h2>ที่อยู่สำหรับออกหมาย</h2>
+        {% if effective and effective.is_complete %}<span class="badge badge-green ml-auto">ครบ</span>{% else %}<span class="badge badge-amber ml-auto">ยังไม่ครบ</span>{% endif %}</div>
+      <div class="font-medium">{{ case.recipient_name|default:"-" }}</div>
+      <div class="text-sm">{{ effective.format|default:"— ไม่มีที่อยู่ —" }}</div>
+      {% if effective and not effective.is_complete %}<div class="mt-1 text-xs text-amber-700">ขาด: {{ effective.missing_labels|join:", " }} — สอบถามผู้เสียหายระหว่างโทรแล้วกรอกด้านล่าง</div>
+      {% elif not effective %}<div class="mt-1 text-xs text-amber-700">ไม่พบเลขรับแจ้งนี้ในไฟล์ผู้แจ้ง — สอบถามที่อยู่จากผู้เสียหายแล้วกรอกด้านล่าง</div>{% endif %}
+      <div class="mt-1 text-xs text-slate-500">{% if override %}แก้เองโดย {{ override.updated_by.display_name|default:"-" }} ({{ override.updated_at|thai_date:"datetime" }}){% else %}ที่อยู่จากไฟล์ผู้แจ้ง{% endif %}</div>
+      {% if address_conflict %}<div class="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900 ring-1 ring-amber-200">ไฟล์ผู้แจ้งที่นำเข้าล่าสุดมีที่อยู่ต่างจากที่แก้ไว้ — บันทึกใหม่อีกครั้งเพื่อยืนยันที่อยู่นี้</div>{% endif %}
+      <details class="mt-3 border-t border-slate-100 pt-3" {% if not effective or not effective.is_complete %}open{% endif %}>
+        <summary class="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-indigo-700">{% icon "pencil" "h-4 w-4" %} แก้ไข / กรอกที่อยู่</summary>
+        {% url 'call_address_save' case.pk as addr_action %}{% include "registry/_address_form.html" with form=address_form action=addr_action %}
+      </details>
+    </div>
+
     {% if can_issue %}
     <div class="card">
       <div class="card-header">{% icon "document" "h-5 w-5 text-slate-400" %}<h2>หมายเรียก</h2>

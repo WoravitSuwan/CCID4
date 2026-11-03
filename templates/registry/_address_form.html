@@ -1,0 +1,45 @@
+{% load ui %}{# Address-for-summons form + postcode autofill. Params: form, action. Field ids follow the form's prefix. #}
+<form method="post" action="{{ action }}" class="mt-3 grid grid-cols-2 gap-3 text-sm address-form" data-idp="id_{% if form.prefix %}{{ form.prefix }}-{% endif %}">{% csrf_token %}
+  {% for f in form %}
+  <div class="{% if f.name == 'recipient_name' or f.name == 'note' %}col-span-2{% endif %}"><label class="label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}</div>
+  {% endfor %}
+  <p class="col-span-2 text-xs text-slate-500">ที่อยู่ที่แก้เองจะไม่ถูกทับเมื่อนำเข้าไฟล์ผู้แจ้งใหม่ ถ้าไฟล์ใหม่มีที่อยู่ต่างไป ระบบจะแจ้งให้ผู้ดูแลเลือก</p>
+  <div class="postcode-hint col-span-2 -mt-1 hidden text-xs"></div>
+  <div class="col-span-2"><button class="btn btn-primary">{% icon "check" "h-4 w-4" %} บันทึกที่อยู่</button></div>
+</form>
+<script>
+(function () {
+  // Fill the postcode from ตำบล/อำเภอ/จังหวัด using the system's own postcode table (no outside request)
+  const form = document.currentScript.previousElementSibling;
+  const idp = form.dataset.idp, $ = (n) => document.getElementById(idp + n);
+  const pc = $("postcode"), hint = form.querySelector(".postcode-hint");
+  if (!pc) return;
+  const list = document.createElement("datalist");
+  list.id = idp + "postcode-options"; form.appendChild(list); pc.setAttribute("list", list.id);
+  let auto = !pc.value, timer;
+  pc.addEventListener("input", () => { auto = !pc.value; });
+  function show(text, cls) { hint.textContent = text; hint.className = "postcode-hint col-span-2 -mt-1 text-xs " + cls; }
+  async function lookup() {
+    if (!$("province").value.trim()) return;
+    const q = new URLSearchParams({subdistrict: $("subdistrict").value, district: $("district").value,
+                                   province: $("province").value});
+    const r = await fetch("{% url 'postcode_lookup' %}?" + q, {headers: {"X-Requested-With": "fetch"}});
+    if (!r.ok) return;
+    const d = await r.json();
+    list.innerHTML = d.candidates.map((c) => `<option value="${c}">`).join("");
+    if (d.postcode) {
+      if (auto || !pc.value) { pc.value = d.postcode; auto = true; }
+      show("รหัสไปรษณีย์ " + d.postcode + " เติมให้อัตโนมัติจาก ตำบล/อำเภอ/จังหวัด", "text-emerald-700");
+    } else if (d.candidates.length > 1) {
+      show("พื้นที่นี้มีหลายรหัสไปรษณีย์: " + d.candidates.join(", ") + " — เลือกจากช่องรหัสไปรษณีย์", "text-amber-700");
+    } else {
+      show("ไม่พบรหัสไปรษณีย์ของพื้นที่นี้ ตรวจการสะกดตำบล/อำเภอ/จังหวัด หรือกรอกเอง", "text-slate-500");
+    }
+  }
+  ["subdistrict", "district", "province"].forEach((n) => {
+    const el = $(n); if (!el) return;
+    el.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(lookup, 350); });
+  });
+  if (!pc.value) lookup();
+})();
+</script>

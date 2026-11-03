@@ -9,6 +9,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from openpyxl import Workbook
@@ -19,6 +20,7 @@ from apps.core import permissions as perms
 from apps.core.audit import log
 from apps.core.downloads import content_disposition
 from apps.core.models import AuditAction
+from apps.registry.address_edit import address_form, save_address
 from apps.registry.forms import StyledForm
 from apps.registry.models import Case
 
@@ -27,6 +29,7 @@ from .services import assign, case_phones, parse_receipt_list, record_call
 
 User = get_user_model()
 DT_WIDGET = forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M")
+ADDRESS_PREFIX = "addr"  # keeps address field ids apart from the call form (both have "note")
 TABS = [("todo", "ต้องโทร"), ("callback", "นัดโทรกลับ"), ("never", "ยังไม่เคยโทร"), ("done", "เสร็จแล้ว"),
         ("all", "ทั้งหมด")]
 
@@ -165,7 +168,19 @@ def call_case(request, pk):
         "summonses": case.summonses.select_related("issuer").order_by("-number"),
         "can_issue": perms.can_issue_for_case(request.user, case),
         "issue_blockers": case.issue_blockers(),
+        "address_form": address_form(case, prefix=ADDRESS_PREFIX), "override": case.get_override(),
+        "effective": case.effective_address(), "address_conflict": case.address_conflict(),
     })
+
+
+@require_POST
+def call_address_save(request, pk):
+    """Call staff fix/enter the address for the summons while on the phone with the complainant."""
+    case = get_object_or_404(Case.objects.select_related("complainant"), pk=pk)
+    if not perms.can_record_call(request.user, case):
+        raise PermissionDenied
+    save_address(request, case, prefix=ADDRESS_PREFIX)
+    return redirect(f"{reverse('call_case', args=[case.pk])}#address")
 
 
 # --------------------------------------------------------------------------- assignment

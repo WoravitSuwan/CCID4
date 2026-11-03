@@ -18,14 +18,20 @@ from apps.calls.models import CallAssignment
 from apps.calls.services import contact_log_with_calls
 from apps.calls.views import call_staff
 from apps.core import permissions as perms
-from apps.core.downloads import content_disposition
 from apps.core.audit import log
+from apps.core.downloads import content_disposition
 from apps.core.models import AuditAction
 from apps.documents.models import Summons, SummonsResult
 
-from .forms import AddressOverrideForm, CaseFilterForm
+from .address_edit import address_form, save_address
+from .forms import CaseFilterForm
 from .models import (
-    AddressOverride, Case, Complainant, Investigator, Status, complainant_address_snapshot,
+    AddressOverride,
+    Case,
+    Complainant,
+    Investigator,
+    Status,
+    complainant_address_snapshot,
 )
 
 PAGE_SIZE = 50
@@ -179,12 +185,7 @@ def case_detail(request, pk):
     override = case.get_override()
     summonses = case.summonses.select_related("issuer", "created_by").order_by("-number")
     can_edit = perms.can_edit_case(request.user, case)
-    form = AddressOverrideForm(instance=override) if can_edit else None
-    if form is not None and override is None and case.complainant:
-        c = case.complainant
-        form.initial.update({f: getattr(c, f) for f in ["house_no", "moo", "building", "soi", "road",
-                                                        "subdistrict", "district", "province"]})
-        form.initial["postcode"] = c.effective_postcode
+    form = address_form(case) if can_edit else None
     return render(request, "registry/case_detail.html", {
         "case": case, "c": case.complainant, "override": override, "summonses": summonses,
         "form": form, "can_edit": can_edit, "can_issue": perms.can_issue_for_case(request.user, case),
@@ -202,18 +203,7 @@ def case_address_save(request, pk):
     case = _case_or_404(pk)
     if not perms.can_edit_case(request.user, case):
         raise PermissionDenied
-    override = case.get_override() or AddressOverride(receipt_no=case.receipt_no)
-    before = override.address().format() if override.pk else "(ที่อยู่จากไฟล์ผู้แจ้ง)"
-    form = AddressOverrideForm(request.POST, instance=override)
-    if form.is_valid():
-        obj = form.save(commit=False)
-        obj.updated_by = request.user
-        obj.source_snapshot = complainant_address_snapshot(case.complainant)
-        obj.save()
-        log(request, AuditAction.EDIT, case, f"แก้ที่อยู่ผู้กล่าวหา {case.receipt_no}: {before} → {obj.address().format()}")
-        messages.success(request, "บันทึกที่อยู่แล้ว ระบบจะใช้ที่อยู่นี้ในการออกหมาย (ไม่ถูกทับเมื่อนำเข้าไฟล์ใหม่)")
-    else:
-        messages.error(request, "ข้อมูลไม่ถูกต้อง: " + "; ".join(f"{k}: {v[0]}" for k, v in form.errors.items()))
+    save_address(request, case)
     return redirect("case_detail", pk=pk)
 
 

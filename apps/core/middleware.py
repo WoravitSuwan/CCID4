@@ -7,8 +7,9 @@ from django.urls import reverse
 PUBLIC_PREFIXES = ("/accounts/login", "/static/", "/healthz")
 # Call staff (outsource) may only use the call pages - everything else redirects there.
 OUTSOURCE_PREFIXES = ("/calls/", "/accounts/", "/static/", "/healthz", "/summons/", "/exports/")
-# per-case pages call staff may open: start issuing a summons for one of their cases
-OUTSOURCE_PATTERNS = (re.compile(r"^/cases/\d+/issue/$"),)
+# other pages call staff may open: start issuing a summons for one of their cases, and the
+# postcode lookup used by the address form on the call page
+OUTSOURCE_PATTERNS = (re.compile(r"^/cases/\d+/issue/$"), re.compile(r"^/cases/postcode/$"))
 
 
 class LoginRequiredMiddleware:
