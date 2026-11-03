@@ -40,6 +40,30 @@
       {% endif %}
     </div>
 
+    {% if can_issue %}
+    <div class="card">
+      <div class="card-header">{% icon "document" "h-5 w-5 text-slate-400" %}<h2>หมายเรียก</h2>
+        <a class="btn btn-primary btn-sm ml-auto" href="{% url 'case_issue' case.pk %}">{% icon "document" "h-4 w-4" %} ออกหมายครั้งที่ {{ summonses|length|add:1 }}</a></div>
+      {% if issue_blockers %}
+      <div class="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
+        <div class="font-medium">ต้องแก้ก่อนออกหมาย:</div>
+        <ul class="ml-4 list-disc">{% for b in issue_blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+        <div class="mt-1 text-amber-800">ยศ ตำแหน่ง และโทรศัพท์ของผู้ลงนาม กรอกหรือเลือกได้ในหน้าออกหมาย</div>
+      </div>
+      {% endif %}
+      <ul class="space-y-2 text-sm">
+        {% for s in summonses %}
+        <li class="flex flex-wrap items-center gap-2">
+          <span class="badge badge-blue">ครั้งที่ {{ s.number }}</span>
+          <span>นัด {{ s.appointment_at|thai_date:"datetime" }}</span>
+          <span class="text-xs text-slate-500">ผู้ลงนาม {{ s.issuer }}</span>
+          <span class="ml-auto whitespace-nowrap">{% if pdf_available %}<a class="btn btn-sm" href="{% url 'summons_pdf' s.pk %}" target="_blank">PDF</a> {% endif %}<a class="btn btn-sm" href="{% url 'summons_docx' s.pk %}">Word</a></span>
+        </li>
+        {% empty %}<li class="text-slate-500">ยังไม่เคยออกหมายเรียก</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
     <div class="card">
       <div class="card-header">{% icon "clock" "h-5 w-5 text-slate-400" %}<h2>ประวัติการโทร ({{ attempts|length }})</h2>
         {% if assignment.is_done and perm_calls_manage %}<form method="post" action="{% url 'call_reopen' case.pk %}" class="ml-auto">{% csrf_token %}<button class="btn btn-sm">เปิดงานโทรอีกครั้ง</button></form>{% endif %}

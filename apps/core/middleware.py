@@ -1,10 +1,14 @@
+import re
+
 from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse
 
 PUBLIC_PREFIXES = ("/accounts/login", "/static/", "/healthz")
 # Call staff (outsource) may only use the call pages - everything else redirects there.
-OUTSOURCE_PREFIXES = ("/calls/", "/accounts/", "/static/", "/healthz")
+OUTSOURCE_PREFIXES = ("/calls/", "/accounts/", "/static/", "/healthz", "/summons/", "/exports/")
+# per-case pages call staff may open: start issuing a summons for one of their cases
+OUTSOURCE_PATTERNS = (re.compile(r"^/cases/\d+/issue/$"),)
 
 
 class LoginRequiredMiddleware:
@@ -23,6 +27,7 @@ class LoginRequiredMiddleware:
                 return response
             return redirect(f"{reverse(settings.LOGIN_URL)}?next={request.get_full_path()}")
         if (request.user.is_authenticated and request.user.effective_role == "outsource"
-                and not request.path.startswith(OUTSOURCE_PREFIXES)):
+                and not request.path.startswith(OUTSOURCE_PREFIXES)
+                and not any(p.match(request.path) for p in OUTSOURCE_PATTERNS)):
             return redirect("calls_queue")
         return self.get_response(request)

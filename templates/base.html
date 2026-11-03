@@ -24,6 +24,8 @@
     <nav class="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
       {% if is_outsource %}
       <a class="side-link {% if u and 'call' in u %}active{% endif %}" href="{% url 'calls_queue' %}">{% icon "phone" %} รายการที่ต้องโทร</a>
+      <a class="side-link {% if u == 'summons_list' or u == 'issue_form' %}active{% endif %}" href="{% url 'summons_list' %}">{% icon "document" %} หมายเรียกที่ออก</a>
+      <a class="side-link {% if u and 'export' in u %}active{% endif %}" href="{% url 'export_jobs' %}">{% icon "download" %} ส่งออกเอกสาร</a>
       {% else %}
       <a class="side-link {% if u == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">{% icon "home" %} ภาพรวม</a>
       <a class="side-link {% if u == 'case_list' or u == 'case_detail' %}active{% endif %}" href="{% url 'case_list' %}?open=on">{% icon "cases" %} ทะเบียนคดี</a>

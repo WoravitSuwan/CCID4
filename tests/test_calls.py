@@ -55,8 +55,8 @@ def test_outsource_sees_only_assigned_cases_and_call_pages(client, imported, cal
     assert [a.case_id for a in page.context["page"]] == [mine.pk]
     assert client.get(f"/calls/{mine.pk}/").status_code == 200
     assert client.get(f"/calls/{other.pk}/").status_code == 403
-    # every other page redirects back to the call list
-    for url in ["/", "/cases/", f"/cases/{mine.pk}/", "/summons/", "/imports/", "/settings/users/"]:
+    # admin pages redirect back to the call list (summonses / exports are allowed: they issue too)
+    for url in ["/", "/cases/", f"/cases/{mine.pk}/", "/imports/", "/settings/users/"]:
         resp = client.get(url)
         assert resp.status_code == 302 and resp["Location"] == "/calls/", url
     assert mine.complainant.national_id[-3:] not in client.get(f"/calls/{mine.pk}/").content.decode() or \

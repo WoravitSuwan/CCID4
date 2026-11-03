@@ -53,12 +53,21 @@
   </form>
 </div>
 
+<form method="post" action="{% url 'issue_start' %}" id="queue-form">{% csrf_token %}
+<input type="hidden" name="next" value="{{ request.get_full_path }}">
+{% if can_issue %}
+<div class="mb-2 flex flex-wrap items-center gap-2 text-sm">
+  <button class="btn btn-primary btn-sm" id="queue-issue" disabled>{% icon "document" "h-4 w-4" %} ออกหมายเรียก (<span id="queue-count">0</span> คดี)</button>
+  <span class="text-slate-500">ติ๊กเลือกคดีที่จะออกหมาย หรือกด "ออกหมาย" ในหน้าบันทึกผลการโทร</span>
+</div>
+{% endif %}
 <div class="table-wrap">
   <table class="table">
-    <thead><tr><th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th>สถานะคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th>{% if can_manage %}<th>ผู้รับผิดชอบ</th>{% endif %}<th></th></tr></thead>
+    <thead><tr>{% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="queue-all" aria-label="เลือกทั้งหมด"></th>{% endif %}<th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th>สถานะคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th>{% if can_manage %}<th>ผู้รับผิดชอบ</th>{% endif %}<th></th></tr></thead>
     <tbody>
     {% for a in page %}
-      <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button'))location.href='{% url 'call_case' a.case_id %}'">
+      <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
+        {% if can_issue %}<td><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
         <td class="whitespace-nowrap"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div></td>
         <td class="font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
         <td class="whitespace-nowrap font-mono">{{ a.case.victim_phone|default:a.case.complainant.phone|default:"-" }}</td>
@@ -74,7 +83,7 @@
         <td class="text-right">{% if a.is_done %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
       </tr>
     {% empty %}
-      <tr><td colspan="9" class="py-16 text-center">
+      <tr><td colspan="10" class="py-16 text-center">
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">{% icon "check" "h-6 w-6" %}</div>
         <div class="font-medium text-slate-700">ไม่มีรายการในแท็บนี้</div>
         {% if can_manage %}<div class="text-sm text-slate-500"><a href="{% url 'calls_assign' %}">มอบหมายเลขรับแจ้ง</a> ให้เจ้าหน้าที่โทร</div>{% endif %}
@@ -83,5 +92,13 @@
     </tbody>
   </table>
 </div>
+</form>
 {% include "_pagination.html" %}
+<script>
+(function(){
+  const btn=document.getElementById('queue-issue'); if(!btn) return;
+  const upd=()=>{const n=document.querySelectorAll('.queue-cb:checked').length;document.getElementById('queue-count').textContent=n;btn.disabled=n===0;};
+  document.addEventListener('change',e=>{if(e.target.id==='queue-all'){document.querySelectorAll('.queue-cb').forEach(c=>c.checked=e.target.checked);}upd();});
+})();
+</script>
 {% endblock %}

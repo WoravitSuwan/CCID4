@@ -42,10 +42,11 @@ def test_role_permissions(client, setup_signers):
         assert client.get(url).status_code == 200, url
     client.logout()
     login(client, Role.OUTSOURCE)
-    for url in ("/imports/", "/settings/users/", "/cases/", "/summons/", "/exports/new/"):
+    for url in ("/imports/", "/settings/users/", "/cases/", "/"):
         resp = client.get(url)
         assert resp.status_code == 302 and resp["Location"] == "/calls/", url
-    assert client.get("/calls/").status_code == 200
+    for url in ("/calls/", "/summons/", "/exports/", "/exports/new/"):  # call staff can issue and export
+        assert client.get(url).status_code == 200, url
     assert client.get("/calls/assign/").status_code == 403
 
 
@@ -181,11 +182,10 @@ def test_issue_flow_via_web(client, setup_signers):
     assert AuditLog.objects.filter(action="download").count() >= 2
 
 
-def test_outsource_cannot_issue(client, setup_signers):
+def test_outsource_cannot_issue_unassigned_case(client, setup_signers):
     case = Case.objects.not_final().first()
     login(client, Role.OUTSOURCE)
-    assert client.get(f"/cases/{case.pk}/issue/")["Location"] == "/calls/"
-    assert client.post("/summons/issue/start/", {"case_ids": [case.pk]})["Location"] == "/calls/"
+    assert client.get(f"/cases/{case.pk}/issue/").status_code == 403
 
 
 def test_register_names_become_signers_automatically(client, imported):

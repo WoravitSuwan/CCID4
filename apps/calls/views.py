@@ -99,6 +99,7 @@ def queue(request):
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
         "staff": call_staff() if perms.can_manage_calls(request.user) else [],
         "can_manage": perms.can_manage_calls(request.user),
+        "can_issue": perms.can_issue_any(request.user),
     })
 
 
@@ -161,6 +162,9 @@ def call_case(request, pk):
         "outcomes_reached": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c in REACHED],
         "outcomes_not": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c not in REACHED],
         "next_pk": _next_case(request, case.pk),
+        "summonses": case.summonses.select_related("issuer").order_by("-number"),
+        "can_issue": perms.can_issue_for_case(request.user, case),
+        "issue_blockers": case.issue_blockers(),
     })
 
 

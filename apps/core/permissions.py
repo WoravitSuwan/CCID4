@@ -2,7 +2,8 @@
 
 Two roles only:
   ผู้ดูแลระบบ (admin): everything - import, register, issue, export, calls, settings
-  เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): only the call pages for the cases assigned to them
+  เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): for the cases assigned to them only - record calls,
+      issue summonses (choosing the signer's rank/position) and download/export those summonses
 """
 from functools import wraps
 
@@ -25,13 +26,28 @@ def is_outsource(user) -> bool:
     return role_of(user) == Role.OUTSOURCE
 
 
-# Everything except the call pages is for administrators.
-can_import = can_export = can_export_register = can_manage_settings = can_manage_calls = is_admin
-can_issue_any = is_admin
+# Import, register, settings and call management are for administrators.
+can_import = can_export_register = can_manage_settings = can_manage_calls = is_admin
+
+
+def is_assigned(user, case) -> bool:
+    """The case is on this outsource caller's list."""
+    from apps.calls.models import CallAssignment
+
+    return bool(user and user.is_authenticated and case is not None
+                and CallAssignment.objects.filter(case_id=case.pk, assignee_id=user.pk).exists())
+
+
+def can_issue_any(user) -> bool:
+    return is_admin(user) or is_outsource(user)
+
+
+def can_export(user) -> bool:
+    return is_admin(user) or is_outsource(user)
 
 
 def can_issue_for_case(user, case) -> bool:
-    return is_admin(user)
+    return is_admin(user) or (is_outsource(user) and is_assigned(user, case))
 
 
 def can_edit_case(user, case) -> bool:
@@ -44,7 +60,9 @@ def can_view_full_id(user, case) -> bool:
 
 
 def can_access_summons(user, summons) -> bool:
-    return is_admin(user)
+    if is_admin(user):
+        return True
+    return is_outsource(user) and (summons.created_by_id == user.pk or is_assigned(user, summons.case))
 
 
 def can_record_call(user, case) -> bool:

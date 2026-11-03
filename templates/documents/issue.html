@@ -67,7 +67,7 @@
       {% for it in items %}
         <tr class="{% if not it.ok %}bg-amber-50{% endif %}">
           <td><button class="btn btn-sm" name="exclude" value="{{ it.case.pk }}" title="นำออกจากรายการ">✕</button></td>
-          <td class="font-mono"><a href="{% url 'case_detail' it.case.pk %}" target="_blank">{{ it.case.receipt_no }}</a></td>
+          <td class="font-mono"><a href="{% if is_outsource %}{% url 'call_case' it.case.pk %}{% else %}{% url 'case_detail' it.case.pk %}{% endif %}" target="_blank">{{ it.case.receipt_no }}</a></td>
           <td>{{ it.number }}</td>
           <td>{{ it.values|get_item:"ชื่อผู้แจ้ง" }}</td>
           <td class="max-w-md text-xs">{{ it.values|get_item:"ที่อยู่" }}</td>

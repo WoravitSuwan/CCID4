@@ -19,7 +19,7 @@
     {% for s in page %}
       <tr>
         <td><input type="checkbox" class="s-cb h-4 w-4" name="ids" value="{{ s.pk }}"></td>
-        <td class="font-mono"><a href="{% url 'case_detail' s.case_id %}">{{ s.case.receipt_no }}</a></td>
+        <td class="font-mono"><a href="{% if is_outsource %}{% url 'call_case' s.case_id %}{% else %}{% url 'case_detail' s.case_id %}{% endif %}">{{ s.case.receipt_no }}</a></td>
         <td>{{ s.number }}</td><td>{{ s.recipient_name }}</td><td>{{ s.issue_date|thai_date }}</td>
         <td class="whitespace-nowrap">{{ s.appointment_at|thai_date:"datetime" }}</td><td>{{ s.issuer }}</td><td>{{ s.created_by.display_name|default:"-" }}</td>
         <td><span class="badge {% if s.result == 'attended' %}badge-green{% elif s.result == 'absent' %}badge-red{% elif s.result == 'cancelled' %}badge-gray{% else %}badge-blue{% endif %}">{{ s.get_result_display }}</span></td>

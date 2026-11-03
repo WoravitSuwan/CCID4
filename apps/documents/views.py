@@ -81,7 +81,7 @@ class IssueForm(StyledForm):
 def issue_start(request):
     if not perms.can_issue_any(request.user):
         raise PermissionDenied
-    if request.POST.get("all_matching"):
+    if request.POST.get("all_matching") and perms.is_admin(request.user):
         from django.http import QueryDict
 
         request.GET = QueryDict(request.POST.get("query", ""))
@@ -121,6 +121,9 @@ def issue_form(request):
         raise PermissionDenied
     cases, excluded = _selected_cases(request)
     if not cases and request.method == "GET":
+        if perms.is_outsource(request.user):
+            messages.info(request, "เลือกคดีจากรายการที่ต้องโทรก่อน แล้วกด 'ออกหมายเรียก'")
+            return redirect("calls_queue")
         messages.info(request, "เลือกคดีจากทะเบียนคดีก่อน แล้วกด 'ออกหมายเรียก'")
         return redirect("case_list")
     settings_row = SystemSetting.get()
@@ -231,6 +234,13 @@ def issue_signer(request):
     if not perms.can_issue_any(request.user):
         raise PermissionDenied
     kind, _, pk = request.POST.get("target", "").partition(":")
+    if perms.is_outsource(request.user):
+        from apps.calls.models import CallAssignment
+
+        mine = CallAssignment.objects.filter(assignee=request.user)
+        field = "case__investigator_alias__investigator_id" if kind == "inv" else "case__investigator_alias_id"
+        if not pk.isdigit() or not mine.filter(**{field: int(pk)}).exists():
+            raise PermissionDenied
     if kind == "inv":
         inv = get_object_or_404(Investigator, pk=pk)
         form = SignerForm(request.POST, instance=inv, prefix=f"i{inv.pk}")
@@ -265,8 +275,19 @@ def issue_signer(request):
 
 
 # --------------------------------------------------------------------------- summons list & downloads
+def _own_summonses(request, qs):
+    """Call staff only see summonses they issued or for cases on their call list."""
+    if perms.is_outsource(request.user):
+        from django.db.models import Q
+
+        qs = qs.filter(Q(created_by=request.user) | Q(case__call_assignment__assignee=request.user)).distinct()
+    return qs
+
+
 def summons_list(request):
-    qs = Summons.objects.select_related("case", "issuer", "created_by")
+    if not perms.can_export(request.user):
+        raise PermissionDenied
+    qs = _own_summonses(request, Summons.objects.select_related("case", "issuer", "created_by"))
     result = request.GET.get("result")
     if result in SummonsResult.values:
         qs = qs.filter(result=result)
@@ -328,8 +349,7 @@ class ExportForm(StyledForm):
 
 
 def _export_queryset(request):
-    qs = Summons.objects.select_related("case", "issuer")
-    return qs
+    return _own_summonses(request, Summons.objects.select_related("case", "issuer"))
 
 
 def export_new(request):
