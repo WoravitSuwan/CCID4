@@ -20,8 +20,9 @@ from .models import Investigator, InvestigatorAlias, Unit, person_core_key, sign
 HEADER_ALIASES = {
     "name": ["ชื่อ-สกุล(ตามทะเบียน)", "ชื่อ-สกุล", "ชื่อสกุล", "ชื่อ-นามสกุล", "ชื่อนามสกุล", "ชื่อ", "ชื่อที่ใช้ลงนาม",
              "ชื่อในทะเบียน", "พนักงานสอบสวน", "ยศชื่อสกุล", "ยศ-ชื่อ-สกุล", "ยศชื่อ-สกุล", "ผู้ลงนาม"],
-    "rank": ["ยศ(เต็ม)", "ยศเต็ม", "ยศ"],
-    "position": ["ตำแหน่ง"],
+    "surname": ["นามสกุล", "สกุล"],  # files that split first name / surname into two columns
+    "rank": ["ยศ(เต็ม)", "ยศเต็ม", "ยศ", "คำนำหน้า", "คำนำหน้าชื่อ", "ยศ/คำนำหน้า"],
+    "position": ["ตำแหน่ง", "ตำแหน่ง(เต็ม)", "ตำแหน่งเต็ม", "ตำแหน่งงาน"],
     "phone": ["โทรศัพท์", "เบอร์โทร", "เบอร์โทรศัพท์", "หมายเลขโทรศัพท์", "โทร", "มือถือ"],
     "unit": ["หน่วย", "สังกัด"],
 }
@@ -42,26 +43,51 @@ def _key(text) -> str:
     return re.sub(r"\s+", "", str(text or ""))
 
 
+def _abbr_pattern(abbr: str) -> re.Pattern:
+    """'พ.ต.ท.' also written 'พ.ต.ท', 'พ. ต. ท.' or 'พตท.' - dots and spaces are optional."""
+    letters = [part for part in re.split(r"[.\s]+", abbr.replace("(พิเศษ)", "")) if part]
+    body = r"\.?\s*".join(re.escape(x) for x in letters) + r"\.?"
+    if "(พิเศษ)" in abbr:
+        body += r"\s*\(\s*พิเศษ\s*\)"
+    return re.compile(body)
+
+
+_ABBR_PATTERNS = [(abbr, _abbr_pattern(abbr)) for abbr in _ABBRS]
+
+
+def _match_abbr(text: str):
+    """(abbreviation, matched length) for a rank abbreviation at the start of text, else (None, 0).
+
+    At least one dot is required so a name that happens to start with the same letters is never cut.
+    """
+    for abbr, pattern in _ABBR_PATTERNS:
+        m = pattern.match(text)
+        if m and "." in m.group(0):
+            return abbr, m.end()
+    return None, 0
+
+
 def expand_rank(text: str) -> str:
     """'พ.ต.ท.' -> 'พันตำรวจโท', 'พ.ต.ต.หญิง' -> 'พันตำรวจตรีหญิง'; full ranks are kept."""
     raw = clean_text(text)
-    compact = _key(raw)
-    for abbr in _ABBRS:
-        if compact == abbr or compact == abbr + "หญิง":
-            return RANK_ABBREVIATIONS[abbr] + ("หญิง" if compact.endswith("หญิง") else "")
+    abbr, end = _match_abbr(raw)
+    if abbr:
+        rest = _key(raw[end:])
+        if rest in ("", "หญิง"):
+            return RANK_ABBREVIATIONS[abbr] + rest
     return raw
 
 
 def split_rank(text: str) -> tuple[str, str]:
     """'พ.ต.ท.สมชาย ใจดี' -> ('พันตำรวจโท', 'สมชาย ใจดี'); no rank -> ('', text)."""
     raw = clean_text(text)
-    for abbr in _ABBRS:
-        if raw.startswith(abbr):
-            rest = raw[len(abbr):]
-            female = rest.startswith("หญิง")
-            if female:
-                rest = rest[len("หญิง"):]
-            return RANK_ABBREVIATIONS[abbr] + ("หญิง" if female else ""), rest.strip()
+    abbr, end = _match_abbr(raw)
+    if abbr:
+        rest = raw[end:].lstrip()
+        female = rest.startswith("หญิง")
+        if female:
+            rest = rest[len("หญิง"):]
+        return RANK_ABBREVIATIONS[abbr] + ("หญิง" if female else ""), rest.strip()
     for rank in _FULL_RANKS:
         if raw.startswith(rank):
             rest = raw[len(rank):]
@@ -136,6 +162,9 @@ def parse(file) -> tuple[list[SignerRow], str]:
                                                 start=header_row + 1):
                 get = lambda f: cell(values[cols[f]]) if f in cols and cols[f] < len(values) else ""  # noqa: E731
                 name, rank = get("name"), expand_rank(get("rank"))
+                surname = get("surname")
+                if surname and _key(surname) not in _key(name):
+                    name = f"{name} {surname}".strip()
                 if not name:
                     continue
                 embedded_rank, name_only = split_rank(name)

@@ -56,6 +56,10 @@ urlpatterns = [
     path("calls/<int:pk>/", cv.call_case, name="call_case"),
     path("calls/<int:pk>/reopen/", cv.reopen, name="call_reopen"),
     path("calls/<int:pk>/address/", cv.call_address_save, name="call_address_save"),
+    path("calls/<int:pk>/status/", cv.call_status, name="call_status"),
+    path("calls/<int:pk>/calls/<int:attempt_pk>/attach/", cv.call_attach, name="call_attach"),
+    path("calls/attachments/<int:pk>/", cv.attachment_download, name="call_attachment"),
+    path("calls/attachments/<int:pk>/delete/", cv.attachment_delete, name="call_attachment_delete"),
     # settings
     path("settings/", sv.settings_home, name="settings_home"),
     path("settings/investigators/", sv.investigators, name="settings_investigators"),

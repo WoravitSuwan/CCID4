@@ -181,7 +181,8 @@ def issue_form(request):
                 error = str(exc)
     return render(request, "documents/issue.html", {
         "form": form, "plan": plan, "cases": cases, "excluded": excluded, "error": error,
-        "signer_forms": _signer_forms(plan) if plan else {},
+        # signer rank/position come from the admin's Excel import; call staff only see what is missing
+        "signer_forms": _signer_forms(plan) if plan and perms.is_admin(request.user) else {},
         "all_signers": Investigator.objects.filter(is_active=True),
     })
 
@@ -231,16 +232,9 @@ def issue_signer(request):
     from apps.registry.forms import SignerForm
     from apps.registry.models import InvestigatorAlias
 
-    if not perms.can_issue_any(request.user):
+    if not perms.can_manage_settings(request.user):  # admin only; call staff wait for the signer import
         raise PermissionDenied
     kind, _, pk = request.POST.get("target", "").partition(":")
-    if perms.is_outsource(request.user):
-        from apps.calls.models import CallAssignment
-
-        mine = CallAssignment.objects.filter(assignee=request.user)
-        field = "case__investigator_alias__investigator_id" if kind == "inv" else "case__investigator_alias_id"
-        if not pk.isdigit() or not mine.filter(**{field: int(pk)}).exists():
-            raise PermissionDenied
     if kind == "inv":
         inv = get_object_or_404(Investigator, pk=pk)
         form = SignerForm(request.POST, instance=inv, prefix=f"i{inv.pk}")

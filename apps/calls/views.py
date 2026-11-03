@@ -1,16 +1,20 @@
 import datetime as dt
 import io
+from pathlib import Path
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -18,14 +22,22 @@ from openpyxl.styles import Font
 from apps.accounts.models import Role
 from apps.core import permissions as perms
 from apps.core.audit import log
-from apps.core.downloads import content_disposition
+from apps.core.downloads import content_disposition, file_download
 from apps.core.models import AuditAction
 from apps.registry.address_edit import address_form, save_address
 from apps.registry.forms import StyledForm
-from apps.registry.models import Case
+from apps.registry.models import Case, Status
 
-from .models import REACHED, SHORT_LABELS, CallAssignment, CallAttempt, CallOutcome
-from .services import assign, case_phones, parse_receipt_list, record_call
+from .models import REACHED, SHORT_LABELS, CallAssignment, CallAttachment, CallAttempt, CallOutcome
+from .services import (
+    ALLOWED_EXTENSIONS,
+    assign,
+    case_phones,
+    check_attachments,
+    parse_receipt_list,
+    record_call,
+    save_attachments,
+)
 
 User = get_user_model()
 DT_WIDGET = forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M")
@@ -144,13 +156,22 @@ def call_case(request, pk):
     phones = case_phones(case)
     now = timezone.localtime().replace(second=0, microsecond=0)
     form = CallForm(request.POST or None, initial={"called_at": now, "phone": phones[0] if phones else ""})
-    if request.method == "POST" and form.is_valid():
+    files = request.FILES.getlist("attachments") if request.method == "POST" else []
+    valid = request.method == "POST" and form.is_valid()
+    file_problems = check_attachments(files) if valid else []
+    if file_problems:
+        form.add_error(None, "ไฟล์แนบ: " + " · ".join(file_problems) + " — เลือกไฟล์ใหม่แล้วบันทึกอีกครั้ง")
+    if valid and not file_problems:
         d = form.cleaned_data
-        attempt = record_call(case, request.user, outcome=d["outcome"], phone=d["phone"], note=d["note"],
-                              called_at=d["called_at"], callback_at=d["callback_at"],
-                              appointment_at=d["appointment_at"])
-        log(request, AuditAction.CALL, case, f"{case.receipt_no}: {attempt.register_text()}")
-        messages.success(request, f"บันทึกผลการโทรครั้งที่ {attempt.number} แล้ว")
+        with transaction.atomic():
+            attempt = record_call(case, request.user, outcome=d["outcome"], phone=d["phone"], note=d["note"],
+                                  called_at=d["called_at"], callback_at=d["callback_at"],
+                                  appointment_at=d["appointment_at"])
+            saved = save_attachments(attempt, files, request.user)
+        log(request, AuditAction.CALL, case, f"{case.receipt_no}: {attempt.register_text()}"
+            + (f" (แนบไฟล์ {len(saved)} ไฟล์: {', '.join(a.original_name for a in saved)})" if saved else ""))
+        messages.success(request, f"บันทึกผลการโทรครั้งที่ {attempt.number} แล้ว"
+                         + (f" พร้อมไฟล์แนบ {len(saved)} ไฟล์" if saved else ""))
         if request.POST.get("go") == "next":
             nxt = _next_case(request, case.pk)
             if nxt:
@@ -161,7 +182,8 @@ def call_case(request, pk):
     assignment = CallAssignment.objects.filter(case=case).select_related("assignee").first()
     return render(request, "calls/call.html", {
         "case": case, "form": form, "phones": phones, "assignment": assignment,
-        "attempts": case.calls.select_related("created_by"), "reached": REACHED,
+        "attempts": case.calls.select_related("created_by").prefetch_related("attachments__uploaded_by"),
+        "reached": REACHED,
         "outcomes_reached": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c in REACHED],
         "outcomes_not": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c not in REACHED],
         "next_pk": _next_case(request, case.pk),
@@ -170,7 +192,80 @@ def call_case(request, pk):
         "issue_blockers": case.issue_blockers(),
         "address_form": address_form(case, prefix=ADDRESS_PREFIX), "override": case.get_override(),
         "effective": case.effective_address(), "address_conflict": case.address_conflict(),
+        "statuses": Status.objects.all(), "can_change_status": perms.can_change_status(request.user, case),
+        "attachment_max_mb": settings.CALL_ATTACHMENT_MAX_MB,
+        "attachment_accept": ",".join(f".{e}" for e in sorted(ALLOWED_EXTENSIONS)),
     })
+
+
+@require_POST
+def call_status(request, pk):
+    """Change the case status from the call page (e.g. the victim withdraws, case closed)."""
+    case = get_object_or_404(Case.objects.select_related("status"), pk=pk)
+    if not perms.can_change_status(request.user, case):
+        raise PermissionDenied
+    status = Status.objects.filter(pk=request.POST.get("status")).first()
+    if status is None:
+        messages.error(request, "กรุณาเลือกสถานะ")
+        return redirect("call_case", pk=pk)
+    old = case.status.name if case.status_id else "-"
+    note = request.POST.get("note", "").strip()[:300]
+    if case.set_status(status, request.user, note):
+        log(request, AuditAction.EDIT, case,
+            f"เปลี่ยนสถานะ {case.receipt_no}: {old} → {status.name}" + (f" ({note})" if note else ""))
+        messages.success(request, f"เปลี่ยนสถานะคดีเป็น '{status.name}' แล้ว")
+    return redirect("call_case", pk=pk)
+
+
+@require_POST
+def call_attach(request, pk, attempt_pk):
+    """Add files to a call that was already recorded."""
+    case = get_object_or_404(Case, pk=pk)
+    if not perms.can_record_call(request.user, case):
+        raise PermissionDenied
+    attempt = get_object_or_404(CallAttempt, pk=attempt_pk, case=case)
+    files = request.FILES.getlist("attachments")
+    problems = check_attachments(files) or ([] if files else ["เลือกไฟล์ที่จะแนบก่อน"])
+    if problems:
+        messages.error(request, "แนบไฟล์ไม่สำเร็จ: " + " · ".join(problems))
+    else:
+        saved = save_attachments(attempt, files, request.user)
+        log(request, AuditAction.CALL, case, f"{case.receipt_no}: แนบไฟล์ในการโทรครั้งที่ {attempt.number} "
+            f"({', '.join(a.original_name for a in saved)})")
+        messages.success(request, f"แนบไฟล์ {len(saved)} ไฟล์ในการโทรครั้งที่ {attempt.number} แล้ว")
+    return redirect(f"{reverse('call_case', args=[pk])}#call-{attempt.pk}")
+
+
+def attachment_download(request, pk):
+    att = get_object_or_404(CallAttachment.objects.select_related("case", "case__call_assignment"), pk=pk)
+    if not perms.can_access_attachment(request.user, att):
+        raise PermissionDenied
+    path = Path(settings.MEDIA_ROOT) / att.file.name
+    if not path.is_file():
+        raise Http404("ไม่พบไฟล์")
+    inline = att.opens_inline and request.GET.get("download") != "1"
+    response = file_download(path, att.original_name, inline=inline)
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = ("default-src 'none'; img-src 'self'; media-src 'self'; "
+                                           "style-src 'unsafe-inline'")
+    return response
+
+
+@require_POST
+def attachment_delete(request, pk):
+    att = get_object_or_404(CallAttachment.objects.select_related("case", "attempt"), pk=pk)
+    if not (perms.is_admin(request.user)
+            or (perms.can_access_attachment(request.user, att) and att.uploaded_by_id == request.user.pk)):
+        raise PermissionDenied
+    name, case, attempt = att.original_name, att.case, att.attempt
+    att.file.delete(save=False)
+    att.delete()
+    log(request, AuditAction.CALL, case, f"{case.receipt_no}: ลบไฟล์แนบ '{name}' ในการโทรครั้งที่ {attempt.number}")
+    messages.success(request, f"ลบไฟล์ '{name}' แล้ว")
+    back = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
+        back = f"{reverse('call_case', args=[case.pk])}#call-{attempt.pk}"
+    return redirect(back)
 
 
 @require_POST
@@ -259,7 +354,7 @@ def export_calls(request):
     ws = wb.active
     ws.title = "ผลการติดต่อ"
     headers = ["เลขรับแจ้ง", "ผู้เสียหาย", "ครั้งที่", "วันเวลาที่โทร", "เบอร์ที่โทร", "ผลการติดต่อ", "ติดต่อได้",
-               "หมายเหตุ", "นัดโทรกลับ", "นัดเข้าพบ พงส.", "ผู้โทร", "ข้อความสำหรับทะเบียน"]
+               "หมายเหตุ", "นัดโทรกลับ", "นัดเข้าพบ พงส.", "ผู้โทร", "ข้อความสำหรับทะเบียน", "ไฟล์แนบ"]
     ws.append(headers)
     for cell in ws[1]:
         cell.font = Font(bold=True)
@@ -267,12 +362,15 @@ def export_calls(request):
     def local(value):
         return timezone.localtime(value).replace(tzinfo=None) if value else None
 
+    files = {}
+    for att in CallAttachment.objects.filter(attempt__in=qs).only("attempt_id", "original_name"):
+        files.setdefault(att.attempt_id, []).append(att.original_name)
     for a in qs.iterator():
         ws.append([a.case.receipt_no, a.case.victim_name, a.number, local(a.called_at), a.phone,
                    a.get_outcome_display(), "ได้" if a.reached else "ไม่ได้", a.note, local(a.callback_at),
                    local(a.appointment_at), a.created_by.display_name() if a.created_by else "",
-                   a.register_text()])
-    for col, width in zip("ABCDEFGHIJKL", (16, 26, 8, 18, 14, 40, 9, 40, 18, 18, 18, 60)):
+                   a.register_text(), ", ".join(files.get(a.pk, []))])
+    for col, width in zip("ABCDEFGHIJKLM", (16, 26, 8, 18, 14, 40, 9, 40, 18, 18, 18, 60, 30)):
         ws.column_dimensions[col].width = width
     for row in ws.iter_rows(min_row=2):
         for idx in (3, 8, 9):

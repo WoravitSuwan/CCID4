@@ -39,6 +39,11 @@
   <div class="card mt-4 overflow-x-auto p-0">
     <div class="flex items-center gap-2 px-4 pt-4"><h2>ผู้ลงนาม: {% if inv %}{{ inv }}{% else %}<span class="text-amber-700">ยังไม่ได้ผูกผู้ลงนาม</span>{% endif %}</h2>
       {% if inv %}<span class="text-sm text-slate-500">{{ inv.position }}</span>{% endif %}</div>
+    {% if is_outsource %}{% if not inv or inv.missing_signer_fields %}
+    <div class="mx-4 mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+      {% if inv %}ข้อมูลผู้ลงนามยังไม่ครบ ({{ inv.missing_signer_fields|join:", " }}){% else %}ชื่อพนักงานสอบสวนในทะเบียนยังไม่ได้ผูกกับข้อมูลผู้ลงนาม{% endif %}
+      — ผู้ดูแลระบบจะนำเข้ายศ/ตำแหน่งจากไฟล์ Excel (จับคู่ตามชื่อ-นามสกุล) เมื่อนำเข้าแล้วคดีกลุ่มนี้จะออกหมายได้ทันที
+    </div>{% endif %}{% endif %}
     {% for e in signer_forms|get_item:inv %}
     <details class="mx-4 mt-3 rounded-lg ring-1 {% if e.attention %}bg-amber-50 ring-amber-200{% else %}bg-slate-50 ring-slate-200{% endif %}" {% if e.attention %}open{% endif %}>
       <summary class="cursor-pointer px-4 py-2 text-sm font-medium {% if e.attention %}text-amber-900{% else %}text-slate-600{% endif %}">

@@ -1,4 +1,4 @@
-﻿# สำรองฐานข้อมูลระบบออกหมายเรียก (รันใน PowerShell ที่โฟลเดอร์โปรเจกต์ หรือจาก Task Scheduler)
+﻿# สำรองฐานข้อมูล + ไฟล์แนบการโทร ของระบบออกหมายเรียก (รันใน PowerShell ที่โฟลเดอร์โปรเจกต์ หรือจาก Task Scheduler)
 #   powershell -NoProfile -ExecutionPolicy Bypass -File C:\ccid4\tools\backup.ps1
 param(
   [string]$ProjectDir = (Split-Path -Parent $PSScriptRoot),
@@ -19,5 +19,10 @@ $target = Join-Path $BackupDir "summons_$stamp.dump"
 docker compose exec -T db pg_dump -U $user -Fc -f /tmp/backup.dump $db
 docker compose cp db:/tmp/backup.dump $target
 docker compose exec -T db rm -f /tmp/backup.dump
-Write-Host "สำรองแล้ว: $target"
-Get-ChildItem $BackupDir -Filter "summons_*.dump" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$KeepDays) } | Remove-Item
+# files attached to call records (exports/summons files are re-created by the system, so not needed)
+$files = Join-Path $BackupDir "summons_$($stamp)_files.tgz"
+docker compose exec -T web sh -c "mkdir -p /app/media/call_attachments && tar -czf /tmp/files.tgz -C /app/media call_attachments"
+docker compose cp web:/tmp/files.tgz $files
+docker compose exec -T web rm -f /tmp/files.tgz
+Write-Host "สำรองแล้ว: $target และ $files"
+Get-ChildItem $BackupDir -Filter "summons_*" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$KeepDays) } | Remove-Item

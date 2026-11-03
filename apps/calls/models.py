@@ -113,3 +113,51 @@ class CallAttempt(models.Model):
             text += f" (นัดพบ พงส. {ap.day} {tf.thai_month_abbr(ap.month).replace('.', '')} " \
                     f"{tf.ce_to_be(ap) % 100:02d} เวลา {ap:%H.%M} น.)"
         return text
+
+
+def attachment_path(instance, filename):
+    # stored name never comes from the user (the original name is kept in the database)
+    import uuid
+    from pathlib import Path
+
+    ext = Path(filename).suffix.lower()[:10]
+    return f"call_attachments/{timezone.now():%Y/%m}/{instance.case_id}_{uuid.uuid4().hex}{ext}"
+
+
+class CallAttachment(models.Model):
+    """File attached to a call: screenshot of a chat, slip, recording, document from the victim..."""
+
+    attempt = models.ForeignKey(CallAttempt, on_delete=models.CASCADE, related_name="attachments",
+                                verbose_name="บันทึกการโทร")
+    case = models.ForeignKey("registry.Case", on_delete=models.CASCADE, related_name="call_attachments",
+                             verbose_name="คดี")
+    file = models.FileField("ไฟล์", upload_to=attachment_path, max_length=300)
+    original_name = models.CharField("ชื่อไฟล์", max_length=255)
+    size = models.PositiveBigIntegerField("ขนาด (ไบต์)", default=0)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
+                                    verbose_name="ผู้แนบ")
+    uploaded_at = models.DateTimeField("แนบเมื่อ", auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at", "pk"]
+        verbose_name = "ไฟล์แนบการโทร"
+        verbose_name_plural = "ไฟล์แนบการโทร"
+
+    def __str__(self):
+        return self.original_name
+
+    @property
+    def extension(self) -> str:
+        return self.original_name.rsplit(".", 1)[-1].lower() if "." in self.original_name else ""
+
+    @property
+    def is_image(self) -> bool:
+        return self.extension in IMAGE_EXTENSIONS
+
+    @property
+    def opens_inline(self) -> bool:
+        return self.extension in INLINE_EXTENSIONS
+
+
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+INLINE_EXTENSIONS = IMAGE_EXTENSIONS | {"pdf", "mp3", "m4a", "wav", "ogg", "mp4"}

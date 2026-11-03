@@ -154,6 +154,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+# files attached to call records (screenshots, slips, recordings, documents)
+CALL_ATTACHMENT_MAX_MB = env_int("CALL_ATTACHMENT_MAX_MB", 25)
+CALL_ATTACHMENT_MAX_FILES = env_int("CALL_ATTACHMENT_MAX_FILES", 10)
 
 # Celery
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", "redis://localhost:6379/0")

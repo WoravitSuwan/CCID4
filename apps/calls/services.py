@@ -8,7 +8,15 @@ from django.utils import timezone
 
 from apps.registry.models import Case, normalize_receipt_no
 
-from .models import CLOSING, CallAssignment, CallAttempt, CallOutcome
+from .models import CLOSING, CallAssignment, CallAttachment, CallAttempt, CallOutcome
+
+# What call staff may attach. No html/svg/scripts/executables: these could run in the browser or on a PC.
+ALLOWED_EXTENSIONS = {
+    "jpg", "jpeg", "png", "gif", "webp", "heic", "heif",       # photos / screenshots
+    "pdf", "doc", "docx", "xls", "xlsx", "txt", "csv",          # documents
+    "mp3", "m4a", "wav", "ogg", "amr", "aac", "mp4", "mov",     # call recordings / video clips
+    "zip",
+}
 
 
 def case_phones(case: Case) -> list[str]:
@@ -80,3 +88,32 @@ def contact_log_with_calls(case: Case) -> str:
         if text not in case.contact_log:
             lines.append(text)
     return "\n".join(lines)
+
+
+def check_attachments(files) -> list[str]:
+    """Problems with uploaded files (empty list = all fine)."""
+    from django.conf import settings
+
+    problems = []
+    max_bytes = settings.CALL_ATTACHMENT_MAX_MB * 1024 * 1024
+    if len(files) > settings.CALL_ATTACHMENT_MAX_FILES:
+        problems.append(f"แนบได้ครั้งละไม่เกิน {settings.CALL_ATTACHMENT_MAX_FILES} ไฟล์")
+    for f in files:
+        ext = f.name.rsplit(".", 1)[-1].lower() if "." in f.name else ""
+        if ext not in ALLOWED_EXTENSIONS:
+            problems.append(f"{f.name}: ไม่รองรับไฟล์ชนิดนี้ (รองรับ รูปภาพ, PDF, Word, Excel, ไฟล์เสียง, วิดีโอ, ZIP)")
+        elif f.size > max_bytes:
+            problems.append(f"{f.name}: ใหญ่เกิน {settings.CALL_ATTACHMENT_MAX_MB} MB")
+        elif f.size == 0:
+            problems.append(f"{f.name}: ไฟล์ว่างเปล่า")
+    return problems
+
+
+def save_attachments(attempt: CallAttempt, files, user) -> list[CallAttachment]:
+    saved = []
+    for f in files:
+        name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", f.name).strip()[:255] or "file"
+        saved.append(CallAttachment.objects.create(
+            attempt=attempt, case_id=attempt.case_id, file=f, original_name=name, size=f.size,
+            uploaded_by=user if getattr(user, "is_authenticated", False) else None))
+    return saved

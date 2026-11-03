@@ -1,0 +1,14 @@
+{% load ui %}{% if attachments %}
+<ul class="mt-2 space-y-1">
+  {% for f in attachments %}
+  <li class="flex flex-wrap items-center gap-2 text-sm">
+    {% if f.is_image %}<a href="{% url 'call_attachment' f.pk %}" target="_blank" class="shrink-0"><img src="{% url 'call_attachment' f.pk %}" alt="" loading="lazy" class="h-12 w-12 rounded-md object-cover ring-1 ring-slate-200"></a>{% endif %}
+    <a href="{% url 'call_attachment' f.pk %}" {% if f.opens_inline %}target="_blank"{% endif %} class="inline-flex min-w-0 items-center gap-1 font-medium">{% icon "paperclip" "h-3.5 w-3.5 shrink-0 text-slate-400" %}<span class="truncate">{{ f.original_name }}</span></a>
+    <span class="text-xs text-slate-400">{{ f.size|filesizeformat }} · {{ f.uploaded_by.display_name|default:"-" }}</span>
+    {% if perm_settings or f.uploaded_by_id == user.pk %}
+    <form method="post" action="{% url 'call_attachment_delete' f.pk %}" onsubmit="return confirm('ลบไฟล์ {{ f.original_name|escapejs }}?')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="text-xs text-slate-400 hover:text-red-600" title="ลบไฟล์">ลบ</button></form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

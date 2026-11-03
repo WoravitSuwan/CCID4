@@ -97,3 +97,28 @@ def test_bad_file(client, db):
     f = xlsx([["คอลัมน์อื่น"], ["x"]])
     page = client.post("/settings/investigators/import/", {"file": f}, follow=True)
     assert "ไม่พบคอลัมน์ชื่อ" in page.content.decode()
+
+
+def test_separate_name_and_surname_columns_match_register(imported):
+    from apps.registry.models import link_register_names
+
+    link_register_names()
+    inv = Investigator.objects.exclude(sign_name="").first()
+    first, last = inv.sign_name.split(maxsplit=1)
+    f = xlsx([["ลำดับ", "ยศ", "ชื่อ", "นามสกุล", "ตำแหน่ง", "โทร"],
+              [1, "พ.ต.ต", first, f"  {last} ", "รอง สว.(สอบสวน) กก.๒ บก.สอท.๔ บช.สอท.", "0800000001"]])
+    rows, error = si.parse(f)
+    assert error == "" and rows[0].name == inv.sign_name and rows[0].rank == "พันตำรวจตรี"
+    planned = si.plan(rows)[0]
+    assert planned.action == "update" and planned.investigator_id == inv.pk
+    si.apply([planned.as_dict()])
+    inv.refresh_from_db()
+    assert inv.position.startswith("รอง สว.") and inv.rank_full == "พันตำรวจตรี"
+
+
+def test_rank_written_without_dots_or_with_spaces():
+    assert si.split_rank("พ.ต.ท สมชาย ใจดี") == ("พันตำรวจโท", "สมชาย ใจดี")
+    assert si.split_rank("พ. ต. ท. สมชาย ใจดี") == ("พันตำรวจโท", "สมชาย ใจดี")
+    assert si.split_rank("พ.ต.อ.(พิเศษ)สมชาย ใจดี") == ("พันตำรวจเอก (พิเศษ)", "สมชาย ใจดี")
+    assert si.split_rank("พรทิพย์ ใจดี") == ("", "พรทิพย์ ใจดี")  # no dot: never treated as a rank
+    assert si.expand_rank("พตท.") == "พันตำรวจโท"

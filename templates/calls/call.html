@@ -32,6 +32,19 @@
         <dt>พนักงานสอบสวน</dt><dd>{% if case.investigator %}{{ case.investigator }}{% if case.investigator.phone %}<div class="text-xs text-slate-500">โทร {{ case.investigator.phone }}</div>{% endif %}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %}</dd>
         {% if assignment %}<dt>ผู้รับผิดชอบโทร</dt><dd>{{ assignment.assignee.display_name }}</dd>{% endif %}
       </dl>
+      {% if can_change_status %}
+      <form method="post" action="{% url 'call_status' case.pk %}" class="mt-4 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200" id="status-form">{% csrf_token %}
+        <label class="label" for="status-select">เปลี่ยนสถานะคดี</label>
+        <div class="flex flex-wrap gap-2">
+          <select name="status" id="status-select" class="input min-w-0 flex-1 py-1.5">
+            {% for st in statuses %}<option value="{{ st.pk }}" {% if st.pk == case.status_id %}selected{% endif %}>{{ st.name }}{% if st.is_final and 'สิ้นสุด' not in st.name %} (สิ้นสุด){% endif %}</option>{% endfor %}
+          </select>
+          <button class="btn btn-sm">บันทึกสถานะ</button>
+        </div>
+        <input type="text" name="note" id="status-note" class="input mt-2 py-1.5 text-sm" maxlength="300" placeholder="เหตุผล (ถ้ามี) เช่น ผู้เสียหายไม่ประสงค์ดำเนินคดีต่อ">
+        {% if case.status_manual_at %}<div class="mt-1 text-xs text-slate-500">แก้ล่าสุดโดย {{ case.status_manual_by.display_name|default:"-" }} ({{ case.status_manual_at|thai_date:"datetime" }})</div>{% endif %}
+      </form>
+      {% endif %}
       {% if case.contact_log %}
       <div class="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
         <div class="mb-1 text-xs font-medium text-slate-500">บันทึกการติดต่อเดิม (จากไฟล์ทะเบียน)</div>
@@ -63,7 +76,7 @@
       <div class="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
         <div class="font-medium">ต้องแก้ก่อนออกหมาย:</div>
         <ul class="ml-4 list-disc">{% for b in issue_blockers %}<li>{{ b }}</li>{% endfor %}</ul>
-        <div class="mt-1 text-amber-800">ยศ ตำแหน่ง และโทรศัพท์ของผู้ลงนาม กรอกหรือเลือกได้ในหน้าออกหมาย</div>
+        <div class="mt-1 text-amber-800">ยศ ตำแหน่ง และโทรศัพท์ของผู้ลงนาม ผู้ดูแลระบบนำเข้าจากไฟล์ Excel (จับคู่ตามชื่อ-นามสกุล) ไม่ต้องกรอกเอง</div>
       </div>
       {% endif %}
       <ul class="space-y-2 text-sm">
@@ -85,13 +98,21 @@
       </div>
       <ol class="relative space-y-4 border-l border-slate-200 pl-5">
         {% for a in attempts %}
-        <li>
+        <li id="call-{{ a.pk }}" class="scroll-mt-6">
           <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full ring-4 ring-white {% if a.reached %}bg-emerald-500{% else %}bg-amber-400{% endif %}"></span>
           <div class="text-sm font-medium">ครั้งที่ {{ a.number }} · {{ a.get_outcome_display }}</div>
           <div class="text-xs text-slate-500">{{ a.called_at|thai_date:"datetime" }} · {{ a.phone|default:"-" }} · {{ a.created_by.display_name|default:"-" }}</div>
           {% if a.note %}<div class="mt-1 whitespace-pre-line text-sm text-slate-700">{{ a.note }}</div>{% endif %}
           {% if a.callback_at %}<div class="mt-1 text-xs text-amber-700">นัดโทรกลับ {{ a.callback_at|thai_date:"datetime" }}</div>{% endif %}
           {% if a.appointment_at %}<div class="mt-1 text-xs text-emerald-700">นัดเข้าพบพนักงานสอบสวน {{ a.appointment_at|thai_date:"datetime" }}</div>{% endif %}
+          {% include "calls/_attachments.html" with attachments=a.attachments.all %}
+          <details class="mt-1">
+            <summary class="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-indigo-700">{% icon "paperclip" "h-3.5 w-3.5" %} แนบไฟล์เพิ่ม</summary>
+            <form method="post" enctype="multipart/form-data" action="{% url 'call_attach' case.pk a.pk %}" class="mt-2 flex flex-wrap items-center gap-2">{% csrf_token %}
+              <input type="file" name="attachments" multiple required accept="{{ attachment_accept }}" class="text-xs file:mr-2 file:rounded-md file:border-0 file:bg-indigo-50 file:px-2 file:py-1 file:text-indigo-700">
+              <button class="btn btn-sm">อัปโหลด</button>
+            </form>
+          </details>
         </li>
         {% empty %}<li class="text-sm text-slate-500">ยังไม่เคยโทร</li>{% endfor %}
       </ol>
@@ -99,7 +120,7 @@
   </div>
 
   <!-- record form -->
-  <form method="post" class="card lg:col-span-3" id="call-form">{% csrf_token %}
+  <form method="post" enctype="multipart/form-data" class="card lg:col-span-3" id="call-form">{% csrf_token %}
     <div class="card-header">{% icon "pencil" "h-5 w-5 text-slate-400" %}<h2>บันทึกผลการโทร ครั้งที่ {{ attempts|length|add:1 }}</h2></div>
     {% if form.non_field_errors %}<div class="alert alert-error mb-4">{{ form.non_field_errors }}</div>{% endif %}
 
@@ -129,6 +150,9 @@
       <div><label class="label" for="id_phone">{{ form.phone.label }}</label>{{ form.phone }}{{ form.phone.errors }}</div>
       <div><label class="label" for="id_called_at">{{ form.called_at.label }}</label>{{ form.called_at }}{{ form.called_at.errors }}</div>
       <div class="sm:col-span-2"><label class="label" for="id_note">{{ form.note.label }}</label>{{ form.note }}{{ form.note.errors }}</div>
+      <div class="sm:col-span-2"><label class="label" for="id_attachments">{% icon "paperclip" "mr-1 inline h-4 w-4 text-slate-400" %}แนบไฟล์ (ถ้ามี)</label>
+        <input type="file" name="attachments" id="id_attachments" multiple accept="{{ attachment_accept }}" class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100">
+        <span class="helptext">เช่น รูปแชท สลิปโอนเงิน ไฟล์เสียงสนทนา เอกสารจากผู้เสียหาย · เลือกได้หลายไฟล์ ไฟล์ละไม่เกิน {{ attachment_max_mb }} MB</span></div>
     </div>
 
     <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">

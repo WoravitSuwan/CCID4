@@ -192,7 +192,7 @@ def case_detail(request, pk):
         "can_view_id": perms.can_view_full_id(request.user, case), "blockers": case.issue_blockers(),
         "conflict": case.address_conflict(), "results": SummonsResult.choices,
         "effective": case.effective_address(), "statuses": Status.objects.all(),
-        "calls": case.calls.select_related("created_by"),
+        "calls": case.calls.select_related("created_by").prefetch_related("attachments__uploaded_by"),
         "call_assignment": CallAssignment.objects.filter(case=case).select_related("assignee").first(),
         "can_record_call": perms.can_record_call(request.user, case),
     })

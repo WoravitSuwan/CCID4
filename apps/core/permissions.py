@@ -87,3 +87,14 @@ def require(check):
         return wrapper
 
     return decorator
+
+
+def can_change_status(user, case) -> bool:
+    """Admins, and call staff for the cases on their call list."""
+    return is_admin(user) or can_record_call(user, case)
+
+
+def can_access_attachment(user, attachment) -> bool:
+    """See/download a call attachment: admins and the assigned call staff of that case."""
+    return is_admin(user) or can_record_call(user, attachment.case)
+

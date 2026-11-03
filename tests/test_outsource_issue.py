@@ -29,23 +29,44 @@ def form_data(client):
             "template": form.fields["template"].queryset.first().pk, "thai_digits": "on"}
 
 
-def test_caller_issues_with_chosen_rank_and_position(client, caller):
+def test_caller_waits_for_signer_import_then_issues(client, caller, admin_user):
+    import io
+
+    from openpyxl import Workbook
+
     case = CallAssignment.objects.filter(assignee=caller).first().case
     inv = case.investigator
     assert inv.missing_signer_fields()  # the register has no rank/position
     # from the call screen
     page = client.get(f"/calls/{case.pk}/").content.decode()
-    assert f"/cases/{case.pk}/issue/" in page
+    assert f"/cases/{case.pk}/issue/" in page and "ไม่ต้องกรอกเอง" in page
     assert client.get(f"/cases/{case.pk}/issue/")["Location"] == "/summons/issue/"
-    issue_page = client.get("/summons/issue/")
-    html = issue_page.content.decode()
-    assert 'id="dl-rank"' in html and f"/calls/{case.pk}/" in html  # receipt links go to the call page
+    html = client.get("/summons/issue/").content.decode()
+    assert f"/calls/{case.pk}/" in html  # receipt links go to the call page
+    assert "บันทึกผู้ลงนาม" not in html and "จับคู่ตามชื่อ-นามสกุล" in html  # no rank/position entry
     prefix = f"i{inv.pk}"
-    client.post("/summons/issue/signer/", {
+    resp = client.post("/summons/issue/signer/", {
         "target": f"inv:{inv.pk}", f"{prefix}-rank_full": "พันตำรวจโท", f"{prefix}-sign_name": inv.sign_name,
-        f"{prefix}-position": "สว.(สอบสวน) กก.๑ บก.สอท.๔ บช.สอท.", f"{prefix}-phone": "0811111111"})
+        f"{prefix}-position": "สว.", f"{prefix}-phone": "0811111111"})
+    assert resp.status_code == 403
+
+    # the admin imports the unit's list: first name / surname in separate columns, abbreviated rank
+    first, last = inv.sign_name.split(maxsplit=1)
+    wb = Workbook()
+    wb.active.append(["ยศ", "ชื่อ", "นามสกุล", "ตำแหน่ง", "โทรศัพท์"])
+    wb.active.append(["พ.ต.ท", first, last, "สว.(สอบสวน) กก.๑ บก.สอท.๔ บช.สอท.", 811111111])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    buf.name = "signers.xlsx"
+    client.force_login(admin_user)
+    client.post("/settings/investigators/import/", {"file": buf})
+    client.post("/settings/investigators/import/", {"action": "confirm"})
     inv.refresh_from_db()
-    assert inv.rank_full == "พันตำรวจโท"
+    assert (inv.rank_full, inv.phone) == ("พันตำรวจโท", "0811111111")
+    client.force_login(caller)
+    client.get(f"/cases/{case.pk}/issue/")  # signing in again starts a new session
+    assert "บันทึกผู้ลงนาม" not in client.get("/summons/issue/").content.decode()
     resp = client.post("/summons/issue/", {**form_data(client), "action": "confirm"})
     assert resp["Location"] == "/exports/new/"
     summons = Summons.objects.get(case=case)
@@ -75,14 +96,10 @@ def test_caller_bulk_issue_from_queue_only_own_cases(client, caller):
     assert any("ไม่มีสิทธิ์" in p for p in blocked.problems)
 
 
-def test_caller_cannot_edit_unrelated_signer(client, caller):
-    own_invs = set(CallAssignment.objects.filter(assignee=caller)
-                   .values_list("case__investigator_alias__investigator_id", flat=True))
-    other = Investigator.objects.exclude(pk__in=own_invs).first()
-    if other is None:
-        pytest.skip("all signers are on the caller's cases")
-    prefix = f"i{other.pk}"
-    resp = client.post("/summons/issue/signer/", {"target": f"inv:{other.pk}", f"{prefix}-rank_full": "x",
+def test_caller_cannot_edit_signers(client, caller):
+    inv = Investigator.objects.first()
+    prefix = f"i{inv.pk}"
+    resp = client.post("/summons/issue/signer/", {"target": f"inv:{inv.pk}", f"{prefix}-rank_full": "x",
                                                   f"{prefix}-sign_name": "x", f"{prefix}-position": "x",
                                                   f"{prefix}-phone": "x"})
     assert resp.status_code == 403

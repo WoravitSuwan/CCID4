@@ -88,4 +88,4 @@ class Command(BaseCommand):
                             phone=case.victim_phone, called_at=now - dt.timedelta(hours=5 - idx))
         self.stdout.write(self.style.SUCCESS(
             f"พร้อมแล้ว ผู้ใช้ทดลอง 2 บัญชี: admin (ผู้ดูแลระบบ) และ call1 (outsource) รหัสผ่าน {DEMO_PASSWORD} "
-            "(ผู้ลงนาม 'ธนพล มั่นคงสมมติ' ยังไม่มียศ/ตำแหน่ง เพื่อลองกรอกในหน้าออกหมาย)"))
+            "(ผู้ลงนาม 'ธนพล มั่นคงสมมติ' ยังไม่มียศ/ตำแหน่ง เพื่อลองนำเข้าจาก Excel ที่ ตั้งค่า → ผู้ลงนาม)"))

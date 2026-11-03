@@ -134,6 +134,7 @@
       <span class="text-xs text-slate-500">{{ a.called_at|thai_date:"datetime" }} · {{ a.phone|default:"-" }} · {{ a.created_by.display_name|default:"-" }}</span>
       {% if a.note %}<span class="w-full pl-1 text-slate-600">{{ a.note }}</span>{% endif %}
       {% if a.appointment_at %}<span class="w-full pl-1 text-xs text-emerald-700">นัดเข้าพบพนักงานสอบสวน {{ a.appointment_at|thai_date:"datetime" }}</span>{% endif %}
+      {% if a.attachments.all %}<div class="w-full pl-1">{% include "calls/_attachments.html" with attachments=a.attachments.all %}</div>{% endif %}
     </li>
     {% endfor %}
   </ol>
