@@ -223,7 +223,7 @@ def plan(rows: list[SignerRow]) -> list[SignerRow]:
         if inv is None:
             row.action = "new"
             surname = _surname_key(row.name)
-            similar = [i for i in by_surname.get(surname, []) if person_core_key(i.sign_name) != core] if surname else []
+            similar = [i for i in by_surname.get(surname, []) if person_core_key(i.sign_name) != core]
             if similar:
                 row.problem = ("นามสกุลตรงกับ " + ", ".join(i.sign_name for i in similar)
                                + " ในระบบ แต่ชื่อสะกดต่างกัน — ถ้าเป็นคนเดียวกัน แก้ชื่อในไฟล์ให้ตรงทะเบียนแล้วนำเข้าใหม่")
