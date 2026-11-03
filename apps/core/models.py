@@ -13,6 +13,7 @@ class AuditAction(models.TextChoices):
     SETTINGS = "settings", "แก้ไขการตั้งค่า"
     CALL = "call", "บันทึกผลการติดต่อผู้เสียหาย"
     ASSIGN = "assign", "มอบหมายงานโทร"
+    WIPE = "wipe", "ล้างข้อมูลคดีทั้งหมด"
 
 
 class AuditLog(models.Model):
@@ -49,6 +50,10 @@ class SystemSetting(models.Model):
         default="มาให้การต่อพนักงานสอบสวนตามประเด็นที่เกี่ยวข้องกับคดี",
     )
     default_appointment_days = models.PositiveIntegerField("นัดหลังวันออกหมาย (วัน)", default=14)
+    # unit logo (kept in the database so it is part of the database backup and survives a data wipe)
+    logo_data = models.BinaryField("โลโก้หน่วย", null=True, blank=True, editable=False)
+    logo_type = models.CharField(max_length=30, blank=True, editable=False)
+    logo_updated = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "การตั้งค่าระบบ"

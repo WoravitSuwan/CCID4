@@ -11,6 +11,7 @@ from apps.registry import views as rv
 
 urlpatterns = [
     path("healthz", lambda r: HttpResponse("ok")),
+    path("branding/logo/", sv.branding_logo, name="branding_logo"),
     path("accounts/login/", auth_views.LoginView.as_view(template_name="accounts/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("accounts/password/", auth_views.PasswordChangeView.as_view(
@@ -43,10 +44,14 @@ urlpatterns = [
     path("summons/<int:pk>/result/", rv.summons_result, name="summons_result"),
     path("summons/<int:pk>/docx/", dv.summons_docx, name="summons_docx"),
     path("summons/<int:pk>/pdf/", dv.summons_pdf, name="summons_pdf"),
+    path("summons/<int:pk>/view/", dv.summons_view, name="summons_view"),
     path("exports/", dv.export_jobs, name="export_jobs"),
     path("exports/new/", dv.export_new, name="export_new"),
     path("exports/<int:pk>/", dv.export_job, name="export_job"),
     path("exports/<int:pk>/download/", dv.export_download, name="export_download"),
+    path("exports/<int:pk>/view/", dv.export_view, name="export_view"),
+    path("exports/<int:pk>/file/<int:idx>/", dv.export_file, name="export_file"),
+    path("exports/<int:pk>/print-all/", dv.export_print_all, name="export_print_all"),
     path("exports/<int:pk>/retry-word/", dv.export_retry_word, name="export_retry_word"),
     # victim phone follow-up (outsource call staff)
     path("calls/", cv.queue, name="calls_queue"),
@@ -81,6 +86,7 @@ urlpatterns = [
     path("settings/users/new/", sv.user_edit, name="settings_user_new"),
     path("settings/users/<int:pk>/", sv.user_edit, name="settings_user_edit"),
     path("settings/system/", sv.system, name="settings_system"),
+    path("settings/wipe/", sv.wipe, name="settings_wipe"),
     path("settings/audit/", sv.audit, name="settings_audit"),
     path("django-admin/", admin.site.urls),
 ]

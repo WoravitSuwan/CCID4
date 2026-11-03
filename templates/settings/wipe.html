@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% load ui humanize %}
+{% block title %}ล้างข้อมูล{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<div class="grid max-w-5xl gap-5 lg:grid-cols-2">
+  <div class="card">
+    <div class="card-header">{% icon "alert" "h-5 w-5 text-red-500" %}<h2>ล้างข้อมูลคดีทั้งหมด</h2></div>
+    <p class="text-sm text-slate-600">ใช้เมื่อต้องการเริ่มทดลองใหม่ตั้งแต่ต้น แล้วนำเข้าทะเบียนคดีและไฟล์ผู้แจ้งใหม่ <b class="text-red-700">ลบแล้วกู้คืนจากหน้าเว็บไม่ได้</b> ถ้าอาจต้องใช้ข้อมูลเดิมอีก ให้สำรองข้อมูลก่อน (คู่มือข้อ 11)</p>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <div class="rounded-lg bg-red-50 p-3 ring-1 ring-red-200">
+        <div class="mb-1 text-sm font-semibold text-red-800">จะถูกลบ</div>
+        <ul class="space-y-0.5 text-sm text-red-900">{% for k, v in counts.items %}<li class="flex justify-between gap-2"><span>{{ k }}</span><span class="tabular-nums">{{ v|intcomma }}</span></li>{% endfor %}
+          <li>ไฟล์ที่นำเข้า ไฟล์ส่งออก และไฟล์แนบ</li></ul>
+      </div>
+      <div class="rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-200">
+        <div class="mb-1 text-sm font-semibold text-emerald-800">เก็บไว้</div>
+        <ul class="list-disc pl-4 text-sm text-emerald-900">
+          <li>ผู้ใช้และรหัสผ่าน</li><li>พนักงานสอบสวน ยศ ตำแหน่ง</li><li>หน่วย สถานที่นัด ที่อยู่ซอง</li>
+          <li>สถานะคดี แบบฟอร์ม การตั้งค่า</li><li>บันทึกการใช้งาน (การล้างครั้งนี้จะถูกบันทึกด้วย)</li></ul>
+      </div>
+    </div>
+  </div>
+  <form method="post" class="card space-y-3 ring-1 ring-red-200" onsubmit="return confirm('ยืนยันลบข้อมูลคดีทั้งหมด? ลบแล้วกู้คืนไม่ได้')">{% csrf_token %}
+    <h2 class="text-red-700">ยืนยันการลบ</h2>
+    {% for f in form %}
+    <div><label class="label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{{ f.errors }}</div>
+    {% endfor %}
+    <p class="text-xs text-slate-500">ระบบบันทึกชื่อผู้ลบ บัญชีที่ใช้ เวลา และจำนวนข้อมูลที่ลบไว้ในบันทึกการใช้งาน</p>
+    <button class="btn w-full justify-center bg-red-600 text-white ring-red-600 hover:bg-red-700 hover:text-white">{% icon "alert" "h-4 w-4" %} ลบข้อมูลคดีทั้งหมด</button>
+  </form>
+</div>
+{% endblock %}

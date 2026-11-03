@@ -281,11 +281,15 @@ def complete_context(summons: Summons) -> dict:
     return values
 
 
+KEEP_DIGITS_ON_ENVELOPE = {"ใบอนุญาตฝากส่ง"}  # the permit box is printed as typed (๑๙/๒๕๖๘)
+
+
 def envelope_values(summons: Summons) -> dict:
-    """Envelope text uses Arabic digits, like the agency's printed envelopes."""
+    """Envelope text uses Arabic digits, like the agency's printed envelopes (except the permit box)."""
     from apps.core.thai_format import to_arabic_digits
 
-    return {k: to_arabic_digits(v) for k, v in complete_context(summons).items()}
+    return {k: v if k in KEEP_DIGITS_ON_ENVELOPE else to_arabic_digits(v)
+            for k, v in complete_context(summons).items()}
 
 
 def render_envelope(summons: Summons, out_path, tpl: DocTemplate | None = None) -> Path:
@@ -402,6 +406,17 @@ def merge_docx(paths, out_path) -> Path:
     return Path(out_path)
 
 
+def merge_pdfs(paths, out_path) -> Path:
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for p in paths:
+        writer.append(str(p))
+    with open(out_path, "wb") as fh:
+        writer.write(fh)
+    return Path(out_path)
+
+
 def run_export(job: ExportJob):
     job.status = JobStatus.RUNNING
     job.done = 0
@@ -457,7 +472,7 @@ def run_export(job: ExportJob):
             outputs += merged
     else:
         # one file per person (summons + envelope together), named เลขรับแจ้ง_ชื่อ
-        files, used = [], set()
+        files, people, used = [], [], set()
         per_person = work / "per_person"
         per_person.mkdir()
         for s in summonses:
@@ -468,10 +483,20 @@ def run_export(job: ExportJob):
                 n += 1
             used.add(stem)
             parts = [p for p in (by_summons[s.pk].get("summons"), by_summons[s.pk].get("envelope")) if p]
-            files.append(merge_docx(parts, per_person / f"{stem}.docx"))
+            people.append((stem, parts))
+            if want_docx:
+                files.append(merge_docx(parts, per_person / f"{stem}.docx"))
         tick()
         if want_pdf:
-            outputs += convert_many(files, work / "pdf")
+            # Convert each part on its own and join the PDFs: every page keeps its own paper size,
+            # whatever LibreOffice version renders it (7.4 printed a landscape envelope that follows
+            # a portrait summons in one .docx on portrait paper).
+            pdf_parts = dict(zip(summons_files + envelope_files,
+                                 convert_many(summons_files + envelope_files, work / "pdf_parts")))
+            pdf_dir = work / "pdf"
+            pdf_dir.mkdir(exist_ok=True)
+            for stem, parts in people:
+                outputs.append(merge_pdfs([pdf_parts[p] for p in parts], pdf_dir / f"{stem}.pdf"))
             tick()
         if want_docx:
             outputs += files

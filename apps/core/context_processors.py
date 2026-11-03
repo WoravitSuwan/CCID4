@@ -15,8 +15,19 @@ def thai_font() -> str:
     return thai_font_status() if pdf_available() else "n/a"
 
 
+def logo_version():
+    """Timestamp of the uploaded unit logo (None = no logo; the shield icon is shown)."""
+    from .models import SystemSetting
+
+    try:
+        stamp = SystemSetting.objects.filter(pk=1, logo_type__gt="").values_list("logo_updated", flat=True).first()
+    except Exception:  # database not ready (first start, migrations running)
+        return None
+    return int(stamp.timestamp()) if stamp else None
+
+
 def app_context(request):
-    base = {"demo_mode": settings.DEMO_MODE}
+    base = {"demo_mode": settings.DEMO_MODE, "logo_version": logo_version()}
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         if settings.DEMO_MODE:

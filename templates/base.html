@@ -6,6 +6,7 @@
   <title>{% block title %}ระบบออกหมายเรียก{% endblock %} · บก.สอท.4</title>
   <link rel="preload" href="{% static 'fonts/sarabun-thai-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% if logo_version %}<link rel="icon" href="{% url 'branding_logo' %}?v={{ logo_version }}">{% endif %}
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
 </head>
 <body class="h-full" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
@@ -15,10 +16,10 @@
   <!-- sidebar -->
   <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 text-white transition-transform lg:translate-x-0">
     <div class="flex items-center gap-3 px-5 py-5">
-      <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-400/30">{% icon "shield" "h-6 w-6" %}</div>
+      {% if logo_version %}<img src="{% url 'branding_logo' %}?v={{ logo_version }}" alt="โลโก้หน่วย" class="h-11 w-11 shrink-0 rounded-lg bg-white object-contain p-0.5">{% else %}<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-400/30">{% icon "shield" "h-6 w-6" %}</div>{% endif %}
       <div class="leading-tight">
         <div class="text-sm font-semibold">ระบบออกหมายเรียก</div>
-        <div class="text-xs text-slate-400">ผู้กล่าวหา · บก.สอท.4</div>
+        <div class="text-xs text-slate-400">กก.1 บก.สอท.4</div>
       </div>
     </div>
     <nav class="flex-1 space-y-1 overflow-y-auto px-3 pb-4">

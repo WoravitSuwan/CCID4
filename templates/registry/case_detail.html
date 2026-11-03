@@ -159,7 +159,7 @@
           </form>
           {% else %}{{ s.get_result_display }}{% endif %}
         </td>
-        <td class="whitespace-nowrap">{% if pdf_available %}<a class="btn btn-sm" href="{% url 'summons_pdf' s.pk %}" target="_blank">PDF</a>{% endif %} <a class="btn btn-sm" href="{% url 'summons_docx' s.pk %}">Word</a></td>
+        <td class="whitespace-nowrap">{% if pdf_available %}<a class="btn btn-sm" href="{% url 'summons_view' s.pk %}?back={{ request.path|urlencode }}">ดู / พิมพ์</a>{% endif %} <a class="btn btn-sm" href="{% url 'summons_docx' s.pk %}">Word</a></td>
       </tr>
     {% empty %}<tr><td colspan="7" class="py-8 text-center text-slate-500">ยังไม่เคยออกหมายเรียก</td></tr>{% endfor %}
     </tbody>

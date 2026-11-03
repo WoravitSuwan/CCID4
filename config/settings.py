@@ -187,10 +187,11 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", "INFO")},
 }
 
+# PDFs are shown inside the system's own viewer page (iframe + print button); other sites may not frame it
+X_FRAME_OPTIONS = "SAMEORIGIN"
 if not DEBUG:
     SESSION_COOKIE_HTTPONLY = True
     CSRF_COOKIE_HTTPONLY = False
-    X_FRAME_OPTIONS = "SAMEORIGIN"
 
 if env_bool("DJANGO_HTTPS", False):
     # Served through an HTTPS reverse proxy (nginx / Traefik / load balancer) that sets X-Forwarded-Proto

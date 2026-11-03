@@ -1,0 +1,63 @@
+{% extends "base.html" %}{% load ui %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="mb-3 flex flex-wrap items-center gap-2">
+  <a href="{{ back }}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} กลับ</a>
+  <h1 class="ml-2 text-lg font-semibold">{{ title }}</h1>
+</div>
+{% if not src %}
+<div class="card text-sm">
+  <p>ไฟล์ชุดนี้เป็น Word จึงเปิดดูในเว็บไม่ได้ ดาวน์โหลดแล้วเปิดด้วย Microsoft Word เพื่อพิมพ์</p>
+  <a class="btn btn-primary mt-3" href="{{ download }}">{% icon "download" "h-4 w-4" %} ดาวน์โหลด</a>
+</div>
+{% else %}
+<div class="grid gap-4 {% if files|length > 1 %} lg:grid-cols-[18rem_1fr] {% endif %}">
+  {% if files|length > 1 %}
+  <aside class="card max-h-[80vh] overflow-y-auto p-2">
+    <div class="px-2 pb-2 pt-1 text-xs font-medium text-slate-500">{{ files|length }} ไฟล์ (1 คน = 1 ไฟล์)</div>
+    <ul class="space-y-0.5 text-sm">
+      {% for f in files %}
+      <li><a href="?i={{ f.idx }}" data-src="{% url 'export_file' job.pk f.idx %}" class="viewer-item block truncate rounded-lg px-2 py-1.5 {% if f.idx == current %}bg-indigo-50 font-medium text-indigo-700{% else %}text-slate-700 hover:bg-slate-50{% endif %}" title="{{ f.name }}">{{ f.name }}</a></li>
+      {% endfor %}
+    </ul>
+  </aside>
+  {% endif %}
+  <div class="card p-0">
+    <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
+      <span id="viewer-name" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{% for f in files %}{% if f.idx == current %}{{ f.name }}{% endif %}{% endfor %}</span>
+      <button type="button" class="btn btn-primary" id="btn-print">{% icon "document" "h-4 w-4" %} พิมพ์</button>
+      {% if print_all %}<button type="button" class="btn" id="btn-print-all" data-src="{{ print_all }}">พิมพ์ทั้งหมด ({{ files|length }} ไฟล์)</button>{% endif %}
+      <a class="btn" href="{{ download }}">{% icon "download" "h-4 w-4" %} ดาวน์โหลด</a>
+      {% if word %}<a class="btn" href="{{ word }}">Word</a>{% endif %}
+      <a class="btn btn-ghost" id="btn-open" href="{{ src }}" target="_blank" title="เปิดในแท็บใหม่ (ถ้าปุ่มพิมพ์ใช้ไม่ได้ในเบราว์เซอร์นี้)">เปิดแท็บใหม่</a>
+    </div>
+    <iframe id="viewer" src="{{ src }}" class="block h-[78vh] w-full rounded-b-xl bg-slate-100" title="ตัวอย่างเอกสาร"></iframe>
+  </div>
+</div>
+<script>
+(function () {
+  const frame = document.getElementById("viewer"), open = document.getElementById("btn-open");
+  let printWhenLoaded = false;
+  function show(src, name) {
+    frame.src = src; open.href = src;
+    if (name !== undefined) document.getElementById("viewer-name").textContent = name;
+  }
+  function printFrame() {
+    try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+    catch (e) { window.open(frame.src, "_blank"); }  // browser without in-page PDF printing
+  }
+  frame.addEventListener("load", () => { if (printWhenLoaded) { printWhenLoaded = false; setTimeout(printFrame, 300); } });
+  document.getElementById("btn-print").addEventListener("click", printFrame);
+  const all = document.getElementById("btn-print-all");
+  if (all) all.addEventListener("click", () => { printWhenLoaded = true; show(all.dataset.src, "ทุกไฟล์รวมกัน"); });
+  document.querySelectorAll(".viewer-item").forEach((a) => a.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    document.querySelectorAll(".viewer-item").forEach((x) => x.classList.remove("bg-indigo-50", "font-medium", "text-indigo-700"));
+    a.classList.add("bg-indigo-50", "font-medium", "text-indigo-700");
+    show(a.dataset.src, a.textContent);
+    history.replaceState(null, "", a.getAttribute("href"));
+  }));
+})();
+</script>
+{% endif %}
+{% endblock %}

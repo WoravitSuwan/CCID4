@@ -69,8 +69,10 @@ def test_envelope_uses_arabic_digits_and_permit(setup_signers, admin_user, tmp_p
     out = render_envelope(summons, tmp_path / "env.docx")
     text = docx_engine.document_text(out)
     assert "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)" in text and "กรุณาส่ง" in text
-    assert "ใบอนุญาตที่ 19/2568" in text  # Arabic digits like the printed envelope
-    assert not any(ch in text for ch in "๐๑๒๓๔๕๖๗๘๙")
+    # like the printed envelope: Arabic digits everywhere except the postage-permit box (๑๙/๒๕๖๘)
+    assert "ใบอนุญาตที่ ๑๙/๒๕๖๘" in text
+    rest = text.replace("ใบอนุญาตที่ ๑๙/๒๕๖๘", "")
+    assert not any(ch in rest for ch in "๐๑๒๓๔๕๖๗๘๙") and "เลขที่ 370" in text
     assert "{" not in text
     # the summons itself keeps Thai digits and shows the address after the 'บ้านเลขที่' label
     stext = docx_engine.document_text(summons.docx_file.path)

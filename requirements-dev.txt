@@ -2,5 +2,4 @@
 waitress==3.0.2
 pytest==9.2.0
 pytest-django==4.14.0
-pypdf==6.17.0
 ruff

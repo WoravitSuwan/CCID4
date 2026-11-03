@@ -38,6 +38,8 @@ from apps.documents.docx_engine import (  # noqa: E402
 
 OUT = ROOT / "templates_docx"
 FONT = "TH SarabunIT๙"
+# The printed government envelope uses Arabic-shaped digits (370, 50180); TH SarabunIT๙ draws them as Thai digits
+ENVELOPE_FONT = "TH Sarabun New"
 TYPO_FIXES = {"พยานบุคคคล": "พยานบุคคล", "สอบสอบสวน": "สอบสวน", "กกฎหมาย": "กฎหมาย", "กฏหมาย": "กฎหมาย"}
 
 
@@ -144,8 +146,9 @@ def build_summons(original: Path):
 
 
 # --------------------------------------------------------------------------- envelope
-def _set_run_font(run, size_pt, bold=False):
-    run.font.name = FONT
+def _set_run_font(run, size_pt, bold=False, font=None):
+    font = font or FONT
+    run.font.name = font
     run.font.size = Pt(size_pt)
     run.font.bold = bold
     rpr = run._element.get_or_add_rPr()
@@ -154,7 +157,7 @@ def _set_run_font(run, size_pt, bold=False):
         fonts = OxmlElement("w:rFonts")
         rpr.insert(0, fonts)
     for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
-        fonts.set(qn(attr), FONT)
+        fonts.set(qn(attr), font)
     for tag in ("w:szCs",):
         el = rpr.find(qn(tag))
         if el is None:
@@ -247,7 +250,8 @@ def _fixed_table(container, widths_cm):
     return table
 
 
-def _cell_para(cell, text, size, bold=False, align=None, first=False, space_before=0, indent_cm=0.0):
+def _cell_para(cell, text, size, bold=False, align=None, first=False, space_before=0, indent_cm=0.0,
+               font=ENVELOPE_FONT):
     p = cell.paragraphs[0] if first else cell.add_paragraph()
     fmt = p.paragraph_format
     fmt.space_before = Pt(space_before)
@@ -256,7 +260,7 @@ def _cell_para(cell, text, size, bold=False, align=None, first=False, space_befo
     fmt.left_indent = Cm(indent_cm)
     if align is not None:
         p.alignment = align
-    _set_run_font(p.add_run(text), size, bold)
+    _set_run_font(p.add_run(text), size, bold, font)
     return p
 
 
@@ -281,11 +285,11 @@ def build_envelope_official():
     sec.top_margin, sec.bottom_margin = Cm(1.0), Cm(1.0)
     sec.left_margin, sec.right_margin = Cm(1.5), Cm(1.5)
     normal = doc.styles["Normal"]
-    normal.font.name = FONT
+    normal.font.name = ENVELOPE_FONT
     normal.font.size = Pt(14)
     fonts = normal.element.get_or_add_rPr().find(qn("w:rFonts"))
     for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
-        fonts.set(qn(attr), FONT)
+        fonts.set(qn(attr), ENVELOPE_FONT)
 
     # outer frame = the envelope face, exactly half of the page, dashed bottom edge
     outer = _fixed_table(doc, [26.7])
@@ -295,22 +299,22 @@ def build_envelope_official():
     _borders(outer._tbl.tblPr, "w:tblBorders", bottom=("dashed", 8))
     face = row.cells[0]
 
-    header = _fixed_table(face, [2.3, 10.6, 7.2, 6.2])
+    header = _fixed_table(face, [2.5, 9.6, 7.4, 7.2])
     c_logo, c_sender, c_center, c_box = header.rows[0].cells
     logo_p = c_logo.paragraphs[0]
     logo_p.add_run().add_picture(io.BytesIO(garuda), height=Cm(2.0))
-    _cell_para(c_sender, "{ชื่อหน่วย}", 14, bold=True, first=True)
-    _cell_para(c_sender, "{ที่อยู่หน่วย}", 14, bold=True)
-    _cell_para(c_center, "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)", 14, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER,
+    _cell_para(c_sender, "{ชื่อหน่วย}", 16, bold=True, first=True)
+    _cell_para(c_sender, "{ที่อยู่หน่วย}", 16, bold=True)
+    _cell_para(c_center, "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)", 16, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER,
                first=True)
-    _cell_para(c_box, "{ใบอนุญาตฝากส่ง}", 14, align=WD_ALIGN_PARAGRAPH.CENTER, first=True)
+    _cell_para(c_box, "{ใบอนุญาตฝากส่ง}", 16, align=WD_ALIGN_PARAGRAPH.CENTER, first=True)
     c_box.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
     _borders(c_box._tc.get_or_add_tcPr(), "w:tcBorders",
              top=("single", 8), left=("single", 8), bottom=("single", 8), right=("single", 8))
 
     # recipient: right half
-    _cell_para(face, "กรุณาส่ง", 16, bold=True, space_before=12, indent_cm=12.0)
-    _cell_para(face, "{ชื่อผู้แจ้ง}", 18, space_before=4, indent_cm=12.0)
+    _cell_para(face, "กรุณาส่ง", 18, bold=True, space_before=18, indent_cm=12.0)
+    _cell_para(face, "{ชื่อผู้แจ้ง}", 18, space_before=6, indent_cm=12.0)
     _cell_para(face, "{ที่อยู่หลายบรรทัด}", 18, indent_cm=12.0)
     _cell_para(face, "{รหัสไปรษณีย์}", 18, indent_cm=12.0)
 

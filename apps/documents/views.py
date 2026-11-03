@@ -313,7 +313,7 @@ def _summons_file(request, pk, kind):
     log(request, AuditAction.DOWNLOAD, summons,
         f"ดาวน์โหลดหมายเรียก {summons.case.receipt_no} ครั้งที่ {summons.number} ({kind})")
     filename = f"{summons.base_filename()}.{kind}"
-    return file_download(path, filename, inline=kind == "pdf")
+    return file_download(path, filename, inline=kind == "pdf" and request.GET.get("download") != "1")
 
 
 def summons_docx(request, pk):
@@ -412,6 +412,117 @@ def export_download(request, pk):
         raise Http404("ไฟล์ถูกลบตามกำหนดเวลาแล้ว กรุณาส่งออกใหม่")
     log(request, AuditAction.DOWNLOAD, job, f"ดาวน์โหลดไฟล์ส่งออก {path.name}")
     return file_download(path, path.name, inline=path.suffix == ".pdf")
+
+
+# --------------------------------------------------------------------------- view / print in the browser
+def _own_job(request, pk) -> ExportJob:
+    job = get_object_or_404(ExportJob, pk=pk)
+    if job.created_by_id != request.user.pk and not perms.is_admin(request.user):
+        raise PermissionDenied
+    if job.status != JobStatus.DONE or not job.result_file or not Path(job.result_file.path).exists():
+        raise Http404("ไฟล์ยังไม่พร้อมหรือถูกลบตามกำหนดเวลาแล้ว กรุณาส่งออกใหม่")
+    return job
+
+
+def _job_pdf_names(job) -> list[str]:
+    """PDF files in an export: the file itself, or the PDFs inside its ZIP (one per person)."""
+    import zipfile
+
+    path = Path(job.result_file.path)
+    if path.suffix == ".pdf":
+        return [path.name]
+    if path.suffix == ".zip":
+        with zipfile.ZipFile(path) as zf:
+            return [n for n in zf.namelist() if n.lower().endswith(".pdf")]
+    return []
+
+
+def _job_pdf_bytes(job, idx: int) -> tuple[str, bytes]:
+    import zipfile
+
+    names = _job_pdf_names(job)
+    if not 0 <= idx < len(names):
+        raise Http404
+    path = Path(job.result_file.path)
+    if path.suffix == ".pdf":
+        return names[0], path.read_bytes()
+    with zipfile.ZipFile(path) as zf:
+        return names[idx], zf.read(names[idx])
+
+
+def _inline_pdf(data: bytes, filename: str) -> HttpResponse:
+    from apps.core.downloads import content_disposition
+
+    resp = HttpResponse(data, content_type="application/pdf")
+    resp["Content-Disposition"] = content_disposition(filename, inline=True)
+    return resp
+
+
+def export_view(request, pk):
+    """Open the exported PDFs in the browser, one by one or all together, with a print button."""
+    job = _own_job(request, pk)
+    names = _job_pdf_names(job)
+    try:
+        current = min(max(int(request.GET.get("i", 0)), 0), max(len(names) - 1, 0))
+    except ValueError:
+        current = 0
+    files = [{"idx": i, "name": n.rsplit(".", 1)[0]} for i, n in enumerate(names)]
+    return render(request, "documents/viewer.html", {
+        "job": job, "files": files, "current": current,
+        "src": reverse("export_file", args=[job.pk, current]) if names else "",
+        "print_all": reverse("export_print_all", args=[job.pk]) if len(names) > 1 else "",
+        "download": reverse("export_download", args=[job.pk]),
+        "back": reverse("export_job", args=[job.pk]), "title": f"ไฟล์ส่งออก #{job.pk}",
+    })
+
+
+def export_file(request, pk, idx):
+    job = _own_job(request, pk)
+    name, data = _job_pdf_bytes(job, idx)
+    log(request, AuditAction.DOWNLOAD, job, f"เปิดดูไฟล์ส่งออก {name}")
+    return _inline_pdf(data, name)
+
+
+def export_print_all(request, pk):
+    """Every PDF of the export joined into one, to print all people at once."""
+
+    from .services import merge_pdfs
+
+    job = _own_job(request, pk)
+    names = _job_pdf_names(job)
+    work = Path(job.result_file.path).parent / "print_all.pdf"
+    if not work.exists():
+        parts = []
+        tmp = Path(job.result_file.path).parent / "print_parts"
+        tmp.mkdir(exist_ok=True)
+        for i in range(len(names)):
+            _, data = _job_pdf_bytes(job, i)
+            part = tmp / f"{i:05d}.pdf"
+            part.write_bytes(data)
+            parts.append(part)
+        merge_pdfs(parts, work)
+        for part in parts:
+            part.unlink(missing_ok=True)
+        tmp.rmdir()
+    log(request, AuditAction.DOWNLOAD, job, f"เปิดพิมพ์ไฟล์ส่งออกทั้งหมด {len(names)} ไฟล์")
+    return _inline_pdf(work.read_bytes(), f"พิมพ์ทั้งหมด_{len(names)}ไฟล์.pdf")
+
+
+def summons_view(request, pk):
+    summons = get_object_or_404(Summons.objects.select_related("case"), pk=pk)
+    if not perms.can_access_summons(request.user, summons):
+        raise PermissionDenied
+    back = request.GET.get("back", "")
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    if not url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
+        back = reverse("summons_list")
+    return render(request, "documents/viewer.html", {
+        "files": [], "src": reverse("summons_pdf", args=[summons.pk]),
+        "download": reverse("summons_pdf", args=[summons.pk]) + "?download=1",
+        "word": reverse("summons_docx", args=[summons.pk]), "back": back,
+        "title": f"หมายเรียก {summons.case.receipt_no} ครั้งที่ {summons.number}",
+    })
 
 
 def export_jobs(request):

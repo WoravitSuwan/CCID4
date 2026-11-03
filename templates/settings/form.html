@@ -2,7 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 {% include "settings/_tabs.html" %}
-<form method="post" class="card max-w-2xl space-y-3">{% csrf_token %}
+<form method="post" enctype="multipart/form-data" class="card max-w-2xl space-y-3">{% csrf_token %}
   <h2>{{ title }}</h2>
   {% if help %}<p class="text-sm text-slate-500">{{ help }}</p>{% endif %}
   {% if form.non_field_errors %}<div class="text-sm text-red-700">{{ form.non_field_errors }}</div>{% endif %}
@@ -11,6 +11,7 @@
     {% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>
     {% else %}<label class="label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
     {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}{{ f.errors }}
+    {% if f.name == "logo" and logo_version %}<div class="mt-2 flex items-center gap-2 text-xs text-slate-500"><img src="{% url 'branding_logo' %}?v={{ logo_version }}" alt="" class="h-12 w-12 rounded border border-slate-200 object-contain"> โลโก้ที่ใช้อยู่</div>{% endif %}
   </div>
   {% endfor %}
   {% if suggestions %}<div class="rounded bg-blue-50 p-2 text-sm text-blue-900">ชื่อที่ใกล้เคียง: {% for s in suggestions %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %} (เลือกในช่อง "พนักงานสอบสวนที่ผูกไว้" ด้วยตนเอง)</div>{% endif %}

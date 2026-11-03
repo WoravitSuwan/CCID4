@@ -387,18 +387,76 @@ def user_edit(request, pk=None):
 
 
 # --------------------------------------------------------------------------- system & audit
+LOGO_TYPES = {b"\x89PNG\r\n\x1a\n": "image/png", b"\xff\xd8\xff": "image/jpeg", b"RIFF": "image/webp"}
+LOGO_MAX_BYTES = 2 * 1024 * 1024
+
+
+def logo_content_type(data: bytes) -> str:
+    """Recognise PNG / JPEG / WebP by their first bytes (never trust the file name)."""
+    for magic, ctype in LOGO_TYPES.items():
+        if data.startswith(magic) and (ctype != "image/webp" or data[8:12] == b"WEBP"):
+            return ctype
+    return ""
+
+
 class SystemForm(StyledModelForm):
+    logo = forms.FileField(label="โลโก้หน่วย (PNG / JPG / WebP ไม่เกิน 2 MB)", required=False,
+                           help_text="แสดงที่แถบเมนู หน้าเข้าสู่ระบบ และไอคอนแท็บเบราว์เซอร์ แนะนำรูปสี่เหลี่ยมจัตุรัส พื้นหลังโปร่งใส",
+                           widget=forms.ClearableFileInput(attrs={"accept": "image/png,image/jpeg,image/webp"}))
+    remove_logo = forms.BooleanField(label="ลบโลโก้ (กลับไปใช้ไอคอนเดิม)", required=False)
+
     class Meta:
         model = SystemSetting
         fields = ["retention_days", "default_reason", "default_appointment_days"]
 
+    def clean_logo(self):
+        f = self.cleaned_data.get("logo")
+        if not f:
+            return None
+        if f.size > LOGO_MAX_BYTES:
+            raise forms.ValidationError("ไฟล์ใหญ่เกิน 2 MB")
+        data = f.read()
+        ctype = logo_content_type(data)
+        if not ctype:
+            raise forms.ValidationError("รองรับเฉพาะรูป PNG, JPG หรือ WebP")
+        return data, ctype
+
+    def save(self, commit=True):
+        from django.utils import timezone
+
+        obj = super().save(commit=False)
+        logo = self.cleaned_data.get("logo")
+        if logo:
+            obj.logo_data, obj.logo_type = logo
+            obj.logo_updated = timezone.now()
+        elif self.cleaned_data.get("remove_logo"):
+            obj.logo_data, obj.logo_type, obj.logo_updated = None, "", None
+        if commit:
+            obj.save()
+        return obj
+
+
+def branding_logo(request):
+    """The unit logo (public: also shown on the login page)."""
+    from django.http import Http404
+
+    obj = SystemSetting.objects.filter(pk=1).only("logo_data", "logo_type").first()
+    if not obj or not obj.logo_type or not obj.logo_data:
+        raise Http404
+    resp = HttpResponse(bytes(obj.logo_data), content_type=obj.logo_type)
+    resp["Cache-Control"] = "public, max-age=86400"
+    resp["X-Content-Type-Options"] = "nosniff"
+    return resp
+
 
 @admin_only
 def system(request):
-    form = SystemForm(request.POST or None, instance=SystemSetting.get())
+    form = SystemForm(request.POST or None, request.FILES or None, instance=SystemSetting.get())
     if request.method == "POST" and form.is_valid():
         form.save()
-        log(request, AuditAction.SETTINGS, form.instance, "แก้ไขการตั้งค่าระบบ")
+        logo_note = (" (เปลี่ยนโลโก้)" if form.cleaned_data.get("logo")
+                     else " (ลบโลโก้)" if form.cleaned_data.get("remove_logo") else "")
+        log(request, AuditAction.SETTINGS, form.instance, "แก้ไขการตั้งค่าระบบ" + logo_note)
         messages.success(request, "บันทึกแล้ว")
         return redirect("settings_system")
     return render(request, "settings/form.html", {"form": form, "title": "การตั้งค่าระบบ", "tab": "system",
@@ -421,3 +479,53 @@ def audit(request):
     return render(request, "settings/audit.html", {
         "page": page, "actions": AuditAction.choices, "users": User.objects.order_by("username"), "tab": "audit",
     })
+
+
+# --------------------------------------------------------------------------- wipe all case data
+WIPE_PHRASE = "ลบข้อมูลทั้งหมด"
+
+
+class WipeForm(StyledForm):
+    confirm = forms.CharField(label=f'พิมพ์คำว่า "{WIPE_PHRASE}" เพื่อยืนยัน', max_length=50)
+    deleted_by = forms.CharField(label="ชื่อ-นามสกุล ผู้ลบข้อมูล", max_length=150)
+    password = forms.CharField(label="รหัสผ่านของคุณ", widget=forms.PasswordInput)
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_confirm(self):
+        value = " ".join(self.cleaned_data["confirm"].split())
+        if value != WIPE_PHRASE:
+            raise forms.ValidationError(f'ต้องพิมพ์ "{WIPE_PHRASE}" ให้ตรงทุกตัวอักษร')
+        return value
+
+    def clean_deleted_by(self):
+        value = " ".join(self.cleaned_data["deleted_by"].split())
+        if len(value) < 3:
+            raise forms.ValidationError("กรอกชื่อ-นามสกุลของผู้ลบ")
+        return value
+
+    def clean_password(self):
+        if not self.user or not self.user.check_password(self.cleaned_data["password"]):
+            raise forms.ValidationError("รหัสผ่านไม่ถูกต้อง")
+        return ""
+
+
+@admin_only
+def wipe(request):
+    """Delete every case, import, summons and call record - to start the trial over."""
+    from .wipe import counts, wipe_case_data
+
+    form = WipeForm(request.POST or None, user=request.user)
+    if request.method == "POST" and form.is_valid():
+        before = wipe_case_data()
+        summary = ", ".join(f"{k} {v:,}" for k, v in before.items())
+        log(request, AuditAction.WIPE, None,
+            f"ล้างข้อมูลคดีทั้งหมด โดย {form.cleaned_data['deleted_by']} (บัญชี {request.user.username}): {summary}",
+            deleted_by=form.cleaned_data["deleted_by"], counts=before)
+        messages.success(request, f"ล้างข้อมูลแล้ว ({summary}) — นำเข้าทะเบียนคดีและไฟล์ผู้แจ้งใหม่ได้ที่เมนู นำเข้าข้อมูล")
+        return redirect("import_home")
+    return render(request, "settings/wipe.html", {"form": form, "counts": counts(), "phrase": WIPE_PHRASE,
+                                                  "tab": "wipe"})
+
