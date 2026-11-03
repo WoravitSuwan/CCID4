@@ -30,7 +30,7 @@
       <a class="side-link {% if u == 'summons_list' or u == 'issue_form' %}active{% endif %}" href="{% url 'summons_list' %}">{% icon "document" %} หมายเรียก</a>
       <a class="side-link {% if u and 'export' in u %}active{% endif %}" href="{% url 'export_jobs' %}">{% icon "download" %} ส่งออกเอกสาร</a>
       {% if perm_calls_manage %}<a class="side-link {% if u and 'call' in u %}active{% endif %}" href="{% url 'calls_queue' %}">{% icon "phone" %} ติดต่อผู้เสียหาย</a>{% endif %}
-      {% if perm_import %}<a class="side-link {% if u and 'import' in u %}active{% endif %}" href="{% url 'import_home' %}">{% icon "upload" %} นำเข้าข้อมูล</a>{% endif %}
+      {% if perm_import %}<a class="side-link {% if u and u|slice:":7" == "import_" %}active{% endif %}" href="{% url 'import_home' %}">{% icon "upload" %} นำเข้าข้อมูล</a>{% endif %}
       {% endif %}
       {% if perm_settings %}
       <div class="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">ผู้ดูแลระบบ</div>

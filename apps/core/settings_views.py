@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -96,6 +97,56 @@ def investigator_edit(request, pk=None):
         "help": "ข้อมูลนี้ใช้เป็นผู้ลงนามในหมายเรียก ยศและตำแหน่งพิมพ์เองหรือเลือกจากรายการได้ "
                 "ค่าที่เคยพิมพ์ระบบจะจำไว้ให้เลือกครั้งต่อไป",
     })
+
+
+SESSION_SIGNER_IMPORT = "signer_import_rows"
+
+
+@admin_only
+def signer_template(request):
+    from apps.registry.signer_import import template_workbook
+
+    from .downloads import content_disposition
+
+    log(request, AuditAction.DOWNLOAD, None, "ดาวน์โหลดแบบฟอร์มรายชื่อผู้ลงนาม (Excel)")
+    resp = HttpResponse(template_workbook(),
+                        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = content_disposition("รายชื่อผู้ลงนาม_ยศ_ตำแหน่ง.xlsx")
+    return resp
+
+
+@admin_only
+def signer_import(request):
+    """Upload an Excel list of signers -> preview -> confirm."""
+    from apps.registry import signer_import as si
+
+    rows = None
+    if request.method == "POST" and request.POST.get("action") == "confirm":
+        stored = request.session.pop(SESSION_SIGNER_IMPORT, None)
+        if not stored:
+            messages.error(request, "ไม่พบข้อมูลที่ตรวจสอบไว้ กรุณาอัปโหลดไฟล์อีกครั้ง")
+            return redirect("settings_signer_import")
+        counts = si.apply(stored)
+        log(request, AuditAction.SETTINGS, None,
+            f"นำเข้ารายชื่อผู้ลงนามจาก Excel: เพิ่ม {counts['new']} แก้ไข {counts['update']} ไม่เปลี่ยน {counts['same']}")
+        messages.success(request, f"นำเข้ารายชื่อผู้ลงนามแล้ว: เพิ่มใหม่ {counts['new']} คน, แก้ไข {counts['update']} คน, "
+                                  f"ไม่เปลี่ยน {counts['same']} คน")
+        return redirect("settings_investigators")
+    if request.method == "POST" and request.FILES.get("file"):
+        upload = request.FILES["file"]
+        if not upload.name.lower().endswith((".xlsx", ".xlsm")):
+            messages.error(request, "รองรับเฉพาะไฟล์ .xlsx")
+        else:
+            parsed, error = si.parse(upload)
+            if error:
+                messages.error(request, error)
+            else:
+                rows = si.plan(parsed)
+                request.session[SESSION_SIGNER_IMPORT] = [r.as_dict() for r in rows]
+    summary = None
+    if rows is not None:
+        summary = {a: sum(1 for r in rows if r.action == a) for a in ("new", "update", "same", "skip")}
+    return render(request, "settings/signer_import.html", {"rows": rows, "summary": summary, "tab": "investigators"})
 
 
 @require_POST

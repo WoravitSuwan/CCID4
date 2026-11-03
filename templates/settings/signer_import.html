@@ -1,0 +1,61 @@
+{% extends "base.html" %}{% load ui %}
+{% block title %}นำเข้ารายชื่อผู้ลงนาม{% endblock %}
+{% block content %}
+{% include "settings/_tabs.html" %}
+<div class="grid gap-5 lg:grid-cols-3">
+  <div class="card space-y-4">
+    <h2>นำเข้ายศ / ตำแหน่ง จาก Excel</h2>
+    <ol class="list-decimal space-y-1 pl-5 text-sm text-slate-600">
+      <li><a href="{% url 'settings_signer_template' %}">ดาวน์โหลดแบบฟอร์ม</a> ที่มีชื่อผู้ลงนามทุกคนในระบบแล้ว กรอกยศ ตำแหน่ง โทรศัพท์ (ช่องยศมีรายการให้เลือก) หรือใช้ไฟล์รายชื่อของหน่วยเองก็ได้</li>
+      <li>อัปโหลดไฟล์ ตรวจรายการ แล้วกดยืนยัน</li>
+    </ol>
+    <form method="post" enctype="multipart/form-data" class="space-y-3">{% csrf_token %}
+      <input type="file" name="file" accept=".xlsx" required class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-medium file:text-indigo-700 hover:file:bg-indigo-100">
+      <button class="btn btn-primary">{% icon "upload" "h-4 w-4" %} ตรวจสอบไฟล์</button>
+    </form>
+    <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+      <div class="mb-1 font-medium text-slate-700">ไฟล์ที่ใช้ได้</div>
+      <ul class="list-disc space-y-0.5 pl-4">
+        <li>หัวคอลัมน์ เช่น <b>ชื่อ-สกุล</b> (หรือ ชื่อ / พนักงานสอบสวน), <b>ยศ</b>, <b>ตำแหน่ง</b>, <b>โทรศัพท์</b> (หรือ เบอร์โทร), <b>หน่วย</b> หัวตารางอยู่แถวที่ 1–10 ได้</li>
+        <li>ยศย่อแปลงเป็นยศเต็มให้ เช่น พ.ต.ท. → พันตำรวจโท, พ.ต.ต.หญิง → พันตำรวจตรีหญิง</li>
+        <li>ถ้ายศกับชื่ออยู่ช่องเดียวกัน เช่น "พ.ต.ท.สมชาย ใจดี" ระบบแยกให้</li>
+        <li>จับคู่ชื่อโดยไม่สนช่องว่างและคำว่า "หญิง" นำหน้า ชื่อที่ไม่มีในระบบจะเพิ่มเป็นผู้ลงนามใหม่</li>
+        <li>ช่องที่เว้นว่างในไฟล์ จะไม่ลบค่าเดิมในระบบ</li>
+      </ul>
+    </div>
+  </div>
+  <div class="lg:col-span-2">
+    {% if rows is not None %}
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+      <span class="badge badge-green">เพิ่มใหม่ {{ summary.new }}</span>
+      <span class="badge badge-blue">แก้ไข {{ summary.update }}</span>
+      <span class="badge badge-gray">ไม่เปลี่ยน {{ summary.same }}</span>
+      {% if summary.skip %}<span class="badge badge-amber">ข้าม {{ summary.skip }}</span>{% endif %}
+      <form method="post" class="ml-auto">{% csrf_token %}<input type="hidden" name="action" value="confirm">
+        <button class="btn btn-primary" {% if not summary.new and not summary.update %}disabled{% endif %}>{% icon "check" "h-4 w-4" %} ยืนยันนำเข้า</button></form>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>แถว</th><th>ชื่อ</th><th>ยศ</th><th>ตำแหน่ง</th><th>โทรศัพท์</th><th>ผล</th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr class="{% if r.action == 'skip' %}opacity-60{% endif %}">
+            <td class="text-slate-400">{{ r.row_number }}</td><td class="font-medium">{{ r.name }}</td>
+            <td>{{ r.rank|default:"-" }}</td><td>{{ r.position|default:"-" }}</td><td class="font-mono">{{ r.phone|default:"-" }}</td>
+            <td class="text-xs">
+              {% if r.action == 'new' %}<span class="badge badge-green">เพิ่มใหม่</span>
+              {% elif r.action == 'update' %}<span class="badge badge-blue">แก้ไข</span><div class="mt-1 text-slate-500">{{ r.changes|join:" · " }}</div>
+              {% elif r.action == 'same' %}<span class="badge badge-gray">ไม่เปลี่ยน</span>
+              {% else %}<span class="badge badge-amber">ข้าม</span> {{ r.problem }}{% endif %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="6" class="py-8 text-center text-slate-500">ไม่พบรายชื่อในไฟล์</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card text-sm text-slate-500">อัปโหลดไฟล์เพื่อดูรายการก่อนนำเข้า</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

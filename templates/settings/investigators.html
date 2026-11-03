@@ -23,7 +23,12 @@
 </div>
 {% endif %}
 <div class="card overflow-x-auto p-0">
-  <div class="flex items-center px-4 pt-4"><h2>พนักงานสอบสวน (ผู้ลงนาม)</h2><a class="btn btn-sm ml-auto" href="{% url 'settings_investigator_new' %}">+ เพิ่ม</a></div>
+  <div class="flex flex-wrap items-center gap-2 px-4 pt-4"><h2>พนักงานสอบสวน (ผู้ลงนาม)</h2>
+    <div class="ml-auto flex flex-wrap gap-2">
+      <a class="btn btn-sm" href="{% url 'settings_signer_template' %}">ดาวน์โหลดแบบฟอร์ม Excel</a>
+      <a class="btn btn-sm btn-primary" href="{% url 'settings_signer_import' %}">นำเข้ายศ/ตำแหน่งจาก Excel</a>
+      <a class="btn btn-sm" href="{% url 'settings_investigator_new' %}">+ เพิ่ม</a>
+    </div></div>
   <table class="table mt-2">
     <thead><tr><th>ยศ ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>โทรศัพท์</th><th>หน่วย</th><th>ชื่อในทะเบียนที่ผูกไว้</th><th></th></tr></thead>
     <tbody>
