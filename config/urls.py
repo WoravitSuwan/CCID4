@@ -19,6 +19,7 @@ urlpatterns = [
     # register
     path("cases/", rv.case_list, name="case_list"),
     path("cases/export.xlsx", rv.export_register, name="case_export"),
+    path("cases/postcode/", rv.postcode_lookup, name="postcode_lookup"),
     path("cases/<int:pk>/", rv.case_detail, name="case_detail"),
     path("cases/<int:pk>/address/", rv.case_address_save, name="case_address_save"),
     path("cases/<int:pk>/address/resolve/", rv.case_address_resolve, name="case_address_resolve"),

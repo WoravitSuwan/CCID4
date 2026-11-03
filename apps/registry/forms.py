@@ -49,6 +49,11 @@ class CaseFilterForm(StyledForm):
     unit = forms.ModelChoiceField(label="หน่วย", queryset=Unit.objects.all(), required=False, empty_label="ทุกหน่วย")
     investigator = forms.ChoiceField(label="พนักงานสอบสวน", required=False)
     case_type = forms.ChoiceField(label="ประเภทคดี", required=False)
+    scope = forms.ChoiceField(label="สถานะคดี", required=False, choices=[
+        ("all", "ทั้งหมด"), ("open", "ยังไม่สิ้นสุด"), ("final", "สิ้นสุดแล้ว")])
+    sort = forms.ChoiceField(label="เรียงตาม", required=False, choices=[
+        ("-date", "วันที่รับแจ้ง ใหม่ → เก่า"), ("date", "วันที่รับแจ้ง เก่า → ใหม่"),
+        ("-updated", "แก้ไขล่าสุด ใหม่ → เก่า"), ("updated", "แก้ไขล่าสุด เก่า → ใหม่")])
     open = forms.BooleanField(label="ยังไม่สิ้นสุด", required=False)
     incomplete = forms.BooleanField(label="ที่อยู่ไม่ครบ", required=False)
     unmatched = forms.BooleanField(label="จับคู่ไม่ได้", required=False)

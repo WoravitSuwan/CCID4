@@ -63,7 +63,7 @@ class Command(BaseCommand):
         from apps.registry.models import Case
 
         callers = []
-        for username, first in (("call1", "สมใจ (outsource)"), ("call2", "มานี (outsource)")):
+        for username, first in (("call1", "สมใจ (outsource)"),):
             caller = User.objects.filter(username=username).first()
             if caller is None:
                 caller = User.objects.create_user(username, password=DEMO_PASSWORD, role=Role.OUTSOURCE,
@@ -72,8 +72,7 @@ class Command(BaseCommand):
         admin = User.objects.filter(username="admin").first()
         open_cases = list(Case.objects.not_final().order_by("receipt_no"))
         if open_cases and not callers[0].call_assignments.exists():
-            assign(open_cases[:12], callers[0], admin)
-            assign(open_cases[12:20], callers[1], admin)
+            assign(open_cases[:20], callers[0], admin)
             now = timezone.now()
             samples = [
                 (open_cases[0], CallOutcome.OFF, "", None),
@@ -85,5 +84,5 @@ class Command(BaseCommand):
                 record_call(case, callers[0], outcome=outcome, note=note, appointment_at=appointment,
                             phone=case.victim_phone, called_at=now - dt.timedelta(hours=5 - idx))
         self.stdout.write(self.style.SUCCESS(
-            f"พร้อมแล้ว ผู้ใช้ทดลอง admin (ผู้ดูแลระบบ) / call1, call2 (outsource) รหัสผ่าน {DEMO_PASSWORD} "
+            f"พร้อมแล้ว ผู้ใช้ทดลอง 2 บัญชี: admin (ผู้ดูแลระบบ) และ call1 (outsource) รหัสผ่าน {DEMO_PASSWORD} "
             "(ชื่อ 'ธนพล มั่นคงสมมติ' ปล่อยไว้ยังไม่ผูก เพื่อลองหน้าผูกชื่อ)"))

@@ -236,6 +236,10 @@ class AddressOverride(AddressFields):
         return Address.from_obj(self)
 
     def save(self, *args, **kwargs):
+        if not clean_text(self.postcode):  # staff left it blank: fill from ตำบล/อำเภอ/จังหวัด
+            from apps.imports.postcode import lookup_postcode
+
+            self.postcode = lookup_postcode(self.subdistrict, self.district, self.province)
         self.is_complete = self.address().is_complete
         super().save(*args, **kwargs)
 
@@ -256,6 +260,9 @@ class CaseQuerySet(models.QuerySet):
 
     def not_final(self):
         return self.filter(Q(status__isnull=True) | Q(status__is_final=False))
+
+    def final(self):
+        return self.filter(status__is_final=True)
 
     def unmatched(self):
         return self.filter(complainant__isnull=True)

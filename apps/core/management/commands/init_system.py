@@ -14,7 +14,10 @@ class Command(BaseCommand):
         from apps.accounts.models import Role
         from apps.documents.services import ensure_default_templates
 
+        from django.core.management import call_command
+
         SystemSetting.get()
+        call_command("fill_postcodes", stdout=self.stdout)
         created = ensure_default_templates()
         for tpl in created:
             self.stdout.write(f"เพิ่มแบบฟอร์ม: {tpl}")

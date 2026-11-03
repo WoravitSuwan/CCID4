@@ -11,15 +11,27 @@
   </div>
 </div>
 
-{% with g=request.GET %}
-<div class="mb-4 flex flex-wrap gap-2">
-  <a class="btn btn-sm {% if g.open and not g.incomplete and not g.unmatched and not g.never %}btn-primary{% endif %}" href="?open=on">ยังไม่สิ้นสุด</a>
-  <a class="btn btn-sm {% if g.never %}btn-primary{% endif %}" href="?open=on&never=on">ยังไม่เคยออกหมาย</a>
-  <a class="btn btn-sm {% if g.incomplete %}btn-primary{% endif %}" href="?open=on&incomplete=on">{% icon "map-pin" "h-3.5 w-3.5" %} ที่อยู่ไม่ครบ</a>
-  <a class="btn btn-sm {% if g.unmatched %}btn-primary{% endif %}" href="?unmatched=on">{% icon "alert" "h-3.5 w-3.5" %} จับคู่ไม่ได้</a>
-  <a class="btn btn-sm {% if not g %}btn-primary{% endif %}" href="{% url 'case_list' %}">ทั้งหมด</a>
+<div class="mb-4 flex flex-wrap items-center gap-3">
+  <nav class="flex flex-wrap gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200/80" aria-label="สถานะคดี">
+    {% for key, label in form.fields.scope.choices %}{% with n=form.scope_counts|get_item:key %}
+    <a href="?{% query_replace scope=key open='' page='' %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if form.current_scope == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="{% if form.current_scope == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ n }}</span></a>
+    {% endwith %}{% endfor %}
+  </nav>
+  {% with g=request.GET %}
+  <div class="flex flex-wrap gap-2">
+    <a class="btn btn-sm {% if g.never %}btn-primary{% endif %}" href="?scope=open&never=on">ยังไม่เคยออกหมาย</a>
+    <a class="btn btn-sm {% if g.incomplete %}btn-primary{% endif %}" href="?scope=open&incomplete=on">{% icon "map-pin" "h-3.5 w-3.5" %} ที่อยู่ไม่ครบ</a>
+    <a class="btn btn-sm {% if g.unmatched %}btn-primary{% endif %}" href="?unmatched=on">{% icon "alert" "h-3.5 w-3.5" %} จับคู่ไม่ได้</a>
+  </div>
+  {% endwith %}
+  <form method="get" class="ml-auto flex items-center gap-2 text-sm">
+    {% for k, v in request.GET.items %}{% if k != "sort" and k != "page" %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+    <label for="sort" class="text-slate-500">{% icon "calendar" "inline h-4 w-4" %} เรียงตาม</label>
+    <select id="sort" name="sort" class="input w-auto py-1.5" onchange="this.form.submit()">
+      {% for key, label in form.fields.sort.choices %}<option value="{{ key }}" {% if form.current_sort == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </form>
 </div>
-{% endwith %}
 
 <details class="card mb-4 p-0" {% if request.GET.q or request.GET.status or request.GET.year or request.GET.unit or request.GET.investigator or request.GET.case_type %}open{% endif %}>
   <summary class="flex cursor-pointer select-none items-center gap-2 px-5 py-3 text-sm font-medium text-slate-700">{% icon "filter" "h-4 w-4 text-slate-400" %} ค้นหาและตัวกรอง</summary>
@@ -29,7 +41,7 @@
     <div>{{ form.status }}</div><div>{{ form.year }}</div><div>{{ form.unit }}</div><div>{{ form.investigator }}</div>
     <div class="lg:col-span-2">{{ form.case_type }}</div>
     <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm lg:col-span-3">
-      <label class="flex items-center gap-1.5">{{ form.open }} ยังไม่สิ้นสุด</label>
+      <input type="hidden" name="scope" value="{{ form.current_scope }}"><input type="hidden" name="sort" value="{{ form.current_sort }}">
       <label class="flex items-center gap-1.5">{{ form.incomplete }} ที่อยู่ไม่ครบ</label>
       <label class="flex items-center gap-1.5">{{ form.unmatched }} จับคู่ไม่ได้</label>
       <label class="flex items-center gap-1.5">{{ form.never }} ยังไม่เคยออกหมาย</label>
@@ -54,20 +66,20 @@
   <table class="table">
     <thead><tr>
       {% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="check-all" aria-label="เลือกทั้งหมด"></th>{% endif %}
-      <th>เลขรับแจ้ง</th><th>ผู้แจ้ง</th><th>ประเภทคดี</th><th>พนักงานสอบสวน</th><th>สถานะ</th><th class="text-center">หมาย</th><th></th>
+      <th>เลขรับแจ้ง / วันที่รับแจ้ง</th><th>ผู้แจ้ง</th><th>ประเภทคดี</th><th>พนักงานสอบสวน</th><th>สถานะ{% if can_bulk_status %} <span class="font-normal normal-case text-slate-400">(เลือกเพื่อแก้)</span>{% endif %}</th><th class="text-center">หมาย</th><th></th>
     </tr></thead>
     <tbody>
     {% for c in page %}
-      <tr class="cursor-pointer" onclick="if(!event.target.closest('input,a,button,label'))location.href='{% url 'case_detail' c.pk %}'">
+      <tr class="cursor-pointer" onclick="if(!event.target.closest('input,a,button,label,select'))location.href='{% url 'case_detail' c.pk %}'">
         {% if can_issue %}<td><input type="checkbox" class="check case-cb" name="case_ids" value="{{ c.pk }}"></td>{% endif %}
         <td class="whitespace-nowrap">
           <a class="font-mono font-medium" href="{% url 'case_detail' c.pk %}">{{ c.receipt_no }}</a>
-          <div class="text-xs text-slate-400">{{ c.report_date|thai_date }}{% if c.criminal_case_no %} · คดีอาญา {{ c.criminal_case_no }}{% endif %}</div>
+          <div class="text-xs text-slate-500">{{ c.report_date|thai_date:"full" }}{% if c.criminal_case_no %} · คดีอาญา {{ c.criminal_case_no }}{% endif %}</div>
         </td>
         <td><div class="font-medium text-slate-800">{% if c.complainant %}{{ c.complainant.full_name }}{% else %}{{ c.victim_name }}{% endif %}</div><div class="text-xs text-slate-400">{{ c.unit_raw }}</div></td>
         <td class="max-w-[16rem]"><div class="truncate" title="{{ c.case_type }}">{{ c.case_type }}</div></td>
         <td class="whitespace-nowrap">{% if c.investigator %}{{ c.investigator.sign_name }}{% else %}<span class="inline-flex items-center gap-1 text-amber-700" title="ยังไม่ได้ผูกผู้ลงนาม">{% icon "alert" "h-3.5 w-3.5" %}{{ c.investigator_raw|default:"-" }}</span>{% endif %}</td>
-        <td>{% if c.status %}<span class="badge {{ c.status|status_class }}"><span class="dot"></span>{{ c.status.name }}</span>{% if c.status_manual_at %}<span class="ml-1 text-slate-400" title="แก้สถานะในระบบ">{% icon "pencil" "inline h-3.5 w-3.5" %}</span>{% endif %}{% endif %}</td>
+        <td class="whitespace-nowrap">{% include "registry/_status_cell.html" with can_edit=can_bulk_status %}</td>
         <td class="text-center">{% if c.summons_count %}<span class="badge badge-green">{{ c.summons_count }}</span>{% else %}<span class="text-slate-300">–</span>{% endif %}</td>
         <td class="whitespace-nowrap text-right">
           {% if not c.complainant and not c.has_override %}<span class="badge badge-red">จับคู่ไม่ได้</span>

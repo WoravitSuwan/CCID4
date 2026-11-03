@@ -55,7 +55,7 @@
 
 <div class="table-wrap">
   <table class="table">
-    <thead><tr><th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th>{% if can_manage %}<th>ผู้รับผิดชอบ</th>{% endif %}<th></th></tr></thead>
+    <thead><tr><th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th>สถานะคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th>{% if can_manage %}<th>ผู้รับผิดชอบ</th>{% endif %}<th></th></tr></thead>
     <tbody>
     {% for a in page %}
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button'))location.href='{% url 'call_case' a.case_id %}'">
@@ -63,6 +63,7 @@
         <td class="font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
         <td class="whitespace-nowrap font-mono">{{ a.case.victim_phone|default:a.case.complainant.phone|default:"-" }}</td>
         <td class="max-w-[14rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
+        <td class="whitespace-nowrap">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}</td>
         <td class="text-center tabular-nums">{% if a.attempt_count %}{{ a.attempt_count }}{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
         <td class="text-sm">
           {% if a.last_outcome %}<span class="badge {% if a.last_reached %}badge-green{% else %}badge-amber{% endif %}">{{ a.get_last_outcome_display }}</span>
@@ -73,7 +74,7 @@
         <td class="text-right">{% if a.is_done %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
       </tr>
     {% empty %}
-      <tr><td colspan="8" class="py-16 text-center">
+      <tr><td colspan="9" class="py-16 text-center">
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">{% icon "check" "h-6 w-6" %}</div>
         <div class="font-medium text-slate-700">ไม่มีรายการในแท็บนี้</div>
         {% if can_manage %}<div class="text-sm text-slate-500"><a href="{% url 'calls_assign' %}">มอบหมายเลขรับแจ้ง</a> ให้เจ้าหน้าที่โทร</div>{% endif %}

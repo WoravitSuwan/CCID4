@@ -125,8 +125,6 @@ def filtered_cases(request):
             qs = qs.filter(investigator_alias__investigator_id=d["investigator"])
         if d["case_type"]:
             qs = qs.filter(case_type=d["case_type"])
-        if d["open"]:
-            qs = qs.not_final()
         if d["incomplete"]:
             qs = qs.address_incomplete()
         if d["unmatched"]:
@@ -135,10 +133,27 @@ def filtered_cases(request):
             qs = qs.never_summoned()
         if d["conflict"]:
             qs = qs.filter(receipt_no__in=conflict_receipts())
+    # status scope: ยังไม่สิ้นสุด / สิ้นสุดแล้ว / ทั้งหมด (counts are for the other filters)
+    scope, sort = "all", "-date"
+    if form.is_valid():
+        scope = form.cleaned_data["scope"] or ("open" if form.cleaned_data["open"] else "all")
+        sort = form.cleaned_data["sort"] or "-date"
+    form.scope_counts = {"all": qs.count(), "open": qs.not_final().count(), "final": qs.final().count()}
+    form.current_scope, form.current_sort = scope, sort
+    if scope == "open":
+        qs = qs.not_final()
+    elif scope == "final":
+        qs = qs.final()
     override = AddressOverride.objects.filter(receipt_no=OuterRef("receipt_no"))
     qs = qs.annotate(has_override=Exists(override),
                      summons_count=Count("summonses", distinct=True))
-    return form, qs.order_by("-report_date", "receipt_no")
+    order = {
+        "-date": ["-report_date", "-updated_at", "receipt_no"],
+        "date": ["report_date", "updated_at", "receipt_no"],
+        "-updated": ["-updated_at", "receipt_no"],
+        "updated": ["updated_at", "receipt_no"],
+    }[sort]
+    return form, qs.order_by(*order)
 
 
 def case_list(request):
@@ -318,15 +333,24 @@ def case_status_update(request, pk):
     case = _case_or_404(pk)
     if not perms.can_edit_case(request.user, case):
         raise PermissionDenied
-    status = Status.objects.filter(pk=request.POST.get("status")).first()
+    inline = bool(request.headers.get("HX-Request"))
+    status = Status.objects.filter(pk=request.POST.get("status") or request.POST.get("row_status")).first()
     if status is None:
+        if inline:
+            return HttpResponse(status=400)
         messages.error(request, "กรุณาเลือกสถานะ")
         return redirect("case_detail", pk=pk)
     old = case.status.name if case.status_id else "-"
     note = request.POST.get("note", "").strip()[:300]
-    if case.set_status(status, request.user, note):
+    changed = case.set_status(status, request.user, note)
+    if changed:
         log(request, AuditAction.EDIT, case,
             f"เปลี่ยนสถานะ {case.receipt_no}: {old} → {status.name}" + (f" ({note})" if note else ""))
+    if inline:  # register table: send back just the status cell
+        case.refresh_from_db()
+        return render(request, "registry/_status_cell.html", {
+            "c": case, "statuses": Status.objects.all(), "can_edit": True, "just_saved": changed})
+    if changed:
         messages.success(request, f"เปลี่ยนสถานะเป็น '{status.name}' แล้ว")
     return redirect(request.POST.get("next") or reverse("case_detail", args=[pk]))
 
@@ -358,3 +382,18 @@ def case_status_bulk(request):
         msg += f" · ข้าม {skipped} คดีที่ไม่มีสิทธิ์แก้ไข"
     messages.success(request, msg)
     return redirect(back)
+
+
+# --------------------------------------------------------------------------- postcode lookup (internal API)
+def postcode_lookup(request):
+    """GET ?subdistrict=&district=&province= -> {"postcode": "50180", "candidates": [...]}.
+
+    Uses the bundled Thai postcode table - no request leaves the server.
+    """
+    from django.http import JsonResponse
+
+    from apps.imports.postcode import postcode_candidates
+
+    args = [request.GET.get(k, "") for k in ("subdistrict", "district", "province")]
+    candidates = postcode_candidates(*args)
+    return JsonResponse({"postcode": candidates[0] if len(candidates) == 1 else "", "candidates": candidates})

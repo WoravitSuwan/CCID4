@@ -1,0 +1,15 @@
+{% load ui thai %}{% if can_edit %}
+<div class="flex flex-col gap-1">
+  <select name="row_status" form="no-form" aria-label="สถานะคดี {{ c.receipt_no }}"
+          class="rounded-full border-0 py-0.5 pl-2.5 pr-7 text-xs font-medium ring-1 ring-inset focus:ring-2 focus:ring-indigo-500 {{ c.status|status_class }}"
+          hx-post="{% url 'case_status_update' c.pk %}" hx-trigger="change" hx-params="row_status"
+          hx-target="closest td" hx-swap="innerHTML">
+    {% if not c.status %}<option value="">— ไม่มีสถานะ —</option>{% endif %}
+    {% for s in statuses %}<option value="{{ s.pk }}" {% if s.pk == c.status_id %}selected{% endif %}>{{ s.name }}{% if s.is_final %} ✓{% endif %}</option>{% endfor %}
+  </select>
+  {% if just_saved %}<span class="text-[11px] text-emerald-700">บันทึกแล้ว · {{ c.status_manual_at|thai_date:"datetime" }}</span>
+  {% elif c.status_manual_at %}<span class="text-[11px] text-slate-400" title="แก้สถานะในระบบโดย {{ c.status_manual_by.display_name|default:'-' }}">แก้ {{ c.status_manual_at|thai_date:"datetime" }}</span>{% endif %}
+</div>
+{% else %}
+  {% if c.status %}<span class="badge {{ c.status|status_class }}"><span class="dot"></span>{{ c.status.name }}</span>{% endif %}
+{% endif %}

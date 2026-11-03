@@ -7,7 +7,7 @@ from django.core.management import call_command
 from django.db import connection
 
 logger = logging.getLogger(__name__)
-DEMO_ACCOUNTS = [("admin", "ผู้ดูแลระบบ"), ("call1", "outsource"), ("call2", "outsource")]
+DEMO_ACCOUNTS = [("admin", "ผู้ดูแลระบบ"), ("call1", "เจ้าหน้าที่ outsource")]
 
 
 def bootstrap_demo(force: bool = False):

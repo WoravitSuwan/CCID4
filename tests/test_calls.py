@@ -131,5 +131,5 @@ def test_demo_has_call_staff(db, settings):
 
     settings.DEMO_MODE = True
     bootstrap_demo()
-    assert CallAssignment.objects.filter(assignee__username="call1").count() == 12
+    assert CallAssignment.objects.filter(assignee__username="call1").count() == 20
     assert CallAttempt.objects.count() == 4

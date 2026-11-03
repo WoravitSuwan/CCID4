@@ -91,3 +91,17 @@ def get_lookup() -> PostcodeLookup:
 
 def lookup_postcode(subdistrict: str, district: str, province: str) -> str:
     return get_lookup().lookup(subdistrict, district, province)
+
+
+def postcode_candidates(subdistrict: str, district: str, province: str) -> list[str]:
+    """All postcodes that fit (most specific match first) - for letting staff pick one."""
+    lk = get_lookup()
+    p = norm_province(province)
+    d = norm_district(district, p)
+    s = norm_subdistrict(subdistrict)
+    if not p:
+        return []
+    for key, table in (((p, d, s), lk.by_full), ((p, d), lk.by_district), ((p, s), lk.by_province_sub)):
+        if all(key) and table.get(key):
+            return sorted(table[key])
+    return []

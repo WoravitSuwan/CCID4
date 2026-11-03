@@ -78,7 +78,7 @@ def test_demo_bootstrap(db, settings):
     settings.DEMO_MODE = True
     bootstrap_demo()
     assert Case.objects.count() == 40
-    assert set(User.objects.values_list("username", flat=True)) == {"admin", "call1", "call2"}
+    assert set(User.objects.values_list("username", flat=True)) == {"admin", "call1"}
     assert set(User.objects.values_list("role", flat=True)) == {"admin", "outsource"}
     assert User.objects.get(username="admin").check_password("demo12345")
     bootstrap_demo()  # second call is a no-op
