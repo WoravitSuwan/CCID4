@@ -51,10 +51,10 @@ def test_outsource_sees_every_open_case_without_assignment(client, imported, cal
     mine = Case.objects.not_final().first()
     CallAssignment.objects.create(case=mine, assignee=caller, assigned_by=clerk)
     client.force_login(caller)
-    page = client.get("/calls/?tab=all")
+    page = client.get("/calls/?tab=all&scope=all")
     open_cases = Case.objects.not_final().count()
     assert page.context["page"].paginator.count == Case.objects.count()  # every case, no assigning needed
-    assert page.context["counts"]["todo"] == open_cases
+    assert client.get("/calls/").context["counts"]["todo"] == open_cases  # default: open cases
     final = Case.objects.final().first()
     assert final.pk not in [a.case_id for a in client.get("/calls/?tab=todo").context["page"].paginator.object_list]
     mine_only = client.get("/calls/?tab=all&assignee=me").context["page"]
@@ -170,32 +170,27 @@ def test_shared_list_first_caller_takes_the_case_and_busy_warning(client, import
 
 
 def test_queue_tabs_and_status_filter(client, imported, caller):
-    from apps.registry.models import Status
-
     client.force_login(caller)
     c1, c2 = Case.objects.not_final().order_by("receipt_no")[:2]
     record_call(c1, caller, outcome=CallOutcome.OFF)
     record_call(c2, caller, outcome=CallOutcome.INFO)
-    page = client.get("/calls/")
-    counts = page.context["counts"]
     total, open_cases = Case.objects.count(), Case.objects.not_final().count()
-    assert counts["all"] == total and counts["called"] == 2 and counts["never"] == open_cases - 2
+    page = client.get("/calls/")  # default: open cases, tab "ต้องโทร"
+    counts, scopes = page.context["counts"], page.context["scope_counts"]
+    assert scopes == {"open": open_cases, "final": total - open_cases, "all": total}  # same on every tab
+    assert counts["all"] == open_cases and counts["called"] == 2 and counts["never"] == open_cases - 2
     assert counts["done"] == 1 and counts["todo"] == open_cases - 1
     html = page.content.decode()
-    assert "โทรแล้ว" in html and "ยังไม่ได้โทร" in html and "สถานะคดี:" in html
-    # status chips: each status with its count in the tab; picking one narrows every tab
-    final = Status.objects.filter(is_final=True).first()
-    all_tab = client.get("/calls/?tab=all")
-    chips = {key: n for key, st, n in all_tab.context["status_chips"]}
-    assert chips[str(final.pk)] == Case.objects.filter(status=final).count()
-    assert sum(chips.values()) == total
-    only_final = client.get(f"/calls/?tab=all&status={final.pk}")
-    assert only_final.context["page"].paginator.count == Case.objects.filter(status=final).count()
-    assert only_final.context["counts"]["todo"] == 0  # closed cases never need a call
-    # latest result filter
+    assert "ยังไม่สิ้นสุด" in html and "สิ้นสุดแล้ว" in html and 'name="assignee"' not in html
+    all_page = client.get("/calls/?tab=all&scope=all")
+    assert all_page.context["page"].paginator.count == total
+    assert all_page.context["scope_counts"] == {"open": open_cases, "final": total - open_cases, "all": total}
+    final_page = client.get("/calls/?tab=never&scope=final")
+    assert final_page.context["page"].paginator.count == total - open_cases  # closed, never called
+    assert final_page.context["counts"]["todo"] == 0  # closed cases never need a call
+    # latest result filter, kept across tabs
     reached = client.get("/calls/?tab=called&result=reached").context["page"]
     assert [a.case_id for a in reached] == [c2.pk]
     off = client.get("/calls/?tab=called&result=off").context["page"]
     assert [a.case_id for a in off] == [c1.pk]
-    # tab links keep the filters
-    assert f"status={final.pk}" in client.get(f"/calls/?tab=all&status={final.pk}").content.decode()
+    assert "result=off" in client.get("/calls/?tab=called&result=off").content.decode()

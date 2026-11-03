@@ -73,14 +73,25 @@ def _queue(request):
 OPEN_CASE = Q(case__status__isnull=True) | Q(case__status__is_final=False)
 
 
+SCOPES = [("open", "ยังไม่สิ้นสุด"), ("final", "สิ้นสุดแล้ว"), ("all", "ทั้งหมด")]
+
+
+def _apply_scope(qs, scope):
+    if scope == "open":
+        return qs.filter(OPEN_CASE)
+    if scope == "final":
+        return qs.exclude(OPEN_CASE)
+    return qs
+
+
 def _apply_tab(qs, tab):
     now = timezone.now()
-    if tab == "todo":
+    if tab == "todo":  # closed cases never need a call
         return qs.filter(OPEN_CASE, is_done=False).filter(Q(callback_at__isnull=True) | Q(callback_at__lte=now))
     if tab == "callback":
         return qs.filter(OPEN_CASE, is_done=False, callback_at__isnull=False)
     if tab == "never":
-        return qs.filter(OPEN_CASE, attempt_count=0)
+        return qs.filter(attempt_count=0)
     if tab == "called":
         return qs.filter(attempt_count__gt=0)
     if tab == "done":
@@ -115,22 +126,13 @@ def queue(request):
     if tab not in dict(TABS):
         tab = "todo"
     filtered = _apply_filters(request, base)
-    status = request.GET.get("status", "")
-    if status == "none":
-        by_status = filtered.filter(case__status__isnull=True)
-    elif status.isdigit():
-        by_status = filtered.filter(case__status_id=int(status))
-    else:
-        status, by_status = "", filtered
-    counts = {key: _apply_tab(by_status, key).count() for key, _ in TABS}
-    in_tab = _apply_tab(filtered, tab)
-    # status chips: how many cases of each status are in this tab (with the other filters applied)
-    per_status = dict(in_tab.values_list("case__status").annotate(n=Count("pk")).values_list("case__status", "n"))
-    status_chips = [(str(st.pk), st, per_status.get(st.pk, 0)) for st in Status.objects.all()
-                    if per_status.get(st.pk)]
-    if per_status.get(None):
-        status_chips.append(("none", None, per_status[None]))
-    qs = in_tab if not status else _apply_tab(by_status, tab)
+    scope = request.GET.get("scope", "open")
+    if scope not in dict(SCOPES):
+        scope = "open"
+    scoped = _apply_scope(filtered, scope)
+    counts = {key: _apply_tab(scoped, key).count() for key, _ in TABS}
+    scope_counts = {key: _apply_scope(filtered, key).count() for key, _ in SCOPES}
+    qs = _apply_tab(scoped, tab)
     today = timezone.localdate()
     today_calls = CallAttempt.objects.filter(called_at__date=today)
     if perms.is_outsource(request.user):
@@ -150,7 +152,7 @@ def queue(request):
     page = Paginator(_ordered(qs), 50).get_page(request.GET.get("page"))
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
-        "status": status, "status_chips": status_chips, "status_total": sum(per_status.values()),
+        "scope": scope, "scopes": SCOPES, "scope_counts": scope_counts,
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
         "lock_minutes": OPEN_LOCK_MINUTES,
@@ -186,7 +188,7 @@ class CallForm(StyledForm):
 def _next_case(request, current_pk):
     """Next case to call - skipping ones another staff member has open right now."""
     busy = Q(opened_at__gte=timezone.now() - dt.timedelta(minutes=OPEN_LOCK_MINUTES)) & ~Q(opened_by=request.user)
-    qs = _ordered(_apply_tab(_queue(request), "todo")).exclude(case_id=current_pk).exclude(busy)
+    qs = _ordered(_apply_tab(_apply_scope(_queue(request), "open"), "todo")).exclude(case_id=current_pk).exclude(busy)
     nxt = qs.first()
     return nxt.case_id if nxt else None
 

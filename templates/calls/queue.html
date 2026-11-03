@@ -36,34 +36,29 @@
 </div>
 {% endif %}
 
-<div class="mb-3 flex flex-wrap items-center gap-2">
-  <nav class="flex flex-wrap gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200/80">
+<div class="card mb-4 space-y-3 p-3 sm:p-4">
+  <div class="flex flex-wrap items-center gap-3">
+    <div class="inline-flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="สถานะคดี">
+      {% for key, label in scopes %}
+      <a href="?{% query_replace scope=key page="" %}" class="rounded-lg px-4 py-2 text-sm font-semibold {% if scope == key %}bg-white text-slate-900 shadow-sm ring-1 ring-slate-200{% else %}text-slate-500 hover:text-slate-800{% endif %}">{{ label }} <span class="ml-1 tabular-nums {% if scope == key %}text-indigo-600{% else %}text-slate-400{% endif %}">{{ scope_counts|get_item:key|intcomma }}</span></a>
+      {% endfor %}
+    </div>
+    <form method="get" class="ml-auto flex w-full flex-wrap gap-2 sm:w-auto">
+      <input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="scope" value="{{ scope }}">
+      <select name="result" class="input w-full py-2 sm:w-52" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
+        {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+        {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+      <div class="relative w-full sm:w-64"><span class="pointer-events-none absolute left-3 top-2.5 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
+        <input class="input w-full py-2 pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ / เบอร์"></div>
+    </form>
+  </div>
+  <nav class="flex flex-wrap gap-1 border-t border-slate-100 pt-3" aria-label="การโทร">
     {% for key, label in tabs %}
-    <a href="?{% query_replace tab=key page="" %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if tab == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="{% if tab == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ counts|get_item:key }}</span></a>
+    <a href="?{% query_replace tab=key page="" %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if tab == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="tabular-nums {% if tab == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ counts|get_item:key|intcomma }}</span></a>
     {% endfor %}
   </nav>
-  <form method="get" class="ml-auto flex flex-wrap gap-2">
-    <input type="hidden" name="tab" value="{{ tab }}">
-    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
-    <select name="result" class="input w-auto max-w-[13rem] py-1.5" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
-      {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
-      {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-    <select name="assignee" class="input w-auto py-1.5" onchange="this.form.submit()" aria-label="ผู้รับผิดชอบ"><option value="">ผู้รับผิดชอบ: ทุกคน</option>
-      {% if is_outsource %}<option value="me" {% if request.GET.assignee == "me" %}selected{% endif %}>ของฉัน</option>{% endif %}
-      <option value="none" {% if request.GET.assignee == "none" %}selected{% endif %}>ยังไม่มีผู้รับผิดชอบ</option>
-      {% for u in staff %}<option value="{{ u.pk }}" {% if request.GET.assignee == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select>
-    <div class="relative"><span class="pointer-events-none absolute left-3 top-2 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
-      <input class="input w-56 py-1.5 pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ / เบอร์"></div>
-  </form>
 </div>
 
-<div class="mb-3 flex flex-wrap items-center gap-1.5 text-sm">
-  <span class="mr-1 text-slate-500">สถานะคดี:</span>
-  <a href="?{% query_replace status="" page="" %}" class="rounded-full px-3 py-1 ring-1 {% if not status %}bg-slate-800 text-white ring-slate-800 hover:text-white{% else %}bg-white text-slate-600 ring-slate-200 hover:bg-slate-50{% endif %}">ทุกสถานะ <span class="{% if not status %}text-slate-300{% else %}text-slate-400{% endif %}">{{ status_total }}</span></a>
-  {% for key, st, n in status_chips %}
-  <a href="?{% query_replace status=key page="" %}" class="rounded-full px-3 py-1 ring-1 {% if status == key %}bg-slate-800 text-white ring-slate-800 hover:text-white{% else %}bg-white text-slate-600 ring-slate-200 hover:bg-slate-50{% endif %}">{% if st %}{{ st.name }}{% else %}ไม่ระบุสถานะ{% endif %} <span class="{% if status == key %}text-slate-300{% else %}text-slate-400{% endif %}">{{ n }}</span></a>
-  {% endfor %}
-</div>
 <form method="post" action="{% url 'issue_start' %}" id="queue-form">{% csrf_token %}
 <input type="hidden" name="next" value="{{ request.get_full_path }}">
 {% if can_issue %}
@@ -74,7 +69,7 @@
 {% endif %}
 <div class="table-wrap">
   <table class="table">
-    <thead><tr>{% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="queue-all" aria-label="เลือกทั้งหมด"></th>{% endif %}<th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th>สถานะคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th><th>ผู้รับผิดชอบ</th><th></th></tr></thead>
+    <thead><tr>{% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="queue-all" aria-label="เลือกทั้งหมด"></th>{% endif %}<th class="whitespace-nowrap">เลขรับแจ้ง</th><th class="whitespace-nowrap">ผู้เสียหาย</th><th class="whitespace-nowrap">เบอร์โทร</th><th class="whitespace-nowrap">ประเภทคดี</th><th class="whitespace-nowrap">สถานะคดี</th><th class="whitespace-nowrap text-center">โทร (ครั้ง)</th><th class="whitespace-nowrap">ผลการโทรล่าสุด</th><th></th></tr></thead>
     <tbody>
     {% for a in page %}
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
@@ -89,13 +84,13 @@
         <td class="text-sm">
           {% if a.last_outcome %}<span class="badge {% if a.last_reached %}badge-green{% else %}badge-amber{% endif %}">{{ a.get_last_outcome_display }}</span>
           <div class="text-xs text-slate-400">{{ a.last_call_at|thai_date:"datetime" }}</div>{% else %}<span class="text-slate-300">–</span>{% endif %}
+          {% if a.assignee %}<div class="text-xs text-slate-400">ผู้รับผิดชอบ {{ a.assignee.first_name|default:a.assignee.username }}</div>{% endif %}
           {% if a.callback_at and not a.is_done %}<div class="text-xs {% if a.callback_due %}font-semibold text-amber-700{% else %}text-slate-500{% endif %}">โทรกลับ {{ a.callback_at|thai_date:"datetime" }}</div>{% endif %}
         </td>
-        <td class="text-sm">{% if a.assignee %}{{ a.assignee.first_name|default:a.assignee.username }}{% else %}<span class="text-slate-300">–</span>{% endif %}</td>
         <td class="text-right">{% if a.is_done %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
       </tr>
     {% empty %}
-      <tr><td colspan="10" class="py-16 text-center">
+      <tr><td colspan="9" class="py-16 text-center">
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">{% icon "check" "h-6 w-6" %}</div>
         <div class="font-medium text-slate-700">ไม่มีรายการในแท็บนี้</div>
         <div class="text-sm text-slate-500">คดีที่ยังไม่สิ้นสุดจะขึ้นในรายการนี้เองหลังนำเข้าทะเบียนคดี</div>
