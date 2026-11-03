@@ -127,13 +127,20 @@ def test_export_zip_with_envelopes(setup_signers, admin_user):
     job.summonses.set(created)
     final = run_export(job)
     names = zipfile.ZipFile(final).namelist()
-    assert len(names) == 12  # 3 x (summons + envelope) x (docx + pdf)
+    assert len(names) == 6  # 3 people x (docx + pdf), summons + envelope in one file each
     s = created[0]
-    assert f"{s.case.receipt_no}_{s.recipient_name.replace(' ', '')}_หมายเรียกครั้งที่1.docx" in names
-    env = [n for n in names if n.endswith("_ซอง.docx")][0]
+    stem = f"{s.case.receipt_no}_{' '.join(s.recipient_name.split())}"
+    assert f"{stem}.docx" in names and f"{stem}.pdf" in names
     with zipfile.ZipFile(final) as zf:
-        zf.extract(env, Path(final).parent / "x")
-    text = docx_engine.document_text(Path(final).parent / "x" / env)
+        zf.extract(f"{stem}.docx", Path(final).parent / "x")
+        zf.extract(f"{stem}.pdf", Path(final).parent / "x")
+    text = docx_engine.document_text(Path(final).parent / "x" / f"{stem}.docx")
+    assert s.case.receipt_no in text or "หมายเรียก" in text
+    pages = PdfReader(str(Path(final).parent / "x" / f"{stem}.pdf")).pages
+    single = len(PdfReader(str(__import__("apps.documents.services", fromlist=["x"]).ensure_pdf(s))).pages)
+    assert len(pages) == single + 1  # summons pages, then the envelope
+    first, last = pages[0].mediabox, pages[-1].mediabox
+    assert first.height > first.width and last.width > last.height  # A4 portrait summons, landscape envelope
     assert "กรุณาส่ง" in text and "{" not in text
 
 

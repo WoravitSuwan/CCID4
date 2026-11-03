@@ -90,6 +90,12 @@ class Summons(models.Model):
         safe_name = "".join(ch for ch in self.recipient_name if ch not in '\\/:*?"<>|').replace(" ", "")
         return f"{self.case.receipt_no}_{safe_name}_หมายเรียกครั้งที่{self.number}"
 
+    def person_filename(self) -> str:
+        """File name for the per-person export: เลขรับแจ้ง_ชื่อ (+ _ครั้งที่n from the 2nd summons on)."""
+        name = " ".join("".join(ch for ch in self.recipient_name if ch not in '\\/:*?"<>|').split())
+        stem = f"{self.case.receipt_no}_{name}" if name else self.case.receipt_no
+        return stem if self.number <= 1 else f"{stem}_ครั้งที่{self.number}"
+
 
 class ExportFormat(models.TextChoices):
     PDF = "pdf", "PDF"
@@ -98,8 +104,8 @@ class ExportFormat(models.TextChoices):
 
 
 class ExportMode(models.TextChoices):
-    MERGED = "merged", "รวมเป็นไฟล์เดียว"
-    ZIP = "zip", "แยกรายคนใส่ ZIP"
+    ZIP = "zip", "แยกไฟล์รายคน (ชื่อไฟล์ เลขรับแจ้ง_ชื่อ)"
+    MERGED = "merged", "รวมทุกคนเป็นไฟล์เดียว"
 
 
 class JobStatus(models.TextChoices):
@@ -114,7 +120,7 @@ class ExportJob(models.Model):
     format = models.CharField("รูปแบบ", max_length=10, choices=ExportFormat.choices,
                               default=ExportFormat.PDF)
     mode = models.CharField("การรวมไฟล์", max_length=10, choices=ExportMode.choices,
-                            default=ExportMode.MERGED)
+                            default=ExportMode.ZIP)
     include_summons = models.BooleanField("หมายเรียก", default=True)
     include_envelope = models.BooleanField("ใบจ่าหน้าซอง", default=False)
     status = models.CharField(max_length=10, choices=JobStatus.choices, default=JobStatus.PENDING)

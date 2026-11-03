@@ -12,7 +12,7 @@
   <div class="card grid gap-4 md:grid-cols-3">
     <div><span class="label">{{ form.format.label }}</span>{% for r in form.format %}<label class="flex items-center gap-2 text-sm">{{ r.tag }} {{ r.choice_label }}</label>{% endfor %}</div>
     <div><span class="label">{{ form.mode.label }}</span>{% for r in form.mode %}<label class="flex items-center gap-2 text-sm">{{ r.tag }} {{ r.choice_label }}</label>{% endfor %}
-      <span class="helptext">รวมไฟล์เดียว: ขึ้นหน้าใหม่ทุกคน แปลงเป็น PDF ครั้งเดียว (เร็ว) · แยกรายคน: ตั้งชื่อไฟล์ เลขรับแจ้ง_ชื่อ_หมายเรียกครั้งที่n</span></div>
+      <span class="helptext">แยกรายคน: 1 คน = 1 ไฟล์ (หมายเรียกตามด้วยใบจ่าหน้าซอง) ชื่อไฟล์เช่น C6800087109_นายประเสริฐ ศรีสมมติ.docx ดาวน์โหลดเป็น ZIP · รวมไฟล์เดียว: ทุกคนต่อกันในไฟล์เดียว เหมาะกับสั่งพิมพ์ทีเดียว</span></div>
     <div><span class="label">เอกสาร</span>
       <label class="flex items-center gap-2 text-sm">{{ form.include_summons }} {{ form.include_summons.label }}</label>
       <label class="flex items-center gap-2 text-sm">{{ form.include_envelope }} {{ form.include_envelope.label }} (A4 หน้าละ 1 ผู้รับ)</label></div>

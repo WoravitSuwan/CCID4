@@ -337,7 +337,7 @@ class ExportForm(StyledForm):
     format = forms.ChoiceField(label="รูปแบบไฟล์", choices=ExportFormat.choices, widget=forms.RadioSelect,
                                initial=ExportFormat.PDF)
     mode = forms.ChoiceField(label="การรวมไฟล์", choices=ExportMode.choices, widget=forms.RadioSelect,
-                             initial=ExportMode.MERGED)
+                             initial=ExportMode.ZIP)
     include_summons = forms.BooleanField(label="หมายเรียก", required=False, initial=True)
     include_envelope = forms.BooleanField(label="ใบจ่าหน้าซอง", required=False, initial=True)
 

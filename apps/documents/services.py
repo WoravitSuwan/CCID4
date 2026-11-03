@@ -359,6 +359,29 @@ def _ensure_section_break_at_end(doc):
     ppr.append(new_sect)
 
 
+PAGE_SETUP_TAGS = ("pgSz", "pgMar", "cols", "docGrid")
+
+
+def _copy_page_setup(src, dst):
+    """Give the last section of `dst` the page size/orientation/margins of `src`.
+
+    docxcompose keeps the master's final section properties, so an appended
+    landscape envelope would otherwise print portrait like the summons before it.
+    """
+    from docx.oxml.ns import qn
+
+    src_sect = src.element.body.find(qn("w:sectPr"))
+    dst_sect = dst.element.body.find(qn("w:sectPr"))
+    if src_sect is None or dst_sect is None:
+        return
+    for tag in PAGE_SETUP_TAGS:
+        new = src_sect.find(qn(f"w:{tag}"))
+        old = dst_sect.find(qn(f"w:{tag}"))
+        if new is not None and old is not None:  # replace in place: keeps the schema order
+            old.addprevious(copy.deepcopy(new))
+            dst_sect.remove(old)
+
+
 def merge_docx(paths, out_path) -> Path:
     """Concatenate .docx files (each starting on a new page) with docxcompose."""
     from docx import Document
@@ -372,7 +395,9 @@ def merge_docx(paths, out_path) -> Path:
     composer = Composer(master)
     for p in paths[1:]:
         _ensure_section_break_at_end(composer.doc)
-        composer.append(Document(str(p)))
+        part = Document(str(p))
+        composer.append(part)
+        _copy_page_setup(part, composer.doc)
     composer.save(str(out_path))
     return Path(out_path)
 
@@ -398,6 +423,7 @@ def run_export(job: ExportJob):
         ExportJob.objects.filter(pk=job.pk).update(done=job.done)
 
     summons_files, envelope_files = [], []
+    by_summons: dict[int, dict[str, Path]] = {}
     for s in summonses:
         base = s.base_filename()
         if job.include_summons:
@@ -405,12 +431,14 @@ def run_export(job: ExportJob):
             dst.parent.mkdir(exist_ok=True)
             shutil.copyfile(ensure_docx(s), dst)
             summons_files.append(dst)
+            by_summons.setdefault(s.pk, {})["summons"] = dst
             tick()
         if job.include_envelope:
             dst = work / "docx" / f"{base}_ซอง.docx"
             dst.parent.mkdir(exist_ok=True)
             render_envelope(s, dst, env_tpl)
             envelope_files.append(dst)
+            by_summons.setdefault(s.pk, {})["envelope"] = dst
             tick()
 
     outputs: list[Path] = []
@@ -428,7 +456,19 @@ def run_export(job: ExportJob):
         if want_docx:
             outputs += merged
     else:
-        files = summons_files + envelope_files
+        # one file per person (summons + envelope together), named เลขรับแจ้ง_ชื่อ
+        files, used = [], set()
+        per_person = work / "per_person"
+        per_person.mkdir()
+        for s in summonses:
+            stem = s.person_filename()
+            n = 2
+            while stem in used:  # never overwrite inside the ZIP
+                stem = f"{s.person_filename()}_{n}"
+                n += 1
+            used.add(stem)
+            parts = [p for p in (by_summons[s.pk].get("summons"), by_summons[s.pk].get("envelope")) if p]
+            files.append(merge_docx(parts, per_person / f"{stem}.docx"))
         tick()
         if want_pdf:
             outputs += convert_many(files, work / "pdf")
