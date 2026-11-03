@@ -73,9 +73,18 @@ class Summons(models.Model):
     result = models.CharField("ผล", max_length=20, choices=SummonsResult.choices,
                               default=SummonsResult.ISSUED, db_index=True)
     result_note = models.CharField("หมายเหตุผล", max_length=500, blank=True)
+    # proof of sending: Thai Post EMS / registered-mail tracking number (S10, e.g. EB123456785TH)
+    ems_number = models.CharField("เลข EMS", max_length=13, blank=True, db_index=True)
+    ems_at = models.DateTimeField("บันทึกเลข EMS เมื่อ", null=True, blank=True)
+    ems_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                               verbose_name="ผู้บันทึกเลข EMS", related_name="+")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
                                    verbose_name="ผู้กดออกหมาย", related_name="+")
     created_at = models.DateTimeField("เวลาสร้าง", auto_now_add=True)
+
+    @property
+    def ems_tracking_url(self) -> str:
+        return f"https://track.thailandpost.co.th/?trackNumber={self.ems_number}" if self.ems_number else ""
 
     class Meta:
         ordering = ["-created_at"]

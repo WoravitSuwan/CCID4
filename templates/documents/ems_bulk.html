@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% load ui %}
+{% block title %}บันทึกเลข EMS{% endblock %}
+{% block content %}
+<div class="mb-3"><a href="{% url 'summons_list' %}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} หมายเรียกที่ออก</a></div>
+<div class="page-header"><div><h1>บันทึกเลข EMS หลายรายการ</h1>
+  <p class="page-sub">วางรายการ บรรทัดละ 1 ฉบับ: เลขรับแจ้ง ตามด้วยเลข EMS (คัดลอกจาก Excel 2 คอลัมน์ได้เลย)</p></div></div>
+<div class="grid gap-5 lg:grid-cols-2">
+  <form method="post" class="card space-y-3">{% csrf_token %}
+    <textarea name="lines" rows="12" class="input font-mono text-sm" placeholder="C660611953	EB123456785TH&#10;C660611966	EB123456794TH">{{ request.POST.lines }}</textarea>
+    <p class="text-xs text-slate-500">ระบบตรวจเลขตรวจสอบของเลข EMS ทุกเลข ถ้าเลขรับแจ้งมีหมายหลายครั้ง จะบันทึกให้ครั้งล่าสุดที่ยังไม่มีเลข EMS</p>
+    <button class="btn btn-primary">{% icon "check" "h-4 w-4" %} บันทึก</button>
+  </form>
+  {% if rows %}
+  <div class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead><tr><th>เลขรับแจ้ง</th><th>เลข EMS</th><th>ผล</th></tr></thead>
+      <tbody>{% for r in rows %}
+        <tr class="{% if r.error %}bg-red-50{% endif %}"><td class="font-mono">{{ r.receipt|default:"-" }}{% if r.number %} <span class="text-xs text-slate-400">ครั้งที่ {{ r.number }}</span>{% endif %}</td>
+          <td class="font-mono">{{ r.ems|default:"-" }}</td>
+          <td class="text-sm">{% if r.error %}<span class="text-red-700">{{ r.error }}</span>{% else %}<span class="badge badge-green">บันทึกแล้ว</span>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

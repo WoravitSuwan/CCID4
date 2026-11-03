@@ -140,7 +140,7 @@ def test_export_zip_with_envelopes(setup_signers, admin_user):
     single = len(PdfReader(str(__import__("apps.documents.services", fromlist=["x"]).ensure_pdf(s))).pages)
     assert len(pages) == single + 1  # summons pages, then the envelope
     first, last = pages[0].mediabox, pages[-1].mediabox
-    assert first.height > first.width and last.width > last.height  # A4 portrait summons, landscape envelope
+    assert first.height > first.width and last.height > last.width  # summons and envelope both A4 portrait
     assert "กรุณาส่ง" in text and "{" not in text
 
 

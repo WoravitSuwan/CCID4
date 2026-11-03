@@ -144,7 +144,7 @@
 <div class="table-wrap mt-5">
   <div class="flex items-center gap-2 px-5 py-4">{% icon "document" "h-5 w-5 text-slate-400" %}<h2>ประวัติหมายเรียก</h2></div>
   <table class="table">
-    <thead><tr><th>ครั้งที่</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>ผล</th><th>ไฟล์</th></tr></thead>
+    <thead><tr><th>ครั้งที่</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>ผล</th><th>เลข EMS</th><th>ไฟล์</th></tr></thead>
     <tbody>
     {% for s in summonses %}
       <tr>
@@ -159,6 +159,7 @@
           </form>
           {% else %}{{ s.get_result_display }}{% endif %}
         </td>
+        <td>{% include "documents/_ems_cell.html" %}</td>
         <td class="whitespace-nowrap">{% if pdf_available %}<a class="btn btn-sm" href="{% url 'summons_view' s.pk %}?back={{ request.path|urlencode }}">ดู / พิมพ์</a>{% endif %} <a class="btn btn-sm" href="{% url 'summons_docx' s.pk %}">Word</a></td>
       </tr>
     {% empty %}<tr><td colspan="7" class="py-8 text-center text-slate-500">ยังไม่เคยออกหมายเรียก</td></tr>{% endfor %}

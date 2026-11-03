@@ -33,7 +33,7 @@ def test_view_and_print_exported_pdfs(client, admin_user, job):
     assert one["Content-Type"] == "application/pdf" and "inline" in one["Content-Disposition"]
     assert one["X-Frame-Options"] == "SAMEORIGIN"  # shown in our own page, not on other sites
     pages = PdfReader(io.BytesIO(one.content)).pages
-    assert pages[-1].mediabox.width > pages[-1].mediabox.height  # the envelope page is landscape
+    assert all(p.mediabox.height > p.mediabox.width for p in pages)  # one paper direction: A4 portrait
     both = client.get(f"/exports/{job.pk}/print-all/")
     assert len(PdfReader(io.BytesIO(both.content)).pages) == 2 * len(pages)
     assert client.get(f"/exports/{job.pk}/file/9/").status_code == 404

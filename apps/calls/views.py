@@ -239,7 +239,7 @@ def call_case(request, pk):
         "outcomes_reached": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c in REACHED],
         "outcomes_not": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c not in REACHED],
         "next_pk": _next_case(request, case.pk),
-        "summonses": case.summonses.select_related("issuer").order_by("-number"),
+        "summonses": case.summonses.select_related("issuer", "ems_by").order_by("-number"),
         "can_issue": perms.can_issue_for_case(request.user, case),
         "issue_blockers": case.issue_blockers(),
         "address_form": address_form(case, prefix=ADDRESS_PREFIX), "override": case.get_override(),

@@ -1,20 +1,22 @@
-{% extends "base.html" %}{% load thai %}
+{% extends "base.html" %}{% load thai ui %}
 {% block title %}หมายเรียก{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>หมายเรียกที่ออกแล้ว</h1><p class="page-sub">{{ page.paginator.count }} ฉบับ · เลือกรายการเพื่อส่งออกหรือพิมพ์ซ้ำ</p></div></div>
-<form method="get" class="card mb-4 grid grid-cols-2 gap-3 md:grid-cols-6">
+<div class="page-header"><div><h1>หมายเรียกที่ออกแล้ว</h1><p class="page-sub">{{ page.paginator.count }} ฉบับ · เลือกรายการเพื่อส่งออกหรือพิมพ์ซ้ำ · ใส่เลข EMS เมื่อส่งไปรษณีย์แล้ว</p></div>
+  <a class="btn ml-auto" href="{% url 'summons_ems_bulk' %}">{% icon "envelope" "h-4 w-4" %} บันทึกเลข EMS หลายรายการ</a></div>
+<form method="get" class="card mb-4 grid grid-cols-2 gap-3 md:grid-cols-7">
   <input class="input md:col-span-2" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ">
   <select name="result" class="input"><option value="">ทุกผล</option>{% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  <select name="ems" class="input"><option value="">EMS: ทั้งหมด</option><option value="no" {% if request.GET.ems == "no" %}selected{% endif %}>ยังไม่มีเลข EMS</option><option value="yes" {% if request.GET.ems == "yes" %}selected{% endif %}>ส่งแล้ว (มีเลข EMS)</option></select>
   <select name="issuer" class="input"><option value="">ผู้ลงนามทุกคน</option>{% for i in issuers %}<option value="{{ i.pk }}" {% if request.GET.issuer == i.pk|stringformat:"s" %}selected{% endif %}>{{ i }}</option>{% endfor %}</select>
   <input class="input" type="date" name="from" value="{{ request.GET.from }}" title="ออกหมายตั้งแต่">
   <input class="input" type="date" name="to" value="{{ request.GET.to }}" title="ถึง">
-  <div class="flex gap-2 md:col-span-6"><button class="btn btn-primary">ค้นหา</button><a class="btn" href="{% url 'summons_list' %}">ล้าง</a></div>
+  <div class="flex gap-2 md:col-span-7"><button class="btn btn-primary">ค้นหา</button><a class="btn" href="{% url 'summons_list' %}">ล้าง</a></div>
 </form>
 <form method="get" action="{% url 'export_new' %}">
   <div class="mb-2"><button class="btn btn-primary">ส่งออกรายการที่เลือก</button></div>
   <div class="card overflow-x-auto p-0">
   <table class="table">
-    <thead><tr><th><input type="checkbox" class="h-4 w-4" onclick="document.querySelectorAll('.s-cb').forEach(c=>c.checked=this.checked)"></th><th>เลขรับแจ้ง</th><th>ครั้งที่</th><th>ผู้ถูกเรียก</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>ผล</th><th>ไฟล์</th></tr></thead>
+    <thead><tr><th><input type="checkbox" class="h-4 w-4" onclick="document.querySelectorAll('.s-cb').forEach(c=>c.checked=this.checked)"></th><th>เลขรับแจ้ง</th><th>ครั้งที่</th><th>ผู้ถูกเรียก</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>ผล</th><th>เลข EMS</th><th>ไฟล์</th></tr></thead>
     <tbody>
     {% for s in page %}
       <tr>
@@ -23,12 +25,23 @@
         <td>{{ s.number }}</td><td>{{ s.recipient_name }}</td><td>{{ s.issue_date|thai_date }}</td>
         <td class="whitespace-nowrap">{{ s.appointment_at|thai_date:"datetime" }}</td><td>{{ s.issuer }}</td><td>{{ s.created_by.display_name|default:"-" }}</td>
         <td><span class="badge {% if s.result == 'attended' %}badge-green{% elif s.result == 'absent' %}badge-red{% elif s.result == 'cancelled' %}badge-gray{% else %}badge-blue{% endif %}">{{ s.get_result_display }}</span></td>
+        <td>{% include "documents/_ems_cell.html" %}</td>
         <td class="whitespace-nowrap">{% if pdf_available %}<a href="{% url 'summons_view' s.pk %}?back={{ request.get_full_path|urlencode }}">ดู / พิมพ์</a> · {% endif %}<a href="{% url 'summons_docx' s.pk %}">Word</a></td>
       </tr>
-    {% empty %}<tr><td colspan="10" class="text-slate-500">ยังไม่มีหมายเรียก</td></tr>{% endfor %}
+    {% empty %}<tr><td colspan="11" class="text-slate-500">ยังไม่มีหมายเรียก</td></tr>{% endfor %}
     </tbody>
   </table>
   </div>
 </form>
 {% include "_pagination.html" %}
+<script>
+// barcode scanner / keyboard: after saving one EMS number jump to the next empty box
+document.body.addEventListener("htmx:afterSwap", (e) => {
+  const cell = e.target.closest ? e.target : null;
+  if (!cell || !cell.classList || !cell.classList.contains("ems-cell") || cell.querySelector(".text-red-600")) return;
+  const boxes = [...document.querySelectorAll(".ems-input")];
+  const next = boxes.find((b) => b.compareDocumentPosition(cell) & Node.DOCUMENT_POSITION_PRECEDING);
+  if (next) next.focus();
+});
+</script>
 {% endblock %}

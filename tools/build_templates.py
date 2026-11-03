@@ -325,12 +325,75 @@ def build_envelope_official():
     print(f"wrote {out}")
 
 
+def build_envelope_official_portrait():
+    """A4 portrait version of the government envelope (same paper direction as the summons).
+
+    Top half = envelope face: Garuda + sender (top left), '(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)' and
+    the postage-permit box (top right), 'กรุณาส่ง' + recipient below; dashed fold/cut line at half page.
+    """
+    import io
+    import zipfile
+
+    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_ROW_HEIGHT_RULE
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    garuda = zipfile.ZipFile(OUT / "summons_template_v2.docx").read("word/media/image1.png")
+    doc = Document()
+    sec = doc.sections[0]
+    sec.orientation = WD_ORIENT.PORTRAIT
+    sec.page_width, sec.page_height = Cm(21.0), Cm(29.7)
+    sec.top_margin, sec.bottom_margin = Cm(1.0), Cm(1.0)
+    sec.left_margin, sec.right_margin = Cm(1.2), Cm(1.2)
+    normal = doc.styles["Normal"]
+    normal.font.name = ENVELOPE_FONT
+    normal.font.size = Pt(14)
+    fonts = normal.element.get_or_add_rPr().find(qn("w:rFonts"))
+    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+        fonts.set(qn(attr), ENVELOPE_FONT)
+
+    # outer frame = envelope face: upper half of the sheet, dashed bottom edge = fold/cut line
+    outer = _fixed_table(doc, [18.6])
+    row = outer.rows[0]
+    row.height = Cm(13.8)
+    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST  # never clip the address; the line moves down if needed
+    _borders(outer._tbl.tblPr, "w:tblBorders", bottom=("dashed", 8))
+    face = row.cells[0]
+
+    header = _fixed_table(face, [2.3, 9.3, 6.8])
+    c_logo, c_sender, c_right = header.rows[0].cells
+    c_logo.paragraphs[0].add_run().add_picture(io.BytesIO(garuda), height=Cm(2.0))
+    _cell_para(c_sender, "{ชื่อหน่วย}", 15, bold=True, first=True)
+    _cell_para(c_sender, "{ที่อยู่หน่วย}", 15, bold=True)
+    _cell_para(c_right, "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)", 14, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER,
+               first=True)
+    box = _fixed_table(c_right, [6.4])
+    c_box = box.rows[0].cells[0]
+    _cell_para(c_box, "{ใบอนุญาตฝากส่ง}", 14, align=WD_ALIGN_PARAGRAPH.CENTER, first=True)
+    c_box.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    _borders(c_box._tc.get_or_add_tcPr(), "w:tcBorders",
+             top=("single", 8), left=("single", 8), bottom=("single", 8), right=("single", 8))
+    _cell_para(c_right, "", 6)  # Word needs a paragraph after a nested table
+
+    # recipient: right part of the face
+    _cell_para(face, "กรุณาส่ง", 18, bold=True, space_before=30, indent_cm=7.0)
+    _cell_para(face, "{ชื่อผู้แจ้ง}", 18, space_before=6, indent_cm=7.0)
+    _cell_para(face, "{ที่อยู่หลายบรรทัด}", 18, indent_cm=7.0)
+    _cell_para(face, "{รหัสไปรษณีย์}", 18, indent_cm=7.0)
+
+    doc.core_properties.title = "ใบจ่าหน้าซองราชการ (A4 แนวตั้ง)"
+    doc.core_properties.author = ""
+    out = OUT / "envelope_official_portrait.docx"
+    doc.save(str(out))
+    print(f"wrote {out}")
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "summons":
         build_summons(Path(sys.argv[2]))
     elif len(sys.argv) >= 2 and sys.argv[1] == "envelope":
         build_envelope()
         build_envelope_official()
+        build_envelope_official_portrait()
     else:
         print(__doc__)
         raise SystemExit(2)

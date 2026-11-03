@@ -88,6 +88,7 @@
           <span class="badge badge-blue">ครั้งที่ {{ s.number }}</span>
           <span>นัด {{ s.appointment_at|thai_date:"datetime" }}</span>
           <span class="text-xs text-slate-500">ผู้ลงนาม {{ s.issuer }}</span>
+          <div class="w-full">{% include "documents/_ems_cell.html" %}</div>
           <span class="ml-auto whitespace-nowrap">{% if pdf_available %}<a class="btn btn-sm" href="{% url 'summons_view' s.pk %}?back={{ request.path|urlencode }}">ดู / พิมพ์</a> {% endif %}<a class="btn btn-sm" href="{% url 'summons_docx' s.pk %}">Word</a></span>
         </li>
         {% empty %}<li class="text-slate-500">ยังไม่เคยออกหมายเรียก</li>{% endfor %}

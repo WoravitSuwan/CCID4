@@ -43,7 +43,9 @@ BUNDLED_TEMPLATES = [
     (TemplateKind.SUMMONS, 1, "แบบฟอร์มเดิม (วันนัด +14)", "summons_template_sanitized.docx", False),
     (TemplateKind.SUMMONS, 2, "แบบฟอร์มเวอร์ชันใหม่ (วัน/เดือน/ปีนัด ครบ)", "summons_template_v2.docx", True),
     (TemplateKind.ENVELOPE, 1, "ใบจ่าหน้าซอง A4 แนวตั้ง (แบบง่าย)", "envelope_template.docx", False),
-    (TemplateKind.ENVELOPE, 2, "ใบจ่าหน้าซองราชการ A4 แนวนอน (ครุฑ + กรอบฝากส่ง)", "envelope_official.docx", True),
+    (TemplateKind.ENVELOPE, 2, "ใบจ่าหน้าซองราชการ A4 แนวนอน (ครุฑ + กรอบฝากส่ง)", "envelope_official.docx", False),
+    (TemplateKind.ENVELOPE, 3, "ใบจ่าหน้าซองราชการ A4 แนวตั้ง (ครุฑ + กรอบฝากส่ง)", "envelope_official_portrait.docx",
+     True),
 ]
 
 

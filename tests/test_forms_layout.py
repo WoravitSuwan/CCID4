@@ -52,7 +52,8 @@ def test_bundled_templates_registered_and_labels_shown(setup_signers):
     active_summons = DocTemplate.active("summons")
     assert active_summons.version == 2 and active_summons.show_hidden_text
     env = DocTemplate.active("envelope")
-    assert env.version == 2
+    assert env.version == 3  # government envelope on A4 portrait (v2 landscape stays selectable)
+    assert DocTemplate.objects.filter(kind="envelope", version=2).exists()
     assert {"ชื่อหน่วย", "ที่อยู่หน่วย", "ใบอนุญาตฝากส่ง", "ชื่อผู้แจ้ง", "ที่อยู่หลายบรรทัด",
             "รหัสไปรษณีย์"} <= set(env.placeholders)
 

@@ -279,7 +279,7 @@ def _own_summonses(request, qs):
 def summons_list(request):
     if not perms.can_export(request.user):
         raise PermissionDenied
-    qs = _own_summonses(request, Summons.objects.select_related("case", "issuer", "created_by"))
+    qs = _own_summonses(request, Summons.objects.select_related("case", "issuer", "created_by", "ems_by"))
     result = request.GET.get("result")
     if result in SummonsResult.values:
         qs = qs.filter(result=result)
@@ -289,6 +289,11 @@ def summons_list(request):
     q = request.GET.get("q", "").strip()
     if q:
         qs = qs.filter(case__receipt_no__icontains=q.replace(" ", "")) | qs.filter(recipient_name__icontains=q)
+    sent = request.GET.get("ems")
+    if sent == "yes":
+        qs = qs.exclude(ems_number="")
+    elif sent == "no":
+        qs = qs.filter(ems_number="")
     date_from = request.GET.get("from")
     if date_from:
         qs = qs.filter(issue_date__gte=date_from)
@@ -299,6 +304,92 @@ def summons_list(request):
     return render(request, "documents/summons_list.html", {
         "page": page, "results": SummonsResult.choices, "issuers": Investigator.objects.all(),
     })
+
+
+# --------------------------------------------------------------------------- EMS number (proof of sending)
+def _save_ems(request, summons, raw) -> str:
+    """Validate and save; returns an error message ('' = saved). An empty value removes the number."""
+    from . import ems
+
+    old = summons.ems_number
+    if not (raw or "").strip():
+        if old:
+            summons.ems_number, summons.ems_at, summons.ems_by = "", None, None
+            summons.save(update_fields=["ems_number", "ems_at", "ems_by"])
+            log(request, AuditAction.EDIT, summons,
+                f"ลบเลข EMS {old} ของหมายเรียก {summons.case.receipt_no} ครั้งที่ {summons.number}")
+        return ""
+    number, error = ems.validate(raw)
+    if error:
+        return error
+    other = Summons.objects.filter(ems_number=number).exclude(pk=summons.pk).select_related("case").first()
+    if other:
+        return f"เลข {number} ใช้กับหมายเรียก {other.case.receipt_no} ครั้งที่ {other.number} แล้ว"
+    if number != old:
+        summons.ems_number, summons.ems_at, summons.ems_by = number, timezone.now(), request.user
+        summons.save(update_fields=["ems_number", "ems_at", "ems_by"])
+        log(request, AuditAction.EDIT, summons, f"บันทึกเลข EMS {number} ของหมายเรียก {summons.case.receipt_no} "
+                                               f"ครั้งที่ {summons.number}" + (f" (เดิม {old})" if old else ""))
+    return ""
+
+
+@require_POST
+def summons_ems(request, pk):
+    summons = get_object_or_404(Summons.objects.select_related("case", "ems_by"), pk=pk)
+    if not perms.can_access_summons(request.user, summons):
+        raise PermissionDenied
+    # each row's box has its own name: the list puts every box inside one form and htmx sends them all
+    raw = request.POST.get(f"ems_{summons.pk}", request.POST.get("ems", ""))
+    error = _save_ems(request, summons, raw)
+    if request.headers.get("HX-Request"):
+        summons.refresh_from_db()
+        return render(request, "documents/_ems_cell.html", {"s": summons, "ems_error": error, "ems_value": raw})
+    if error:
+        messages.error(request, f"{summons.case.receipt_no}: {error}")
+    else:
+        messages.success(request, f"บันทึกเลข EMS ของ {summons.case.receipt_no} แล้ว")
+    back = request.POST.get("next", "")
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    if not url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
+        back = reverse("summons_list")
+    return redirect(back)
+
+
+def summons_ems_bulk(request):
+    """Paste 'เลขรับแจ้ง เลข EMS' lines (e.g. from the post office receipt) to record many at once."""
+    import re
+
+    if not perms.can_export(request.user):
+        raise PermissionDenied
+    rows = []
+    if request.method == "POST":
+        for line in request.POST.get("lines", "").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            receipt = re.search(r"[LWTC]\d{5,12}", line.upper())
+            rest = line.upper().replace(receipt.group(0), " ") if receipt else line
+            number = re.search(r"[A-Z]{2}[\s\-]?\d[\d\s\-]{7,12}[A-Z]{2}", rest)
+            row = {"line": line, "receipt": receipt.group(0) if receipt else "", "ems": "", "error": ""}
+            rows.append(row)
+            if not receipt or not number:
+                row["error"] = "ไม่พบเลขรับแจ้งหรือเลข EMS ในบรรทัดนี้"
+                continue
+            qs = _own_summonses(request, Summons.objects.filter(case__receipt_no=receipt.group(0))).order_by(
+                "-number").select_related("case")
+            summons = qs.filter(ems_number="").first() or qs.first()
+            if summons is None:
+                row["error"] = "ไม่พบหมายเรียกของเลขรับแจ้งนี้"
+                continue
+            row["error"] = _save_ems(request, summons, number.group(0))
+            row["ems"] = summons.ems_number if not row["error"] else number.group(0)
+            row["number"] = summons.number
+        ok = sum(1 for r in rows if not r["error"])
+        if rows:
+            (messages.success if ok == len(rows) else messages.warning)(
+                request, f"บันทึกเลข EMS แล้ว {ok} จาก {len(rows)} รายการ")
+    return render(request, "documents/ems_bulk.html", {"rows": rows})
 
 
 def _summons_file(request, pk, kind):

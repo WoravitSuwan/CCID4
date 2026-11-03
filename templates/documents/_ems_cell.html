@@ -1,0 +1,23 @@
+{% load thai %}{# no <form> here: this cell sits inside the list's export form #}<div class="ems-cell min-w-[11rem]">
+{% if s.ems_number and not ems_error %}
+  <a href="{{ s.ems_tracking_url }}" target="_blank" rel="noopener noreferrer" class="font-mono text-sm font-medium" title="ติดตามพัสดุที่ไปรษณีย์ไทย">{{ s.ems_number }}</a>
+  <div class="text-[11px] text-slate-400">{{ s.ems_by.display_name|default:"-" }} · {{ s.ems_at|thai_date:"datetime" }}</div>
+  <details class="text-[11px]"><summary class="cursor-pointer text-slate-400 hover:text-slate-700">แก้ / ลบ</summary>
+    <div class="mt-1 flex gap-1">
+      <input name="ems_{{ s.pk }}" value="{{ s.ems_number }}" class="input w-36 py-1 font-mono text-xs uppercase" maxlength="20" aria-label="เลข EMS"
+             hx-post="{% url 'summons_ems' s.pk %}" hx-trigger="keydown[key=='Enter']" hx-target="closest .ems-cell" hx-swap="outerHTML"
+             onkeydown="if(event.key==='Enter')event.preventDefault()">
+      <button type="button" class="btn btn-sm" hx-post="{% url 'summons_ems' s.pk %}" hx-include="previous input" hx-target="closest .ems-cell" hx-swap="outerHTML">บันทึก</button>
+    </div>
+    <span class="text-slate-400">เว้นว่างแล้วกดบันทึก = ลบเลข</span>
+  </details>
+{% else %}
+  <div class="flex gap-1">
+    <input name="ems_{{ s.pk }}" value="{{ ems_value|default:'' }}" class="ems-input input w-36 py-1 font-mono text-xs uppercase {% if ems_error %}ring-red-400{% endif %}" maxlength="20" placeholder="เลข EMS" aria-label="เลข EMS" autocomplete="off"
+           hx-post="{% url 'summons_ems' s.pk %}" hx-trigger="keydown[key=='Enter']" hx-target="closest .ems-cell" hx-swap="outerHTML"
+           onkeydown="if(event.key==='Enter')event.preventDefault()">
+    <button type="button" class="btn btn-sm" hx-post="{% url 'summons_ems' s.pk %}" hx-include="previous input" hx-target="closest .ems-cell" hx-swap="outerHTML">บันทึก</button>
+  </div>
+  {% if ems_error %}<div class="mt-0.5 max-w-[14rem] text-[11px] text-red-600">{{ ems_error }}</div>{% endif %}
+{% endif %}
+</div>

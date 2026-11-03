@@ -183,7 +183,7 @@ def _case_or_404(pk):
 def case_detail(request, pk):
     case = _case_or_404(pk)
     override = case.get_override()
-    summonses = case.summonses.select_related("issuer", "created_by").order_by("-number")
+    summonses = case.summonses.select_related("issuer", "created_by", "ems_by").order_by("-number")
     can_edit = perms.can_edit_case(request.user, case)
     form = address_form(case) if can_edit else None
     return render(request, "registry/case_detail.html", {
