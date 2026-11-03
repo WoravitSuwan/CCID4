@@ -122,7 +122,7 @@
 
 <div class="card mt-5">
   <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>การติดต่อผู้เสียหายทางโทรศัพท์</h2>
-    <span class="text-sm text-slate-500">{% if call_assignment %}ผู้รับผิดชอบ: {{ call_assignment.assignee.display_name }}{% if call_assignment.is_done %} · <span class="text-emerald-700">เสร็จแล้ว</span>{% endif %}{% else %}ยังไม่ได้มอบหมาย{% endif %}</span>
+    <span class="text-sm text-slate-500">{% if call_assignment %}ผู้รับผิดชอบ: {{ call_assignment.assignee.display_name|default:"ยังไม่มี" }}{% if call_assignment.is_done %} · <span class="text-emerald-700">เสร็จแล้ว</span>{% endif %}{% else %}ยังไม่ได้มอบหมาย{% endif %}</span>
     {% if can_record_call %}<a class="btn btn-sm btn-primary ml-auto" href="{% url 'call_case' case.pk %}">{% icon "pencil" "h-4 w-4" %} บันทึกผลการโทร</a>{% endif %}
   </div>
   {% if calls %}

@@ -28,12 +28,13 @@ from apps.registry.address_edit import address_form, save_address
 from apps.registry.forms import StyledForm
 from apps.registry.models import Case, Status
 
-from .models import REACHED, SHORT_LABELS, CallAssignment, CallAttachment, CallAttempt, CallOutcome
+from .models import OPEN_LOCK_MINUTES, REACHED, SHORT_LABELS, CallAssignment, CallAttachment, CallAttempt, CallOutcome
 from .services import (
     ALLOWED_EXTENSIONS,
     assign,
     case_phones,
     check_attachments,
+    ensure_call_pool,
     parse_receipt_list,
     record_call,
     save_attachments,
@@ -52,26 +53,33 @@ def call_staff():
 
 # --------------------------------------------------------------------------- queue
 def _queue(request):
-    qs = CallAssignment.objects.select_related("case", "case__complainant", "case__status", "assignee")
-    if perms.is_outsource(request.user):
-        qs = qs.filter(assignee=request.user)
-    elif not perms.can_manage_calls(request.user):
+    """The shared call list: every open case (plus closed ones that were called), for all call staff."""
+    if not (perms.is_outsource(request.user) or perms.can_manage_calls(request.user)):
         raise PermissionDenied
-    else:
-        assignee = request.GET.get("assignee")
-        if assignee and assignee.isdigit():
-            qs = qs.filter(assignee_id=assignee)
+    ensure_call_pool()
+    qs = CallAssignment.objects.select_related("case", "case__complainant", "case__status", "assignee",
+                                               "opened_by")
+    who = request.GET.get("assignee", "")
+    if who == "me":
+        qs = qs.filter(assignee=request.user)
+    elif who == "none":
+        qs = qs.filter(assignee__isnull=True)
+    elif who.isdigit():
+        qs = qs.filter(assignee_id=who)
     return qs
+
+
+OPEN_CASE = Q(case__status__isnull=True) | Q(case__status__is_final=False)
 
 
 def _apply_tab(qs, tab):
     now = timezone.now()
     if tab == "todo":
-        return qs.filter(is_done=False).filter(Q(callback_at__isnull=True) | Q(callback_at__lte=now))
+        return qs.filter(OPEN_CASE, is_done=False).filter(Q(callback_at__isnull=True) | Q(callback_at__lte=now))
     if tab == "callback":
-        return qs.filter(is_done=False, callback_at__isnull=False)
+        return qs.filter(OPEN_CASE, is_done=False, callback_at__isnull=False)
     if tab == "never":
-        return qs.filter(attempt_count=0)
+        return qs.filter(OPEN_CASE, attempt_count=0)
     if tab == "done":
         return qs.filter(is_done=True)
     return qs
@@ -103,8 +111,8 @@ def queue(request):
     }
     per_staff = []
     if perms.can_manage_calls(request.user):
-        rows = (CallAssignment.objects.values("assignee", "assignee__first_name", "assignee__last_name",
-                                              "assignee__username")
+        rows = (CallAssignment.objects.filter(assignee__isnull=False)
+                .values("assignee", "assignee__first_name", "assignee__last_name", "assignee__username")
                 .annotate(total=Count("pk"), done=Count("pk", filter=Q(is_done=True)),
                           never=Count("pk", filter=Q(attempt_count=0)))
                 .order_by("assignee__first_name"))
@@ -112,7 +120,8 @@ def queue(request):
     page = Paginator(_ordered(qs), 50).get_page(request.GET.get("page"))
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
-        "staff": call_staff() if perms.can_manage_calls(request.user) else [],
+        "staff": call_staff(),
+        "lock_minutes": OPEN_LOCK_MINUTES,
         "can_manage": perms.can_manage_calls(request.user),
         "can_issue": perms.can_issue_any(request.user),
     })
@@ -143,7 +152,9 @@ class CallForm(StyledForm):
 
 
 def _next_case(request, current_pk):
-    qs = _ordered(_apply_tab(_queue(request), "todo")).exclude(case_id=current_pk)
+    """Next case to call - skipping ones another staff member has open right now."""
+    busy = Q(opened_at__gte=timezone.now() - dt.timedelta(minutes=OPEN_LOCK_MINUTES)) & ~Q(opened_by=request.user)
+    qs = _ordered(_apply_tab(_queue(request), "todo")).exclude(case_id=current_pk).exclude(busy)
     nxt = qs.first()
     return nxt.case_id if nxt else None
 
@@ -168,6 +179,7 @@ def call_case(request, pk):
                                   called_at=d["called_at"], callback_at=d["callback_at"],
                                   appointment_at=d["appointment_at"])
             saved = save_attachments(attempt, files, request.user)
+        CallAssignment.objects.filter(case=case, opened_by=request.user).update(opened_at=None)  # done with it
         log(request, AuditAction.CALL, case, f"{case.receipt_no}: {attempt.register_text()}"
             + (f" (แนบไฟล์ {len(saved)} ไฟล์: {', '.join(a.original_name for a in saved)})" if saved else ""))
         messages.success(request, f"บันทึกผลการโทรครั้งที่ {attempt.number} แล้ว"
@@ -179,8 +191,14 @@ def call_case(request, pk):
             messages.info(request, "ไม่มีคดีที่ต้องโทรเหลือในรายการแล้ว")
             return redirect("calls_queue")
         return redirect("call_case", pk=case.pk)
-    assignment = CallAssignment.objects.filter(case=case).select_related("assignee").first()
+    assignment = CallAssignment.objects.filter(case=case).select_related("assignee", "opened_by").first()
+    if assignment is None:
+        assignment = CallAssignment.objects.create(case=case)
+    busy_with = assignment.opened_by_other(request.user)
+    if request.method == "GET" and not busy_with:  # mark "I have this case open" for the others
+        CallAssignment.objects.filter(pk=assignment.pk).update(opened_by=request.user, opened_at=timezone.now())
     return render(request, "calls/call.html", {
+        "busy_with": busy_with, "busy_since": assignment.opened_at if busy_with else None,
         "case": case, "form": form, "phones": phones, "assignment": assignment,
         "attempts": case.calls.select_related("created_by").prefetch_related("attachments__uploaded_by"),
         "reached": REACHED,

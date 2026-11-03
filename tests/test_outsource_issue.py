@@ -80,20 +80,18 @@ def test_caller_waits_for_signer_import_then_issues(client, caller, admin_user):
     assert [s.pk for s in client.get("/summons/").context["page"]] == [summons.pk]
 
 
-def test_caller_bulk_issue_from_queue_only_own_cases(client, caller):
+def test_caller_bulk_issue_from_shared_queue(client, caller):
     own = list(CallAssignment.objects.filter(assignee=caller).values_list("case_id", flat=True))
-    other = Case.objects.not_final().exclude(pk__in=own).first()
     for inv in Investigator.objects.all():
         inv.rank_full, inv.position, inv.phone = "พันตำรวจโท", "สว.", "081"
         inv.save()
+    other = [c.pk for c in Case.objects.not_final().exclude(pk__in=own) if not c.issue_blockers()][:1]
+    assert other  # a case nobody was assigned
     queue = client.get("/calls/").content.decode()
     assert 'name="case_ids"' in queue and "ออกหมายเรียก (" in queue
-    client.post("/summons/issue/start/", {"case_ids": own + [other.pk]})
+    client.post("/summons/issue/start/", {"case_ids": own + other})
     plan = client.get("/summons/issue/").context["plan"]
-    ok = {i.case.pk for i in plan.ok_items}
-    assert ok <= set(own) and other.pk not in ok
-    blocked = [i for i in plan.blocked_items if i.case.pk == other.pk][0]
-    assert any("ไม่มีสิทธิ์" in p for p in blocked.problems)
+    assert {i.case.pk for i in plan.ok_items} == set(own + other)  # no assignment needed
 
 
 def test_caller_cannot_edit_signers(client, caller):

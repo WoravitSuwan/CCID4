@@ -2,8 +2,8 @@
 {% block title %}มอบหมายงานโทร{% endblock %}
 {% block content %}
 <a href="{% url 'calls_queue' %}" class="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} ติดต่อผู้เสียหาย</a>
-<div class="page-header"><div><h1>มอบหมายเลขรับแจ้งให้เจ้าหน้าที่โทร</h1>
-  <p class="page-sub">วางรายการ case id (เลขรับแจ้ง) ที่ต้องการให้เจ้าหน้าที่ outsource โทรติดต่อผู้เสียหาย</p></div></div>
+<div class="page-header"><div><h1>กำหนดผู้รับผิดชอบคดี (ไม่บังคับ)</h1>
+  <p class="page-sub">เจ้าหน้าที่ทุกคนเห็นคดีที่ยังไม่สิ้นสุดทั้งหมดอยู่แล้ว ใช้หน้านี้เฉพาะเมื่ออยากแบ่งงานล่วงหน้า: วางเลขรับแจ้งแล้วเลือกผู้รับผิดชอบ</p></div></div>
 <div class="grid gap-5 lg:grid-cols-3">
   <form method="post" class="card space-y-4 lg:col-span-2">{% csrf_token %}
     <div><label class="label" for="id_receipts">{{ form.receipts.label }}</label>{{ form.receipts }}{{ form.receipts.errors }}

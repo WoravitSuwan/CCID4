@@ -48,13 +48,14 @@ def test_caller_fixes_address_from_call_page(client, caller):
     assert "แก้เองโดย" in page and "99/1" in page
 
 
-def test_caller_cannot_edit_unassigned_case(client, caller):
-    case = incomplete_case()
-    assert client.post(f"/calls/{case.pk}/address/", ADDRESS).status_code == 403
-    assert not AddressOverride.objects.filter(receipt_no=case.receipt_no).exists()
+def test_caller_edits_any_case_but_not_from_the_case_page(client, caller):
+    case = incomplete_case()  # not assigned to anyone: shared call list
+    assert client.post(f"/calls/{case.pk}/address/", ADDRESS).status_code == 302
+    assert AddressOverride.objects.get(receipt_no=case.receipt_no).updated_by == caller
+    other = Case.objects.not_final().exclude(pk=case.pk).filter(complainant__isnull=False).first()
     # the admin-only endpoint on the case page stays closed to call staff
-    client.post(f"/cases/{case.pk}/address/", {k.removeprefix("addr-"): v for k, v in ADDRESS.items()})
-    assert not AddressOverride.objects.filter(receipt_no=case.receipt_no).exists()
+    client.post(f"/cases/{other.pk}/address/", {k.removeprefix("addr-"): v for k, v in ADDRESS.items()})
+    assert not AddressOverride.objects.filter(receipt_no=other.receipt_no).exists()
 
 
 def test_admin_case_page_still_saves_address(client, imported, admin_user):

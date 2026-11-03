@@ -70,6 +70,9 @@ def record_call(case: Case, user, *, outcome: str, phone: str = "", note: str = 
     )
     assignment, _ = CallAssignment.objects.get_or_create(
         case=case, defaults={"assignee": user, "assigned_by": user})
+    if assignment.assignee_id is None and getattr(user, "is_authenticated", False):
+        assignment.assignee = user  # first caller takes the case
+
     assignment.attempt_count = number
     assignment.last_call_at = attempt.called_at
     assignment.last_outcome = outcome
@@ -117,3 +120,12 @@ def save_attachments(attempt: CallAttempt, files, user) -> list[CallAttachment]:
             attempt=attempt, case_id=attempt.case_id, file=f, original_name=name, size=f.size,
             uploaded_by=user if getattr(user, "is_authenticated", False) else None))
     return saved
+
+
+def ensure_call_pool() -> int:
+    """Put every open case on the shared call list (no assignment needed). Returns how many were added."""
+    missing = Case.objects.not_final().filter(call_assignment__isnull=True).values_list("pk", flat=True)
+    new = [CallAssignment(case_id=pk, assignee=None) for pk in missing.iterator()]
+    CallAssignment.objects.bulk_create(new, batch_size=1000, ignore_conflicts=True)
+    return len(new)
+

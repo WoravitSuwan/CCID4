@@ -4,12 +4,12 @@
 <div class="page-header">
   <div>
     <h1>{% if is_outsource %}รายการคดีที่ต้องโทร{% else %}ติดต่อผู้เสียหาย{% endif %}</h1>
-    <p class="page-sub">{% if is_outsource %}คดีที่ได้รับมอบหมายให้คุณโทรติดต่อผู้เสียหาย{% else %}ติดตามผลการโทรของเจ้าหน้าที่ outsource{% endif %}</p>
+    <p class="page-sub">คดีที่ยังไม่สิ้นสุดทุกคดี เจ้าหน้าที่ทุกคนใช้รายการเดียวกัน ใครโทรคดีไหนก่อนจะเป็นผู้รับผิดชอบคดีนั้น</p>
   </div>
   {% if can_manage %}
   <div class="ml-auto flex flex-wrap gap-2">
     <a class="btn" href="{% url 'calls_export' %}">{% icon "download" "h-4 w-4" %} ส่งออกผลการโทร (Excel)</a>
-    <a class="btn btn-primary" href="{% url 'calls_assign' %}">{% icon "plus" "h-4 w-4" %} มอบหมายเลขรับแจ้ง</a>
+    <a class="btn" href="{% url 'calls_assign' %}">{% icon "users" "h-4 w-4" %} กำหนดผู้รับผิดชอบ (ไม่บังคับ)</a>
   </div>
   {% endif %}
 </div>
@@ -44,10 +44,10 @@
   </nav>
   <form method="get" class="ml-auto flex gap-2">
     <input type="hidden" name="tab" value="{{ tab }}">
-    {% if can_manage %}
-    <select name="assignee" class="input w-auto py-1.5" onchange="this.form.submit()"><option value="">เจ้าหน้าที่ทุกคน</option>
+    <select name="assignee" class="input w-auto py-1.5" onchange="this.form.submit()" aria-label="ผู้รับผิดชอบ"><option value="">ผู้รับผิดชอบ: ทุกคน</option>
+      {% if is_outsource %}<option value="me" {% if request.GET.assignee == "me" %}selected{% endif %}>ของฉัน</option>{% endif %}
+      <option value="none" {% if request.GET.assignee == "none" %}selected{% endif %}>ยังไม่มีผู้รับผิดชอบ</option>
       {% for u in staff %}<option value="{{ u.pk }}" {% if request.GET.assignee == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}</select>
-    {% endif %}
     <div class="relative"><span class="pointer-events-none absolute left-3 top-2 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
       <input class="input w-56 py-1.5 pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ / เบอร์"></div>
   </form>
@@ -63,13 +63,14 @@
 {% endif %}
 <div class="table-wrap">
   <table class="table">
-    <thead><tr>{% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="queue-all" aria-label="เลือกทั้งหมด"></th>{% endif %}<th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th>สถานะคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th>{% if can_manage %}<th>ผู้รับผิดชอบ</th>{% endif %}<th></th></tr></thead>
+    <thead><tr>{% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="queue-all" aria-label="เลือกทั้งหมด"></th>{% endif %}<th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทร</th><th>ประเภทคดี</th><th>สถานะคดี</th><th class="text-center">โทรแล้ว</th><th>ผลล่าสุด</th><th>ผู้รับผิดชอบ</th><th></th></tr></thead>
     <tbody>
     {% for a in page %}
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
         {% if can_issue %}<td><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
-        <td class="whitespace-nowrap"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div></td>
-        <td class="font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
+        <td class="whitespace-nowrap"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div>
+          {% with other=a|opened_by_other:user %}{% if other %}<span class="badge badge-amber mt-1" title="{{ other.display_name }} เปิดคดีนี้อยู่">{% icon "phone" "h-3 w-3" %} {{ other.first_name|default:other.username }} กำลังเปิดอยู่</span>{% endif %}{% endwith %}</td>
+        <td class="min-w-[10rem] font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
         <td class="whitespace-nowrap font-mono">{{ a.case.victim_phone|default:a.case.complainant.phone|default:"-" }}</td>
         <td class="max-w-[14rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
         <td class="whitespace-nowrap">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}</td>
@@ -79,14 +80,14 @@
           <div class="text-xs text-slate-400">{{ a.last_call_at|thai_date:"datetime" }}</div>{% else %}<span class="text-slate-300">–</span>{% endif %}
           {% if a.callback_at and not a.is_done %}<div class="text-xs {% if a.callback_due %}font-semibold text-amber-700{% else %}text-slate-500{% endif %}">โทรกลับ {{ a.callback_at|thai_date:"datetime" }}</div>{% endif %}
         </td>
-        {% if can_manage %}<td class="whitespace-nowrap text-sm">{{ a.assignee.display_name }}</td>{% endif %}
+        <td class="text-sm">{% if a.assignee %}{{ a.assignee.first_name|default:a.assignee.username }}{% else %}<span class="text-slate-300">–</span>{% endif %}</td>
         <td class="text-right">{% if a.is_done %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
       </tr>
     {% empty %}
       <tr><td colspan="10" class="py-16 text-center">
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">{% icon "check" "h-6 w-6" %}</div>
         <div class="font-medium text-slate-700">ไม่มีรายการในแท็บนี้</div>
-        {% if can_manage %}<div class="text-sm text-slate-500"><a href="{% url 'calls_assign' %}">มอบหมายเลขรับแจ้ง</a> ให้เจ้าหน้าที่โทร</div>{% endif %}
+        <div class="text-sm text-slate-500">คดีที่ยังไม่สิ้นสุดจะขึ้นในรายการนี้เองหลังนำเข้าทะเบียนคดี</div>
       </td></tr>
     {% endfor %}
     </tbody>

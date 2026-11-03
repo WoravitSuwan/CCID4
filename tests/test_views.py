@@ -182,10 +182,10 @@ def test_issue_flow_via_web(client, setup_signers):
     assert AuditLog.objects.filter(action="download").count() >= 2
 
 
-def test_outsource_cannot_issue_unassigned_case(client, setup_signers):
+def test_outsource_can_issue_any_case_without_assignment(client, setup_signers):
     case = Case.objects.not_final().first()
     login(client, Role.OUTSOURCE)
-    assert client.get(f"/cases/{case.pk}/issue/").status_code == 403
+    assert client.get(f"/cases/{case.pk}/issue/")["Location"] == "/summons/issue/"
 
 
 def test_register_names_become_signers_automatically(client, imported):

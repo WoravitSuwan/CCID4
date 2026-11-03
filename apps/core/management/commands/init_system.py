@@ -23,6 +23,11 @@ class Command(BaseCommand):
         linked = link_register_names()
         if linked:
             self.stdout.write(f"สร้าง/ผูกผู้ลงนามให้ชื่อพนักงานสอบสวนในทะเบียน {linked} ชื่อ")
+        from apps.calls.services import ensure_call_pool
+
+        pooled = ensure_call_pool()
+        if pooled:
+            self.stdout.write(f"เพิ่มคดีที่ยังไม่สิ้นสุดเข้ารายการโทร {pooled} คดี")
         created = ensure_default_templates()
         for tpl in created:
             self.stdout.write(f"เพิ่มแบบฟอร์ม: {tpl}")

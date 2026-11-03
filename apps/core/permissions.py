@@ -2,8 +2,9 @@
 
 Two roles only:
   ผู้ดูแลระบบ (admin): everything - import, register, issue, export, calls, settings
-  เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): for the cases assigned to them only - record calls,
-      issue summonses (choosing the signer's rank/position) and download/export those summonses
+  เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): every case on the shared call list - record calls, fix the
+      address, change the status, issue summonses and download/export them. No register, import,
+      settings or full national ID.
 """
 from functools import wraps
 
@@ -30,14 +31,6 @@ def is_outsource(user) -> bool:
 can_import = can_export_register = can_manage_settings = can_manage_calls = is_admin
 
 
-def is_assigned(user, case) -> bool:
-    """The case is on this outsource caller's list."""
-    from apps.calls.models import CallAssignment
-
-    return bool(user and user.is_authenticated and case is not None
-                and CallAssignment.objects.filter(case_id=case.pk, assignee_id=user.pk).exists())
-
-
 def can_issue_any(user) -> bool:
     return is_admin(user) or is_outsource(user)
 
@@ -46,8 +39,13 @@ def can_export(user) -> bool:
     return is_admin(user) or is_outsource(user)
 
 
+def can_work_on_case(user, case) -> bool:
+    """Call staff work from one shared list: any case, no assignment needed."""
+    return case is not None and (is_admin(user) or is_outsource(user))
+
+
 def can_issue_for_case(user, case) -> bool:
-    return is_admin(user) or (is_outsource(user) and is_assigned(user, case))
+    return can_work_on_case(user, case)
 
 
 def can_edit_case(user, case) -> bool:
@@ -60,18 +58,11 @@ def can_view_full_id(user, case) -> bool:
 
 
 def can_access_summons(user, summons) -> bool:
-    if is_admin(user):
-        return True
-    return is_outsource(user) and (summons.created_by_id == user.pk or is_assigned(user, summons.case))
+    return is_admin(user) or is_outsource(user)
 
 
 def can_record_call(user, case) -> bool:
-    if is_admin(user):
-        return True
-    if is_outsource(user):
-        assignment = getattr(case, "call_assignment", None)
-        return bool(assignment and assignment.assignee_id == user.pk)
-    return False
+    return can_work_on_case(user, case)
 
 
 def require(check):
@@ -90,11 +81,11 @@ def require(check):
 
 
 def can_change_status(user, case) -> bool:
-    """Admins, and call staff for the cases on their call list."""
-    return is_admin(user) or can_record_call(user, case)
+    """Admins and call staff (from the call page)."""
+    return can_work_on_case(user, case)
 
 
 def can_access_attachment(user, attachment) -> bool:
-    """See/download a call attachment: admins and the assigned call staff of that case."""
-    return is_admin(user) or can_record_call(user, attachment.case)
+    """See/download a call attachment: admins and call staff (never anonymous users)."""
+    return can_work_on_case(user, attachment.case)
 

@@ -92,3 +92,9 @@ def signer_datalists():
     female_first = [r for r in ranks if r.endswith("หญิง")] + [r for r in ranks if not r.endswith("หญิง")]
     return {"ranks": ranks, "ranks_female": female_first,
             "positions": RememberedValue.suggestions(RememberedValue.POSITION)}
+
+
+@register.filter
+def opened_by_other(assignment, user):
+    """Who else has this call-list case open right now (None if nobody / me)."""
+    return assignment.opened_by_other(user) if assignment is not None else None

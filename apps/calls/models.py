@@ -1,4 +1,6 @@
 """Phone follow-up of victims by (outsourced) call staff."""
+import datetime as dt
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -41,13 +43,19 @@ CLOSING = {CallOutcome.APPOINTED, CallOutcome.INFO, CallOutcome.NOT_PROCEED, Cal
            CallOutcome.WRONG, CallOutcome.UNKNOWN_PERSON}
 
 
+OPEN_LOCK_MINUTES = 10  # "someone has this case open" warning lasts this long
+
+
 class CallAssignment(models.Model):
-    """A case given to a call-staff member to phone the victim."""
+    """A case on the shared call list (every open case is on it).
+
+    The assignee is optional: the first caller becomes responsible, or an admin may assign one.
+    """
 
     case = models.OneToOneField("registry.Case", on_delete=models.CASCADE, related_name="call_assignment",
                                 verbose_name="คดี")
-    assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="call_assignments",
-                                 verbose_name="ผู้รับผิดชอบโทร")
+    assignee = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+                                 related_name="call_assignments", verbose_name="ผู้รับผิดชอบโทร")
     assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
                                     related_name="+", verbose_name="ผู้มอบหมาย")
     assigned_at = models.DateTimeField("มอบหมายเมื่อ", default=timezone.now)
@@ -57,13 +65,24 @@ class CallAssignment(models.Model):
     last_call_at = models.DateTimeField("โทรล่าสุด", null=True, blank=True)
     last_outcome = models.CharField("ผลล่าสุด", max_length=30, choices=CallOutcome.choices, blank=True)
     attempt_count = models.PositiveIntegerField("จำนวนครั้งที่โทร", default=0)
+    opened_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name="+", verbose_name="เปิดดูล่าสุดโดย")
+    opened_at = models.DateTimeField("เปิดดูล่าสุดเมื่อ", null=True, blank=True)
 
     class Meta:
         verbose_name = "การมอบหมายโทร"
         verbose_name_plural = "การมอบหมายโทร"
 
     def __str__(self):
-        return f"{self.case.receipt_no} → {self.assignee}"
+        return f"{self.case.receipt_no} → {self.assignee or '-'}"
+
+    def opened_by_other(self, user):
+        """Another staff member opened this case in the last few minutes (probably on the phone now)."""
+        if not self.opened_by_id or self.opened_by_id == getattr(user, "pk", None) or not self.opened_at:
+            return None
+        if timezone.now() - self.opened_at > dt.timedelta(minutes=OPEN_LOCK_MINUTES):
+            return None
+        return self.opened_by
 
     @property
     def last_reached(self) -> bool:

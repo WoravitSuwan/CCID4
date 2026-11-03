@@ -144,11 +144,10 @@ def test_export_zip_with_envelopes(setup_signers, admin_user):
     assert "กรุณาส่ง" in text and "{" not in text
 
 
-def test_outsource_cannot_issue_via_service(setup_signers):
+def test_outsource_can_issue_any_open_case_via_service(setup_signers):
     user = User.objects.create_user("call9", password="x" * 10, role=Role.OUTSOURCE)
     plan = plan_issue(user, issuable_cases()[:2], opts())
-    assert not plan.ok_items
-    assert all(any("ไม่มีสิทธิ์" in p for p in item.problems) for item in plan.blocked_items)
+    assert len(plan.ok_items) == 2  # shared call list: no assignment needed
 
 
 def test_unlinked_investigator_blocks(setup_signers, admin_user):

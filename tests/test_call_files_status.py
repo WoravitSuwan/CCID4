@@ -90,15 +90,12 @@ def test_attachments_are_private(client, caller, admin_user):
     case = own_case(caller)
     record(client, case, [SimpleUploadedFile("a.png", PNG, "image/png")])
     att = CallAttachment.objects.get()
+    client.logout()
+    assert client.get(f"/calls/attachments/{att.pk}/").status_code == 302  # login required
     other = User.objects.create_user("caller6", password="pass12345", role=Role.OUTSOURCE)
-    client.force_login(other)
-    assert client.get(f"/calls/attachments/{att.pk}/").status_code == 403
+    client.force_login(other)  # shared call list: other call staff can open it, but not delete it
+    assert client.get(f"/calls/attachments/{att.pk}/").status_code == 200
     assert client.post(f"/calls/attachments/{att.pk}/delete/").status_code == 403
-    other_case = Case.objects.exclude(pk=case.pk).first()
-    CallAssignment.objects.create(case=other_case, assignee=other)
-    attempt = CallAttempt.objects.get(case=case)
-    assert client.post(f"/calls/{case.pk}/calls/{attempt.pk}/attach/",
-                       {"attachments": [SimpleUploadedFile("b.png", PNG)]}).status_code == 403
     client.force_login(admin_user)  # admins see them on the case page too
     assert "a.png" in client.get(f"/cases/{case.pk}/").content.decode()
     assert client.get(f"/calls/attachments/{att.pk}/").status_code == 200
@@ -116,6 +113,9 @@ def test_caller_changes_case_status(client, caller):
     assert case.status == final and case.status_manual_by == caller
     log = AuditLog.objects.get(action="edit", user=caller)
     assert final.name in log.detail and "ไม่ประสงค์" in log.detail
-    # not on someone else's case
-    other = Case.objects.exclude(pk=case.pk).first()
-    assert client.post(f"/calls/{other.pk}/status/", {"status": final.pk}).status_code == 403
+    # any case on the shared list, but never from the admin register endpoint
+    other = Case.objects.not_final().exclude(pk=case.pk).first()
+    assert client.post(f"/calls/{other.pk}/status/", {"status": final.pk}).status_code == 302
+    before = Case.objects.exclude(pk__in=[case.pk, other.pk]).not_final().first()
+    client.post(f"/cases/{before.pk}/status/", {"status": final.pk})
+    assert Case.objects.get(pk=before.pk).status != final

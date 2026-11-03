@@ -47,14 +47,20 @@ def test_bulk_assign_from_register(client, imported, caller, clerk):
     assert CallAssignment.objects.filter(case_id__in=ids, assignee=caller).count() == 3
 
 
-def test_outsource_sees_only_assigned_cases_and_call_pages(client, imported, caller, clerk):
-    mine, other = Case.objects.not_final()[:2]
+def test_outsource_sees_every_open_case_without_assignment(client, imported, caller, clerk):
+    mine = Case.objects.not_final().first()
     CallAssignment.objects.create(case=mine, assignee=caller, assigned_by=clerk)
     client.force_login(caller)
-    page = client.get("/calls/")
-    assert [a.case_id for a in page.context["page"]] == [mine.pk]
-    assert client.get(f"/calls/{mine.pk}/").status_code == 200
-    assert client.get(f"/calls/{other.pk}/").status_code == 403
+    page = client.get("/calls/?tab=all")
+    open_cases = Case.objects.not_final().count()
+    assert page.context["page"].paginator.count == open_cases  # the whole shared list, no assigning needed
+    assert page.context["counts"]["todo"] == open_cases
+    final = Case.objects.final().first()
+    assert final.pk not in [a.case_id for a in client.get("/calls/?tab=todo").context["page"].paginator.object_list]
+    mine_only = client.get("/calls/?tab=all&assignee=me").context["page"]
+    assert [a.case_id for a in mine_only] == [mine.pk]
+    other = Case.objects.not_final().exclude(pk=mine.pk).first()
+    assert client.get(f"/calls/{other.pk}/").status_code == 200
     # admin pages redirect back to the call list (summonses / exports are allowed: they issue too)
     for url in ["/", "/cases/", f"/cases/{mine.pk}/", "/imports/", "/settings/users/"]:
         resp = client.get(url)
@@ -133,3 +139,31 @@ def test_demo_has_call_staff(db, settings):
     bootstrap_demo()
     assert CallAssignment.objects.filter(assignee__username="call1").count() == 20
     assert CallAttempt.objects.count() == 4
+
+
+def test_shared_list_first_caller_takes_the_case_and_busy_warning(client, imported, caller):
+    other = User.objects.create_user("call2b", password="x" * 10, role=Role.OUTSOURCE)
+    client.force_login(caller)
+    first = client.get("/calls/").context["page"][0].case
+    assert CallAssignment.objects.get(case=first).assignee is None  # nobody assigned it
+    page = client.get(f"/calls/{first.pk}/")  # caller opens it
+    nxt = page.context["next_pk"]
+    # the second caller sees that it is open and is warned; "next" skips it
+    client.force_login(other)
+    queue = client.get("/calls/").content.decode()
+    assert "กำลังเปิดอยู่" in queue
+    warn = client.get(f"/calls/{first.pk}/")
+    assert warn.context["busy_with"] == caller and "อาจกำลังโทรอยู่" in warn.content.decode()
+    third = Case.objects.not_final().exclude(pk__in=[first.pk, nxt]).first()
+    assert client.get(f"/calls/{third.pk}/").context["next_pk"] != first.pk
+    # caller records the call: becomes responsible, and the case is released
+    client.force_login(caller)
+    now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    client.post(f"/calls/{first.pk}/", {"outcome": "off", "called_at": now, "go": "stay"})
+    a = CallAssignment.objects.get(case=first)
+    assert a.assignee == caller and a.opened_at is None
+    client.force_login(other)
+    assert client.get(f"/calls/{first.pk}/").context["busy_with"] is None
+    # a later call by someone else does not take it away
+    client.post(f"/calls/{first.pk}/", {"outcome": "info", "called_at": now, "go": "stay"})
+    assert CallAssignment.objects.get(case=first).assignee == caller

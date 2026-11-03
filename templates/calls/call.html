@@ -6,6 +6,9 @@
   {% if next_pk %}<a href="{% url 'call_case' next_pk %}" class="ml-auto inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">ข้ามไปคดีถัดไป {% icon "chevron-right" "h-4 w-4" %}</a>{% endif %}
 </div>
 
+{% if busy_with %}
+<div class="alert alert-warning mb-4">{% icon "alert" "h-5 w-5 shrink-0" %}<div><b>{{ busy_with.display_name }}</b> เปิดคดีนี้อยู่ (ตั้งแต่ {{ busy_since|thai_date:"datetime" }}) อาจกำลังโทรอยู่ — ตรวจประวัติการโทรก่อน เพื่อไม่ให้โทรซ้ำ{% if next_pk %} หรือ <a href="{% url 'call_case' next_pk %}">ข้ามไปคดีถัดไป</a>{% endif %}</div></div>
+{% endif %}
 <div class="grid gap-5 lg:grid-cols-5">
   <!-- case info -->
   <div class="space-y-5 lg:col-span-2">
@@ -30,7 +33,7 @@
         <dt>สถานะคดี</dt><dd>{% if case.status %}<span class="badge {{ case.status|status_class }}">{{ case.status.name }}</span>{% endif %}</dd>
         <dt>หน่วย</dt><dd>{{ case.unit_raw|default:"-" }}</dd>
         <dt>พนักงานสอบสวน</dt><dd>{% if case.investigator %}{{ case.investigator }}{% if case.investigator.phone %}<div class="text-xs text-slate-500">โทร {{ case.investigator.phone }}</div>{% endif %}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %}</dd>
-        {% if assignment %}<dt>ผู้รับผิดชอบโทร</dt><dd>{{ assignment.assignee.display_name }}</dd>{% endif %}
+        <dt>ผู้รับผิดชอบโทร</dt><dd>{{ assignment.assignee.display_name|default:"ยังไม่มี (คนที่โทรก่อนจะเป็นผู้รับผิดชอบ)" }}</dd>
       </dl>
       {% if can_change_status %}
       <form method="post" action="{% url 'call_status' case.pk %}" class="mt-4 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200" id="status-form">{% csrf_token %}

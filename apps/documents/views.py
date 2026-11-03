@@ -270,11 +270,9 @@ def issue_signer(request):
 
 # --------------------------------------------------------------------------- summons list & downloads
 def _own_summonses(request, qs):
-    """Call staff only see summonses they issued or for cases on their call list."""
-    if perms.is_outsource(request.user):
-        from django.db.models import Q
-
-        qs = qs.filter(Q(created_by=request.user) | Q(case__call_assignment__assignee=request.user)).distinct()
+    """Call staff share one call list, so they see every summons (filter 'mine' to narrow it)."""
+    if perms.is_outsource(request.user) and request.GET.get("mine"):
+        qs = qs.filter(created_by=request.user)
     return qs
 
 
