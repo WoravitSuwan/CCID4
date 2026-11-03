@@ -43,8 +43,9 @@ from .services import (
 User = get_user_model()
 DT_WIDGET = forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M")
 ADDRESS_PREFIX = "addr"  # keeps address field ids apart from the call form (both have "note")
-TABS = [("todo", "ต้องโทร"), ("callback", "นัดโทรกลับ"), ("never", "ยังไม่เคยโทร"), ("done", "เสร็จแล้ว"),
-        ("all", "ทั้งหมด")]
+TABS = [("todo", "ต้องโทร"), ("never", "ยังไม่ได้โทร"), ("called", "โทรแล้ว"), ("callback", "นัดโทรกลับ"),
+        ("done", "ติดต่อเสร็จแล้ว"), ("all", "ทั้งหมด")]
+RESULTS = [("reached", "ติดต่อได้ (ทุกแบบ)"), ("not_reached", "ติดต่อไม่ได้ (ทุกแบบ)")]
 
 
 def call_staff():
@@ -80,8 +81,26 @@ def _apply_tab(qs, tab):
         return qs.filter(OPEN_CASE, is_done=False, callback_at__isnull=False)
     if tab == "never":
         return qs.filter(OPEN_CASE, attempt_count=0)
+    if tab == "called":
+        return qs.filter(attempt_count__gt=0)
     if tab == "done":
         return qs.filter(is_done=True)
+    return qs
+
+
+def _apply_filters(request, qs):
+    """Search box, case status and latest call result - kept across tabs."""
+    q = request.GET.get("q", "").strip()
+    if q:
+        qs = qs.filter(Q(case__receipt_no__icontains=q.replace(" ", "")) | Q(case__victim_name__icontains=q)
+                       | Q(case__victim_phone__icontains=q))
+    result = request.GET.get("result", "")
+    if result == "reached":
+        qs = qs.filter(last_outcome__in=REACHED)
+    elif result == "not_reached":
+        qs = qs.filter(attempt_count__gt=0).exclude(last_outcome__in=REACHED)
+    elif result in CallOutcome.values:
+        qs = qs.filter(last_outcome=result)
     return qs
 
 
@@ -95,12 +114,23 @@ def queue(request):
     tab = request.GET.get("tab", "todo")
     if tab not in dict(TABS):
         tab = "todo"
-    qs = _apply_tab(base, tab)
-    q = request.GET.get("q", "").strip()
-    if q:
-        qs = qs.filter(Q(case__receipt_no__icontains=q.replace(" ", "")) | Q(case__victim_name__icontains=q)
-                       | Q(case__victim_phone__icontains=q))
-    counts = {key: _apply_tab(base, key).count() for key, _ in TABS}
+    filtered = _apply_filters(request, base)
+    status = request.GET.get("status", "")
+    if status == "none":
+        by_status = filtered.filter(case__status__isnull=True)
+    elif status.isdigit():
+        by_status = filtered.filter(case__status_id=int(status))
+    else:
+        status, by_status = "", filtered
+    counts = {key: _apply_tab(by_status, key).count() for key, _ in TABS}
+    in_tab = _apply_tab(filtered, tab)
+    # status chips: how many cases of each status are in this tab (with the other filters applied)
+    per_status = dict(in_tab.values_list("case__status").annotate(n=Count("pk")).values_list("case__status", "n"))
+    status_chips = [(str(st.pk), st, per_status.get(st.pk, 0)) for st in Status.objects.all()
+                    if per_status.get(st.pk)]
+    if per_status.get(None):
+        status_chips.append(("none", None, per_status[None]))
+    qs = in_tab if not status else _apply_tab(by_status, tab)
     today = timezone.localdate()
     today_calls = CallAttempt.objects.filter(called_at__date=today)
     if perms.is_outsource(request.user):
@@ -120,6 +150,8 @@ def queue(request):
     page = Paginator(_ordered(qs), 50).get_page(request.GET.get("page"))
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
+        "status": status, "status_chips": status_chips, "status_total": sum(per_status.values()),
+        "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
         "lock_minutes": OPEN_LOCK_MINUTES,
         "can_manage": perms.can_manage_calls(request.user),

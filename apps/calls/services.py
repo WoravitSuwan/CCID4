@@ -123,8 +123,11 @@ def save_attachments(attempt: CallAttempt, files, user) -> list[CallAttachment]:
 
 
 def ensure_call_pool() -> int:
-    """Put every open case on the shared call list (no assignment needed). Returns how many were added."""
-    missing = Case.objects.not_final().filter(call_assignment__isnull=True).values_list("pk", flat=True)
+    """Put every case on the shared call list (no assignment needed). Returns how many were added.
+
+    Closed cases are listed too (tab "ทั้งหมด" / status filter) but never show up as "ต้องโทร".
+    """
+    missing = Case.objects.filter(call_assignment__isnull=True).values_list("pk", flat=True)
     new = [CallAssignment(case_id=pk, assignee=None) for pk in missing.iterator()]
     CallAssignment.objects.bulk_create(new, batch_size=1000, ignore_conflicts=True)
     return len(new)

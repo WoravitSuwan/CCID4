@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <h1>{% if is_outsource %}รายการคดีที่ต้องโทร{% else %}ติดต่อผู้เสียหาย{% endif %}</h1>
-    <p class="page-sub">คดีที่ยังไม่สิ้นสุดทุกคดี เจ้าหน้าที่ทุกคนใช้รายการเดียวกัน ใครโทรคดีไหนก่อนจะเป็นผู้รับผิดชอบคดีนั้น</p>
+    <p class="page-sub">คดีทั้งหมดในทะเบียน แยกตามการโทรและสถานะคดี · เจ้าหน้าที่ทุกคนใช้รายการเดียวกัน ใครโทรคดีไหนก่อนจะเป็นผู้รับผิดชอบคดีนั้น</p>
   </div>
   {% if can_manage %}
   <div class="ml-auto flex flex-wrap gap-2">
@@ -39,11 +39,15 @@
 <div class="mb-3 flex flex-wrap items-center gap-2">
   <nav class="flex flex-wrap gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200/80">
     {% for key, label in tabs %}
-    <a href="?tab={{ key }}{% if request.GET.assignee %}&assignee={{ request.GET.assignee }}{% endif %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if tab == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="{% if tab == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ counts|get_item:key }}</span></a>
+    <a href="?{% query_replace tab=key page="" %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if tab == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="{% if tab == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ counts|get_item:key }}</span></a>
     {% endfor %}
   </nav>
-  <form method="get" class="ml-auto flex gap-2">
+  <form method="get" class="ml-auto flex flex-wrap gap-2">
     <input type="hidden" name="tab" value="{{ tab }}">
+    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <select name="result" class="input w-auto max-w-[13rem] py-1.5" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
+      {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+      {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
     <select name="assignee" class="input w-auto py-1.5" onchange="this.form.submit()" aria-label="ผู้รับผิดชอบ"><option value="">ผู้รับผิดชอบ: ทุกคน</option>
       {% if is_outsource %}<option value="me" {% if request.GET.assignee == "me" %}selected{% endif %}>ของฉัน</option>{% endif %}
       <option value="none" {% if request.GET.assignee == "none" %}selected{% endif %}>ยังไม่มีผู้รับผิดชอบ</option>
@@ -53,6 +57,13 @@
   </form>
 </div>
 
+<div class="mb-3 flex flex-wrap items-center gap-1.5 text-sm">
+  <span class="mr-1 text-slate-500">สถานะคดี:</span>
+  <a href="?{% query_replace status="" page="" %}" class="rounded-full px-3 py-1 ring-1 {% if not status %}bg-slate-800 text-white ring-slate-800 hover:text-white{% else %}bg-white text-slate-600 ring-slate-200 hover:bg-slate-50{% endif %}">ทุกสถานะ <span class="{% if not status %}text-slate-300{% else %}text-slate-400{% endif %}">{{ status_total }}</span></a>
+  {% for key, st, n in status_chips %}
+  <a href="?{% query_replace status=key page="" %}" class="rounded-full px-3 py-1 ring-1 {% if status == key %}bg-slate-800 text-white ring-slate-800 hover:text-white{% else %}bg-white text-slate-600 ring-slate-200 hover:bg-slate-50{% endif %}">{% if st %}{{ st.name }}{% else %}ไม่ระบุสถานะ{% endif %} <span class="{% if status == key %}text-slate-300{% else %}text-slate-400{% endif %}">{{ n }}</span></a>
+  {% endfor %}
+</div>
 <form method="post" action="{% url 'issue_start' %}" id="queue-form">{% csrf_token %}
 <input type="hidden" name="next" value="{{ request.get_full_path }}">
 {% if can_issue %}
@@ -70,9 +81,9 @@
         {% if can_issue %}<td><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
         <td class="whitespace-nowrap"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div>
           {% with other=a|opened_by_other:user %}{% if other %}<span class="badge badge-amber mt-1" title="{{ other.display_name }} เปิดคดีนี้อยู่">{% icon "phone" "h-3 w-3" %} {{ other.first_name|default:other.username }} กำลังเปิดอยู่</span>{% endif %}{% endwith %}</td>
-        <td class="min-w-[10rem] font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
+        <td class="min-w-[9rem] font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
         <td class="whitespace-nowrap font-mono">{{ a.case.victim_phone|default:a.case.complainant.phone|default:"-" }}</td>
-        <td class="max-w-[14rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
+        <td class="max-w-[11rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
         <td class="whitespace-nowrap">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}</td>
         <td class="text-center tabular-nums">{% if a.attempt_count %}{{ a.attempt_count }}{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
         <td class="text-sm">
