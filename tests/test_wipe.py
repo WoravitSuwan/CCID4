@@ -14,7 +14,8 @@ from apps.registry.models import Case, Complainant, Investigator, Status, Unit
 
 pytestmark = pytest.mark.django_db
 
-GOOD = {"confirm": "ลบข้อมูลทั้งหมด", "deleted_by": "ร.ต.ท. ทดสอบ ระบบ", "password": "admin-pass-123"}
+GOOD = {"scope": "all", "confirm": "ลบข้อมูลทั้งหมด", "deleted_by": "ร.ต.ท. ทดสอบ ระบบ",
+        "password": "admin-pass-123"}
 
 
 @pytest.fixture
@@ -27,7 +28,7 @@ def admin(client, imported):
 def test_wipe_needs_phrase_name_and_password(client, admin):
     n = Case.objects.count()
     page = client.get("/settings/wipe/")
-    assert page.status_code == 200 and "จะถูกลบ" in page.content.decode()
+    assert page.status_code == 200 and "ลบเฉพาะหมายเรียกที่ออก" in page.content.decode()
     for bad in ({**GOOD, "confirm": "ลบ"}, {**GOOD, "deleted_by": ""}, {**GOOD, "password": "wrong"}):
         resp = client.post("/settings/wipe/", bad)
         assert resp.status_code == 200 and Case.objects.count() == n
@@ -58,3 +59,23 @@ def test_only_admins_can_wipe(client, imported):
     client.force_login(caller)
     client.post("/settings/wipe/", {**GOOD, "password": "x" * 10})
     assert Case.objects.exists()
+
+
+def test_delete_only_summonses_and_restore_status(client, admin, setup_signers, django_capture_on_commit_callbacks):
+    from apps.documents.models import Summons
+    from apps.documents.services import issue, plan_issue
+    from tests.test_summons import issuable_cases, opts
+
+    cases = issuable_cases()[:2]
+    before = {c.pk: c.status_id for c in cases}
+    created = issue(admin, plan_issue(admin, cases, opts(change_status=True)), opts(change_status=True))
+    assert {Case.objects.get(pk=c.pk).status.name for c in cases} == {"ออกหมายเรียก"}
+    n_cases = Case.objects.count()
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post("/settings/wipe/", {**GOOD, "scope": "summons", "restore_status": "on"})
+    assert resp["Location"] == "/summons/"
+    assert not Summons.objects.exists() and Case.objects.count() == n_cases
+    assert {c.pk: Case.objects.get(pk=c.pk).status_id for c in cases} == before  # back to the file's status
+    assert not Case.objects.filter(pk__in=before, status_manual_at__isnull=False).exists()
+    log = AuditLog.objects.get(action="wipe")
+    assert "ลบหมายเรียกที่ออกทั้งหมด" in log.detail and f"หมายเรียกที่ออก {len(created)}" in log.detail

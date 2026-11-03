@@ -486,6 +486,12 @@ WIPE_PHRASE = "ลบข้อมูลทั้งหมด"
 
 
 class WipeForm(StyledForm):
+    scope = forms.ChoiceField(label="ต้องการลบอะไร", widget=forms.RadioSelect, initial="summons", choices=[
+        ("summons", "เฉพาะหมายเรียกที่ออก (เก็บคดี ข้อมูลผู้แจ้ง และบันทึกการโทรไว้)"),
+        ("all", "ข้อมูลคดีทั้งหมด (เริ่มนำเข้าใหม่ตั้งแต่ต้น)")])
+    restore_status = forms.BooleanField(
+        label="คืนสถานะคดีที่ระบบเปลี่ยนเป็น 'ออกหมายเรียก' ตอนออกหมาย กลับเป็นสถานะเดิม", required=False,
+        initial=True)
     confirm = forms.CharField(label=f'พิมพ์คำว่า "{WIPE_PHRASE}" เพื่อยืนยัน', max_length=50)
     deleted_by = forms.CharField(label="ชื่อ-นามสกุล ผู้ลบข้อมูล", max_length=150)
     password = forms.CharField(label="รหัสผ่านของคุณ", widget=forms.PasswordInput)
@@ -515,17 +521,22 @@ class WipeForm(StyledForm):
 @admin_only
 def wipe(request):
     """Delete every case, import, summons and call record - to start the trial over."""
-    from .wipe import counts, wipe_case_data
+    from .wipe import counts, summons_counts, wipe_case_data, wipe_summonses
 
     form = WipeForm(request.POST or None, user=request.user)
     if request.method == "POST" and form.is_valid():
-        before = wipe_case_data()
+        everything = form.cleaned_data["scope"] == "all"
+        before = wipe_case_data() if everything else wipe_summonses(form.cleaned_data["restore_status"])
         summary = ", ".join(f"{k} {v:,}" for k, v in before.items())
+        what = "ล้างข้อมูลคดีทั้งหมด" if everything else "ลบหมายเรียกที่ออกทั้งหมด"
         log(request, AuditAction.WIPE, None,
-            f"ล้างข้อมูลคดีทั้งหมด โดย {form.cleaned_data['deleted_by']} (บัญชี {request.user.username}): {summary}",
-            deleted_by=form.cleaned_data["deleted_by"], counts=before)
-        messages.success(request, f"ล้างข้อมูลแล้ว ({summary}) — นำเข้าทะเบียนคดีและไฟล์ผู้แจ้งใหม่ได้ที่เมนู นำเข้าข้อมูล")
-        return redirect("import_home")
-    return render(request, "settings/wipe.html", {"form": form, "counts": counts(), "phrase": WIPE_PHRASE,
-                                                  "tab": "wipe"})
+            f"{what} โดย {form.cleaned_data['deleted_by']} (บัญชี {request.user.username}): {summary}",
+            deleted_by=form.cleaned_data["deleted_by"], scope=form.cleaned_data["scope"], counts=before)
+        if everything:
+            messages.success(request, f"ล้างข้อมูลแล้ว ({summary}) — นำเข้าทะเบียนคดีและไฟล์ผู้แจ้งใหม่ได้ที่เมนู นำเข้าข้อมูล")
+            return redirect("import_home")
+        messages.success(request, f"ลบหมายเรียกแล้ว ({summary}) — ออกหมายใหม่ได้ เลขครั้งที่จะเริ่มจาก 1")
+        return redirect("summons_list")
+    return render(request, "settings/wipe.html", {"form": form, "counts": counts(), "summons_counts": summons_counts(),
+                                                  "phrase": WIPE_PHRASE, "tab": "wipe"})
 
