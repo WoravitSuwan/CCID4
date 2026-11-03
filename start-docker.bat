@@ -11,11 +11,13 @@ if errorlevel 1 (
 )
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\make_env.ps1
 if errorlevel 1 ( pause & exit /b 1 )
+set PORT=8000
+for /f "tokens=2 delims==" %%p in ('findstr /b "WEB_PORT=" .env 2^>nul') do set PORT=%%p
 echo Building and starting containers (first time takes several minutes) ...
 docker compose up -d --build
 if errorlevel 1 ( pause & exit /b 1 )
 echo Waiting for the web server ...
-powershell -NoProfile -Command "for($i=0;$i -lt 120;$i++){try{Invoke-WebRequest -UseBasicParsing http://localhost:8000/healthz | Out-Null; exit 0}catch{Start-Sleep 2}}; exit 1"
+powershell -NoProfile -Command "for($i=0;$i -lt 120;$i++){try{Invoke-WebRequest -UseBasicParsing http://localhost:%PORT%/healthz | Out-Null; exit 0}catch{Start-Sleep 2}}; exit 1"
 if errorlevel 1 (
   echo The web server did not start. Showing logs:
   docker compose logs --tail 50 web
@@ -23,6 +25,6 @@ if errorlevel 1 (
   exit /b 1
 )
 type data\admin-password.txt 2>nul
-start "" http://localhost:8000
-echo System is running at http://localhost:8000   (stop: docker compose down)
+start "" http://localhost:%PORT%
+echo System is running at http://localhost:%PORT%   (stop: docker compose down)
 pause
