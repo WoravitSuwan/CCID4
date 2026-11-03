@@ -1,5 +1,4 @@
 import pytest
-from django.urls import reverse
 
 from apps.accounts.models import Role, User
 from apps.core.models import AuditLog
@@ -189,14 +188,15 @@ def test_outsource_cannot_issue(client, setup_signers):
     assert client.post("/summons/issue/start/", {"case_ids": [case.pk]})["Location"] == "/calls/"
 
 
-def test_alias_linking(client, imported):
-    from apps.registry.models import InvestigatorAlias
+def test_register_names_become_signers_automatically(client, imported):
+    """Like the real register: names differing only by spacing or a leading 'หญิง' are one person."""
+    from apps.registry.models import Investigator, InvestigatorAlias
 
+    assert InvestigatorAlias.objects.count() == 4  # 5 spellings in the file, 2 differ only by spaces
+    assert not InvestigatorAlias.objects.filter(investigator__isnull=True).exists()
+    assert Investigator.objects.count() == 3  # 'หญิง สุดา รักษ์ทดสอบ' and 'สุดา  รักษ์ทดสอบ' are the same signer
+    sudas = InvestigatorAlias.objects.filter(raw_name__contains="สุดา")
+    assert sudas.count() == 2 and len({a.investigator_id for a in sudas}) == 1
+    assert sudas.first().investigator.sign_name == "สุดา รักษ์ทดสอบ" and sudas.first().investigator.is_female
     login(client, Role.ADMIN)
-    page = client.get("/settings/investigators/")
-    unlinked = page.context["unlinked"]
-    assert len(unlinked) == 4  # 5 spellings, 2 differ only by spaces
-    first = unlinked[0]
-    resp = client.post(reverse("settings_alias_link", args=[first.pk]), {"investigator": "new"})
-    assert resp.status_code == 302
-    assert InvestigatorAlias.objects.get(pk=first.pk).investigator is not None
+    assert client.get("/settings/investigators/").context["unlinked"] == []

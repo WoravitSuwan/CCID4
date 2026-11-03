@@ -93,12 +93,24 @@ def issue_start(request):
         messages.error(request, "ยังไม่ได้เลือกคดี")
         return redirect(request.POST.get("next") or "case_list")
     request.session[SESSION_CASES] = ids
+    for key in (SESSION_OPTS, SESSION_EXCLUDED):
+        request.session.pop(key, None)
     return redirect("issue_form")
+
+
+SESSION_OPTS = "issue_options"
+SESSION_EXCLUDED = "issue_excluded"
+OPTION_FIELDS = ["issue_date", "appointment_date", "start_time", "stagger", "reason", "template", "thai_digits",
+                 "change_status"]
 
 
 def _selected_cases(request):
     ids = request.session.get(SESSION_CASES) or []
-    excluded = {int(i) for i in request.POST.getlist("exclude") if i.isdigit()}
+    if request.method == "POST":
+        excluded = {int(i) for i in request.POST.getlist("exclude") if i.isdigit()}
+        request.session[SESSION_EXCLUDED] = sorted(excluded)
+    else:
+        excluded = set(request.session.get(SESSION_EXCLUDED) or [])
     qs = (Case.objects.filter(pk__in=ids).exclude(pk__in=excluded)
           .select_related("status", "unit", "complainant", "investigator_alias__investigator"))
     return list(qs), excluded
@@ -118,11 +130,14 @@ def issue_form(request):
         "start_time": "09:00", "reason": settings_row.default_reason, "thai_digits": True,
     }
     form = IssueForm(request.POST or None, initial=initial)
+    saved = request.session.get(SESSION_OPTS)
     if request.method == "GET":
-        form = IssueForm(initial={**initial, "template": DocTemplate.active(TemplateKind.SUMMONS)})
+        form = IssueForm(saved) if saved else IssueForm(
+            initial={**initial, "template": DocTemplate.active(TemplateKind.SUMMONS)})
     plan = None
     error = None
     if request.method == "POST" and form.is_valid():
+        request.session[SESSION_OPTS] = {k: request.POST.get(k) for k in OPTION_FIELDS if request.POST.get(k)}
         opts = form.options()
         try:
             plan = plan_issue(request.user, cases, opts)
@@ -144,15 +159,18 @@ def issue_form(request):
                 messages.error(request, "ไม่มีรายการที่ออกหมายได้")
             else:
                 created = issue(request.user, plan, opts, request=request)
-                request.session.pop(SESSION_CASES, None)
+                for key in (SESSION_CASES, SESSION_OPTS, SESSION_EXCLUDED):
+                    request.session.pop(key, None)
                 request.session[SESSION_EXPORT] = [s.pk for s in created]
                 skipped = len(plan.blocked_items)
                 messages.success(request, f"ออกหมายเรียกแล้ว {len(created)} ฉบับ"
                                  + (f" (ข้าม {skipped} รายการที่ข้อมูลไม่ครบ)" if skipped else ""))
                 return redirect("export_new")
     elif request.method == "GET":
-        bound = IssueForm({**initial, "template": getattr(DocTemplate.active(TemplateKind.SUMMONS), "pk", ""),
-                           "thai_digits": "on"})
+        bound = IssueForm(saved or {**initial, "thai_digits": "on",
+                                    "template": getattr(DocTemplate.active(TemplateKind.SUMMONS), "pk", "")})
+        if saved and bound.is_valid():
+            form = bound
         if bound.is_valid():
             try:
                 plan = plan_issue(request.user, cases, bound.options())
@@ -160,7 +178,90 @@ def issue_form(request):
                 error = str(exc)
     return render(request, "documents/issue.html", {
         "form": form, "plan": plan, "cases": cases, "excluded": excluded, "error": error,
+        "signer_forms": _signer_forms(plan) if plan else {},
+        "all_signers": Investigator.objects.filter(is_active=True),
     })
+
+
+def _signer_forms(plan) -> dict:
+    """Per signer group: forms to complete/fix the signer right on the issue page.
+
+    {group investigator or None: [(target, label, SignerForm, needs_attention)]}
+    """
+    import re
+
+    from apps.registry.forms import SignerForm
+
+    out = {}
+    for inv, items in plan.groups.items():
+        entries = []
+        if inv is None:
+            aliases = {}
+            for item in items:
+                alias = item.case.investigator_alias
+                if alias is not None:
+                    aliases.setdefault(alias.pk, alias)
+            for alias in aliases.values():
+                name = re.sub(r"^หญิง\s*", "", alias.raw_name).strip()
+                entries.append((f"alias:{alias.pk}", alias.raw_name,
+                                SignerForm(prefix=f"a{alias.pk}", initial={"sign_name": name}), True))
+        else:
+            entries.append((f"inv:{inv.pk}", str(inv), SignerForm(prefix=f"i{inv.pk}", instance=inv),
+                            bool(inv.missing_signer_fields())))
+        out[inv] = [
+            {"target": target, "label": label, "form": form, "attention": attention,
+             "form_id": "signer-" + target.replace(":", "-")}
+            for target, label, form, attention in entries
+        ]
+        for entry in out[inv]:  # inputs sit inside the issue form; point them at their own small form
+            for field in entry["form"].fields.values():
+                field.widget.attrs["form"] = entry["form_id"]
+            female = entry["label"].startswith("หญิง") if inv is None else inv.is_female
+            if female:  # register wrote 'หญิง...': offer ranks like พันตำรวจโทหญิง first
+                entry["form"].fields["rank_full"].widget.attrs["list"] = "dl-rank-f"
+    return out
+
+
+@require_POST
+def issue_signer(request):
+    """Save signer data typed on the issue page (and link a register name to it)."""
+    from apps.registry.forms import SignerForm
+    from apps.registry.models import InvestigatorAlias
+
+    if not perms.can_issue_any(request.user):
+        raise PermissionDenied
+    kind, _, pk = request.POST.get("target", "").partition(":")
+    if kind == "inv":
+        inv = get_object_or_404(Investigator, pk=pk)
+        form = SignerForm(request.POST, instance=inv, prefix=f"i{inv.pk}")
+        alias = None
+    elif kind == "alias":
+        alias = get_object_or_404(InvestigatorAlias, pk=pk)
+        link_to = request.POST.get("link_to")
+        if request.POST.get("link_only") and not link_to:
+            messages.error(request, "เลือกผู้ลงนามที่จะผูกก่อน")
+            return redirect("issue_form")
+        if link_to and link_to.isdigit():  # same person as an existing signer
+            inv = get_object_or_404(Investigator, pk=link_to)
+            alias.investigator = inv
+            alias.save()
+            log(request, AuditAction.SETTINGS, alias, f"ผูกชื่อ '{alias.raw_name}' กับ {inv} (จากหน้าออกหมาย)")
+            messages.success(request, f"ผูก '{alias.raw_name}' กับ {inv} แล้ว")
+            return redirect("issue_form")
+        form = SignerForm(request.POST, prefix=f"a{alias.pk}")
+    else:
+        return redirect("issue_form")
+    if form.is_valid():
+        inv = form.save()
+        if alias is not None:
+            alias.investigator = inv
+            alias.save()
+        log(request, AuditAction.SETTINGS, inv, f"บันทึกข้อมูลผู้ลงนาม {inv} ({inv.position}) จากหน้าออกหมาย")
+        messages.success(request, f"บันทึกข้อมูลผู้ลงนาม {inv} แล้ว ระบบจำยศและตำแหน่งไว้ให้เลือกครั้งต่อไป")
+    else:
+        errors = "; ".join(f"{form.fields[k].label}: {v[0]}" for k, v in form.errors.items() if k in form.fields)
+        messages.error(request, "ข้อมูลผู้ลงนามไม่ครบ — " + errors)
+    return redirect("issue_form")
 
 
 # --------------------------------------------------------------------------- summons list & downloads
@@ -311,5 +412,7 @@ def issue_from_case(request, pk):
     if not perms.can_issue_for_case(request.user, case):
         raise PermissionDenied
     request.session[SESSION_CASES] = [case.pk]
+    for key in (SESSION_OPTS, SESSION_EXCLUDED):
+        request.session.pop(key, None)
     return redirect(reverse("issue_form"))
 

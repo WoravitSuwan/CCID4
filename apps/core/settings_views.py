@@ -16,7 +16,7 @@ from apps.accounts.models import Role
 from apps.documents import docx_engine
 from apps.documents.models import DocTemplate, TemplateKind
 from apps.documents.placeholders import SUMMONS_PLACEHOLDERS
-from apps.registry.forms import StyledForm, StyledModelForm
+from apps.registry.forms import SignerForm, StyledForm, StyledModelForm
 from apps.registry.models import Investigator, InvestigatorAlias, Status, Unit
 
 from . import permissions as perms
@@ -55,10 +55,16 @@ def settings_home(request):
 
 
 # --------------------------------------------------------------------------- investigators
-class InvestigatorForm(StyledModelForm):
-    class Meta:
-        model = Investigator
+class InvestigatorForm(SignerForm):
+    class Meta(SignerForm.Meta):
         fields = ["rank_full", "sign_name", "position", "phone", "unit", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["unit"].required = False
+        self.fields["is_active"].required = False
+        if self.instance.pk and self.instance.is_female:
+            self.fields["rank_full"].widget.attrs["list"] = "dl-rank-f"
 
 
 @admin_only
@@ -87,7 +93,8 @@ def investigator_edit(request, pk=None):
     return render(request, "settings/form.html", {
         "form": form, "title": "แก้ไขพนักงานสอบสวน" if inv else "เพิ่มพนักงานสอบสวน", "tab": "investigators",
         "back": "settings_investigators",
-        "help": "ข้อมูลนี้ใช้เป็นผู้ลงนามในหมายเรียก: ยศเต็ม (เช่น พันตำรวจโท), ชื่อ-สกุล, ตำแหน่ง, โทรศัพท์",
+        "help": "ข้อมูลนี้ใช้เป็นผู้ลงนามในหมายเรียก ยศและตำแหน่งพิมพ์เองหรือเลือกจากรายการได้ "
+                "ค่าที่เคยพิมพ์ระบบจะจำไว้ให้เลือกครั้งต่อไป",
     })
 
 

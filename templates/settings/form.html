@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html" %}{% load ui %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 {% include "settings/_tabs.html" %}
@@ -16,4 +16,5 @@
   {% if suggestions %}<div class="rounded bg-blue-50 p-2 text-sm text-blue-900">ชื่อที่ใกล้เคียง: {% for s in suggestions %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %} (เลือกในช่อง "พนักงานสอบสวนที่ผูกไว้" ด้วยตนเอง)</div>{% endif %}
   <div class="flex gap-2"><button class="btn btn-primary">บันทึก</button><a class="btn" href="{% url back %}">ยกเลิก</a></div>
 </form>
+{% signer_datalists %}
 {% endblock %}

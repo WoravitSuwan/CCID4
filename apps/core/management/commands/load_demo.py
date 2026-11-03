@@ -22,7 +22,7 @@ class Command(BaseCommand):
         from apps.documents.services import ensure_default_templates
         from apps.imports.models import ImportBatch, ImportKind
         from apps.imports.services import commit, prepare_batch
-        from apps.registry.models import Investigator, InvestigatorAlias, Unit
+        from apps.registry.models import Investigator, Unit
 
         ensure_default_templates()
         for kind, name in ((ImportKind.REGISTER, "mock_case_register.xlsx"),
@@ -43,13 +43,16 @@ class Command(BaseCommand):
             "ศักดิ์ชัยใจดีสมมติ": ("พันตำรวจโท", "ศักดิ์ชัย ใจดีสมมติ", "สว.(สอบสวน) กก.๑ บก.สอท.๔ บช.สอท.", "๐๘๑ ๐๐๐ ๐๐๐๑"),
             "สุดารักษ์ทดสอบ": ("พันตำรวจตรีหญิง", "สุดา รักษ์ทดสอบ", "รอง สว.(สอบสวน) กก.๑ บก.สอท.๔ บช.สอท.", "๐๘๑ ๐๐๐ ๐๐๐๒"),
         }
+        # the import already created a signer per register name; give two of them full data
+        # ('ธนพล มั่นคงสมมติ' is left without rank/position to try filling it on the issue page)
+        from apps.registry.models import link_register_names, person_core_key
+
+        link_register_names()
         for key, (rank, name, position, phone) in demo_signers.items():
-            inv, _ = Investigator.objects.get_or_create(sign_name=name, defaults={
-                "rank_full": rank, "position": position, "phone": phone})
-            for alias in InvestigatorAlias.objects.all():
-                if alias.key.replace("หญิง", "") == key:
-                    alias.investigator = inv
-                    alias.save()
+            for inv in Investigator.objects.all():
+                if person_core_key(inv.sign_name) == key and not inv.rank_full:
+                    inv.rank_full, inv.position, inv.phone = rank, position, phone
+                    inv.save()
         if not User.objects.filter(username="admin").exists():
             User.objects.create_user("admin", password=DEMO_PASSWORD, role=Role.ADMIN, first_name="ทดลอง-admin",
                                      is_superuser=True, is_staff=True)
@@ -85,4 +88,4 @@ class Command(BaseCommand):
                             phone=case.victim_phone, called_at=now - dt.timedelta(hours=5 - idx))
         self.stdout.write(self.style.SUCCESS(
             f"พร้อมแล้ว ผู้ใช้ทดลอง 2 บัญชี: admin (ผู้ดูแลระบบ) และ call1 (outsource) รหัสผ่าน {DEMO_PASSWORD} "
-            "(ชื่อ 'ธนพล มั่นคงสมมติ' ปล่อยไว้ยังไม่ผูก เพื่อลองหน้าผูกชื่อ)"))
+            "(ผู้ลงนาม 'ธนพล มั่นคงสมมติ' ยังไม่มียศ/ตำแหน่ง เพื่อลองกรอกในหน้าออกหมาย)"))

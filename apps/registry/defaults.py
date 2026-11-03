@@ -35,3 +35,18 @@ DEFAULT_UNITS = [
         "sender_address": "",
     },
 ]
+
+
+# Suggestions for the signer's rank / position fields (staff can still type anything;
+# typed values are remembered - see RememberedValue).
+POLICE_RANKS = [
+    "พลตำรวจเอก", "พลตำรวจโท", "พลตำรวจตรี", "พันตำรวจเอก (พิเศษ)", "พันตำรวจเอก", "พันตำรวจโท",
+    "พันตำรวจตรี", "ร้อยตำรวจเอก", "ร้อยตำรวจโท", "ร้อยตำรวจตรี", "ดาบตำรวจ", "จ่าสิบตำรวจ",
+    "สิบตำรวจเอก", "สิบตำรวจโท", "สิบตำรวจตรี",
+]
+POLICE_RANKS = POLICE_RANKS + [f"{rank}หญิง" for rank in POLICE_RANKS]
+COMMON_POSITIONS = [
+    f"{title} กก.{unit} บก.สอท.๔ บช.สอท."
+    for unit in ("๑", "๒")
+    for title in ("ผกก.", "รอง ผกก.(สอบสวน)", "สว.(สอบสวน)", "รอง สว.(สอบสวน)")
+]

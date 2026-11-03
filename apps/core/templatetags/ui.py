@@ -80,3 +80,14 @@ def percent(part, whole):
         return round(100 * float(part) / float(whole)) if float(whole) else 0
     except (TypeError, ValueError):
         return 0
+
+
+@register.inclusion_tag("_signer_datalists.html")
+def signer_datalists():
+    """<datalist> options for signer rank / position inputs (remembered values first)."""
+    from apps.registry.models import RememberedValue
+
+    ranks = RememberedValue.suggestions(RememberedValue.RANK)
+    female_first = [r for r in ranks if r.endswith("หญิง")] + [r for r in ranks if not r.endswith("หญิง")]
+    return {"ranks": ranks, "ranks_female": female_first,
+            "positions": RememberedValue.suggestions(RememberedValue.POSITION)}

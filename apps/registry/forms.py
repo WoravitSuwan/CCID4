@@ -66,3 +66,23 @@ class CaseFilterForm(StyledForm):
         invs = [(str(i.pk), str(i)) for i in Investigator.objects.all()]
         self.fields["investigator"].choices = [("", "ทุกคน"), ("none", "— ยังไม่ได้ผูกผู้ลงนาม —")] + invs
         self.fields["case_type"].choices = [("", "ทุกประเภท")] + [(t, t) for t in case_types]
+
+
+class SignerForm(StyledModelForm):
+    """Signer data for summonses: rank and position can be typed or picked from remembered values."""
+
+    class Meta:
+        model = Investigator
+        fields = ["rank_full", "sign_name", "position", "phone"]
+        widgets = {
+            "rank_full": forms.TextInput(attrs={"list": "dl-rank", "placeholder": "พิมพ์หรือเลือก เช่น พันตำรวจโท",
+                                                "autocomplete": "off"}),
+            "position": forms.TextInput(attrs={"list": "dl-position", "autocomplete": "off",
+                                               "placeholder": "พิมพ์หรือเลือก เช่น สว.(สอบสวน) กก.๑ บก.สอท.๔ บช.สอท."}),
+            "phone": forms.TextInput(attrs={"placeholder": "เช่น ๐๘๑ ๒๓๔ ๕๖๗๘"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in self.fields:
+            self.fields[name].required = True

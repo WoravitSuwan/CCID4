@@ -39,6 +39,7 @@ urlpatterns = [
     path("summons/", dv.summons_list, name="summons_list"),
     path("summons/issue/start/", dv.issue_start, name="issue_start"),
     path("summons/issue/", dv.issue_form, name="issue_form"),
+    path("summons/issue/signer/", dv.issue_signer, name="issue_signer"),
     path("summons/<int:pk>/result/", rv.summons_result, name="summons_result"),
     path("summons/<int:pk>/docx/", dv.summons_docx, name="summons_docx"),
     path("summons/<int:pk>/pdf/", dv.summons_pdf, name="summons_pdf"),

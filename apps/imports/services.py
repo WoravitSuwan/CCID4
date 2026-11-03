@@ -17,7 +17,7 @@ from apps.core.thai_format import normalize_year_to_ce
 from apps.registry.address import clean_text
 from apps.registry.defaults import FINAL_BY_DEFAULT
 from apps.registry.models import (
-    Case, Complainant, InvestigatorAlias, Status, Unit,
+    Case, Complainant, InvestigatorAlias, Status, Unit, link_register_names,
     normalize_person_key, normalize_receipt_no,
 )
 
@@ -358,7 +358,8 @@ def _diff(analysis: Analysis):
                 if inv_key not in aliases:
                     analysis.new_aliases.append(raw_inv)
                     analysis.add_issue(prow, IssueType.NEW_INVESTIGATOR,
-                                       f"'{raw_inv}' ยังไม่ได้ผูกกับข้อมูลผู้ลงนาม")
+                                       f"ชื่อใหม่ '{raw_inv}' ระบบจะสร้างผู้ลงนามให้ "
+                                       "(กรอกยศ ตำแหน่ง โทรศัพท์ครั้งแรกในหน้าออกหมาย)")
                 elif aliases[inv_key] is None:
                     analysis.unlinked_aliases.append(raw_inv)
 
@@ -478,6 +479,8 @@ def _apply_register(batch, analysis: Analysis):
         alias = InvestigatorAlias(raw_name=raw)
         alias.save()
         aliases[alias.key] = alias
+    # every register name gets a signer record (same person = same name ignoring spaces / leading หญิง)
+    link_register_names()
 
     existing = _existing(Case, analysis.rows.keys(), select_related=("status",))
     updated = set(analysis.updated_keys)

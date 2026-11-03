@@ -19,6 +19,22 @@ def normalize_person_key(value) -> str:
     return re.sub(r"\s+", "", clean_text(value))
 
 
+FEMALE_PREFIX = "หญิง"
+
+
+def signer_name_from_register(value) -> str:
+    """'หญิงสุดา รักษ์ดี' / 'หญิง สุดา  รักษ์ดี' -> 'สุดา รักษ์ดี' (register marks female officers with หญิง)."""
+    text = clean_text(value)
+    if text.startswith(FEMALE_PREFIX):
+        text = text[len(FEMALE_PREFIX):].strip()
+    return text
+
+
+def person_core_key(value) -> str:
+    """Key that treats 'หญิง X', 'หญิงX' and 'X' (any spacing) as the same person."""
+    return normalize_person_key(signer_name_from_register(value))
+
+
 class Status(models.Model):
     name = models.CharField("ชื่อสถานะ", max_length=300, unique=True)
     is_final = models.BooleanField("ถือว่าสิ้นสุด", default=False)
@@ -65,6 +81,41 @@ class Unit(models.Model):
         return self.full_name or self.name
 
 
+class RememberedValue(models.Model):
+    """Values staff typed for the signer's rank / position, offered again next time."""
+
+    RANK, POSITION = "rank", "position"
+    kind = models.CharField(max_length=20, choices=[(RANK, "ยศ"), (POSITION, "ตำแหน่ง")])
+    value = models.CharField(max_length=300)
+    use_count = models.PositiveIntegerField(default=1)
+    last_used = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("kind", "value")]
+        ordering = ["-use_count", "-last_used"]
+
+    @classmethod
+    def remember(cls, kind: str, value: str):
+        value = clean_text(value)
+        if not value:
+            return
+        obj, created = cls.objects.get_or_create(kind=kind, value=value)
+        if not created:
+            cls.objects.filter(pk=obj.pk).update(use_count=models.F("use_count") + 1)
+            obj.save(update_fields=["last_used"])
+
+    @classmethod
+    def suggestions(cls, kind: str) -> list[str]:
+        """Remembered values first (most used), then the built-in list."""
+        from .defaults import COMMON_POSITIONS, POLICE_RANKS
+
+        out = list(cls.objects.filter(kind=kind).values_list("value", flat=True)[:200])
+        for value in (POLICE_RANKS if kind == cls.RANK else COMMON_POSITIONS):
+            if value not in out:
+                out.append(value)
+        return out
+
+
 class Investigator(models.Model):
     rank_full = models.CharField("ยศ (เต็ม)", max_length=100, blank=True, help_text="เช่น พันตำรวจโท")
     sign_name = models.CharField("ชื่อ-สกุลที่ใช้ลงนาม", max_length=200)
@@ -81,6 +132,20 @@ class Investigator(models.Model):
 
     def __str__(self):
         return f"{self.rank_full} {self.sign_name}".strip()
+
+    def save(self, *args, **kwargs):
+        self.rank_full, self.sign_name = clean_text(self.rank_full), clean_text(self.sign_name)
+        self.position, self.phone = clean_text(self.position), clean_text(self.phone)
+        super().save(*args, **kwargs)
+        RememberedValue.remember(RememberedValue.RANK, self.rank_full)
+        RememberedValue.remember(RememberedValue.POSITION, self.position)
+
+    @property
+    def is_female(self) -> bool:
+        """The register writes female officers with a leading 'หญิง'; ranks then end in 'หญิง'."""
+        if self.rank_full.endswith(FEMALE_PREFIX):
+            return True
+        return any(clean_text(a.raw_name).startswith(FEMALE_PREFIX) for a in self.aliases.all()) if self.pk else False
 
     def missing_signer_fields(self) -> list[str]:
         missing = []
@@ -118,6 +183,38 @@ class InvestigatorAlias(models.Model):
         self.raw_name = clean_text(self.raw_name)
         self.key = normalize_person_key(self.raw_name)
         super().save(*args, **kwargs)
+
+
+def link_register_names(aliases=None) -> int:
+    """Give every register name a signer record, so issuing only needs rank/position/phone once.
+
+    Names that differ only by spacing or a leading 'หญิง' are the same person. Existing
+    signers are reused when their name (or another spelling already linked to them)
+    matches; otherwise a signer is created with the name from the register.
+    Returns the number of names linked.
+    """
+    pending = list(aliases if aliases is not None else InvestigatorAlias.objects.filter(investigator__isnull=True))
+    pending = [a for a in pending if a.investigator_id is None]
+    if not pending:
+        return 0
+    by_core = {}
+    for inv in Investigator.objects.prefetch_related("aliases"):
+        by_core.setdefault(person_core_key(inv.sign_name), inv)
+        for other in inv.aliases.all():
+            by_core.setdefault(person_core_key(other.raw_name), inv)
+    linked = 0
+    for alias in pending:
+        core = person_core_key(alias.raw_name)
+        if not core:
+            continue
+        inv = by_core.get(core)
+        if inv is None:
+            inv = Investigator.objects.create(sign_name=signer_name_from_register(alias.raw_name))
+            by_core[core] = inv
+        alias.investigator = inv
+        alias.save(update_fields=["investigator"])
+        linked += 1
+    return linked
 
 
 class AddressFields(models.Model):

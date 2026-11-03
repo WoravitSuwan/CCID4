@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% load thai %}
+{% extends "base.html" %}{% load thai ui %}
 {% block title %}ออกหมายเรียก{% endblock %}
 {% block content %}
 <div class="page-header"><div><h1>ออกหมายเรียก</h1><p class="page-sub">{{ cases|length }} คดีที่เลือก · จัดกลุ่มตามผู้ลงนาม</p></div></div>
@@ -39,6 +39,28 @@
   <div class="card mt-4 overflow-x-auto p-0">
     <div class="flex items-center gap-2 px-4 pt-4"><h2>ผู้ลงนาม: {% if inv %}{{ inv }}{% else %}<span class="text-amber-700">ยังไม่ได้ผูกผู้ลงนาม</span>{% endif %}</h2>
       {% if inv %}<span class="text-sm text-slate-500">{{ inv.position }}</span>{% endif %}</div>
+    {% for e in signer_forms|get_item:inv %}
+    <details class="mx-4 mt-3 rounded-lg ring-1 {% if e.attention %}bg-amber-50 ring-amber-200{% else %}bg-slate-50 ring-slate-200{% endif %}" {% if e.attention %}open{% endif %}>
+      <summary class="cursor-pointer px-4 py-2 text-sm font-medium {% if e.attention %}text-amber-900{% else %}text-slate-600{% endif %}">
+        {% if inv %}{% if e.attention %}กรอกข้อมูลผู้ลงนามให้ครบ{% else %}แก้ไขยศ / ตำแหน่ง / โทรศัพท์ของผู้ลงนาม{% endif %}{% else %}กรอกข้อมูลผู้ลงนามสำหรับชื่อในทะเบียน "{{ e.label }}"{% endif %}
+      </summary>
+      <div class="grid gap-3 px-4 pb-4 sm:grid-cols-2 lg:grid-cols-4">
+        {% for f in e.form %}<div><label class="label">{{ f.label }}</label>{{ f }}</div>{% endfor %}
+        <div class="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-4">
+          <button class="btn btn-primary btn-sm" form="{{ e.form_id }}">บันทึกผู้ลงนาม</button>
+          {% if not inv and all_signers %}
+          <span class="text-xs text-slate-500">หรือถ้าเป็นคนเดียวกับผู้ลงนามที่มีอยู่แล้ว:</span>
+          <select name="link_to" form="{{ e.form_id }}" class="input w-auto py-1 text-sm">
+            <option value="">— เลือกผู้ลงนาม —</option>
+            {% for i in all_signers %}<option value="{{ i.pk }}">{{ i }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-sm" form="{{ e.form_id }}" name="link_only" value="1">ผูกกับคนนี้</button>
+          {% endif %}
+          <span class="text-xs text-slate-500">ยศและตำแหน่งพิมพ์เองหรือเลือกจากรายการได้ ค่าที่พิมพ์ระบบจะจำไว้ครั้งต่อไป</span>
+        </div>
+      </div>
+    </details>
+    {% endfor %}
     <table class="table mt-2">
       <thead><tr><th></th><th>เลขรับแจ้ง</th><th>ครั้งที่</th><th>ผู้ถูกเรียก</th><th>ที่อยู่</th><th>วันเวลานัด</th><th>ผลตรวจ</th></tr></thead>
       <tbody>
@@ -59,4 +81,8 @@
   {% endfor %}
   {% endif %}
 </form>
+{% for inv, entries in signer_forms.items %}{% for e in entries %}
+<form id="{{ e.form_id }}" method="post" action="{% url 'issue_signer' %}" class="hidden">{% csrf_token %}<input type="hidden" name="target" value="{{ e.target }}"></form>
+{% endfor %}{% endfor %}
+{% signer_datalists %}
 {% endblock %}

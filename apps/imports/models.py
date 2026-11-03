@@ -63,7 +63,7 @@ class IssueType(models.TextChoices):
     BAD_AMOUNT = "bad_amount", "มูลค่าความเสียหายไม่ใช่ตัวเลข"
     UNMATCHED = "unmatched", "จับคู่กับอีกไฟล์ไม่ได้"
     NEW_STATUS = "new_status", "สถานะใหม่"
-    NEW_INVESTIGATOR = "new_investigator", "ชื่อพนักงานสอบสวนที่ยังไม่ได้ผูก"
+    NEW_INVESTIGATOR = "new_investigator", "ชื่อพนักงานสอบสวนใหม่"
     BAD_KEY = "bad_key", "รูปแบบเลขรับแจ้งผิด"
 
 

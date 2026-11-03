@@ -18,6 +18,11 @@ class Command(BaseCommand):
 
         SystemSetting.get()
         call_command("fill_postcodes", stdout=self.stdout)
+        from apps.registry.models import link_register_names
+
+        linked = link_register_names()
+        if linked:
+            self.stdout.write(f"สร้าง/ผูกผู้ลงนามให้ชื่อพนักงานสอบสวนในทะเบียน {linked} ชื่อ")
         created = ensure_default_templates()
         for tpl in created:
             self.stdout.write(f"เพิ่มแบบฟอร์ม: {tpl}")
