@@ -4,7 +4,7 @@
 <div class="page-header"><div><h1>ส่งออกหมายเรียก</h1><p class="page-sub">เลือกรูปแบบไฟล์ แล้วกดส่งออก</p></div></div>
 {% if thai_font == "missing" %}<div class="alert alert-warning mb-4">เครื่องนี้ไม่มีฟอนต์ TH SarabunIT๙ — PDF จะใช้ฟอนต์อื่นแทน ตัวอักษรจะใหญ่กว่าแบบฟอร์มและอาจล้นหน้า (ไฟล์ Word ไม่มีปัญหา) ติดตั้งฟอนต์ TH SarabunIT๙ แล้วเปิดระบบใหม่</div>
 {% elif thai_font == "compat" %}<div class="alert alert-info mb-4">PDF ใช้ฟอนต์สำรองที่ขนาดเท่า TH SarabunIT๙ (รูปตัวอักษรต่างเล็กน้อย) — ใส่ฟอนต์จริงในโฟลเดอร์ fonts/ เพื่อให้ตรงแบบฟอร์มทุกตัวอักษร</div>{% endif %}
-{% if not pdf_available %}<div class="alert alert-info mb-4">เซิร์ฟเวอร์นี้ไม่มี LibreOffice จึงส่งออกได้เฉพาะ Word (.docx)</div>{% endif %}
+{% if pdf_reason %}<div class="alert alert-info mb-4">{{ pdf_reason }}</div>{% endif %}
 {% if not summonses %}
 <div class="card text-sm">ยังไม่ได้เลือกหมายเรียก — ไปที่ <a href="{% url 'summons_list' %}">หมายเรียก</a> แล้วเลือกรายการที่ต้องการส่งออก</div>
 {% else %}

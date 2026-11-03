@@ -198,7 +198,7 @@ def main():
                   env=env, capture=True).stdout.strip().splitlines()
         if out and out[-1] == "0":
             run(manage + ["load_demo"], env=env, capture=True)
-            say("  ผู้ใช้ทดลอง: admin / head / clerk / inv  (รหัสผ่าน demo12345 สำหรับ head, clerk, inv)")
+            say("  ผู้ใช้ทดลอง outsource: call1 / call2  (รหัสผ่าน demo12345)")
         else:
             say("  ข้าม: มีข้อมูลคดีอยู่แล้ว")
     check_libreoffice()

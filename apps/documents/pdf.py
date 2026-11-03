@@ -45,6 +45,15 @@ def soffice_path() -> str | None:
     return None
 
 
+def pdf_unavailable_reason() -> str:
+    """Why PDF cannot be made here, worded for where the system runs."""
+    if getattr(settings, "VERCEL", False):
+        return ("ระบบทดลองบน Vercel สร้าง PDF ไม่ได้ (Vercel ติดตั้งโปรแกรม LibreOffice ไม่ได้) "
+                "— ส่งออกเป็น Word แล้วเปิดใน Microsoft Word เพื่อพิมพ์หรือบันทึกเป็น PDF ได้")
+    return ("ไม่พบโปรแกรม LibreOffice บนเครื่องที่รันระบบ จึงสร้าง PDF ไม่ได้ (ส่งออกเป็น Word ได้ตามปกติ) "
+            "— ติดตั้ง LibreOffice จาก https://www.libreoffice.org แล้วเปิดระบบใหม่")
+
+
 def soffice_available() -> bool:
     return soffice_path() is not None
 
@@ -58,9 +67,7 @@ def convert_many(docx_paths, out_dir) -> list[Path]:
         return []
     soffice = soffice_path()
     if not soffice:
-        raise PdfConversionError(
-            "ไม่พบโปรแกรม LibreOffice บนเครื่อง จึงสร้าง PDF ไม่ได้ (ส่งออกเป็น Word ได้ตามปกติ) "
-            "— ติดตั้ง LibreOffice จาก https://www.libreoffice.org แล้วเปิดระบบใหม่")
+        raise PdfConversionError(pdf_unavailable_reason())
     # A private profile per run lets several conversions run in parallel.
     profile = Path(tempfile.gettempdir()) / f"lo_profile_{uuid.uuid4().hex}"
     cmd = [

@@ -17,7 +17,7 @@ def login(client, role, **kw):
 
 
 def test_change_status_on_case_page(client, setup_signers):
-    login(client, Role.CLERK)
+    login(client, Role.ADMIN)
     case = Case.objects.not_final().first()
     final = Status.objects.get(name="สิ้นสุด")
     resp = client.post(f"/cases/{case.pk}/status/", {"status": final.pk, "note": "ผู้เสียหายถอนแจ้งความ"})
@@ -30,19 +30,20 @@ def test_change_status_on_case_page(client, setup_signers):
 
 
 def test_bulk_status_change(client, setup_signers):
-    login(client, Role.HEAD)
+    login(client, Role.ADMIN)
     ids = list(Case.objects.not_final().values_list("pk", flat=True)[:3])
     status = Status.objects.get(name="ส่งสำนวนอัยการ")
     client.post("/cases/status/bulk/", {"status": status.pk, "case_ids": ids})
     assert Case.objects.filter(pk__in=ids, status=status).count() == 3
 
 
-def test_investigator_cannot_change_other_cases(client, setup_signers):
-    case = Case.objects.exclude(investigator_alias__isnull=True).first()
-    other = Case.objects.exclude(investigator_alias__investigator=case.investigator).first()
-    login(client, Role.INVESTIGATOR, investigator=case.investigator)
+def test_outsource_cannot_change_status(client, setup_signers):
+    case = Case.objects.not_final().first()
+    login(client, Role.OUTSOURCE)
     final = Status.objects.get(name="สิ้นสุด")
-    assert client.post(f"/cases/{other.pk}/status/", {"status": final.pk}).status_code == 403
+    assert client.post(f"/cases/{case.pk}/status/", {"status": final.pk})["Location"] == "/calls/"
+    case.refresh_from_db()
+    assert case.status != final
 
 
 def test_manual_status_survives_reimport_of_same_register(setup_signers):
@@ -77,7 +78,8 @@ def test_demo_bootstrap(db, settings):
     settings.DEMO_MODE = True
     bootstrap_demo()
     assert Case.objects.count() == 40
-    assert User.objects.filter(username__in=["admin", "head", "clerk", "inv"]).count() == 4
+    assert set(User.objects.values_list("username", flat=True)) == {"admin", "call1", "call2"}
+    assert set(User.objects.values_list("role", flat=True)) == {"admin", "outsource"}
     assert User.objects.get(username="admin").check_password("demo12345")
     bootstrap_demo()  # second call is a no-op
     assert Case.objects.count() == 40

@@ -4,6 +4,11 @@
     <a class="btn btn-primary mt-3" href="{% url 'export_download' job.pk %}">ดาวน์โหลดไฟล์</a>
   {% elif job.status == 'failed' %}
     <div class="text-sm text-red-800">ส่งออกไม่สำเร็จ: {{ job.message }}</div>
+    {% if job.format != 'docx' %}
+    <form method="post" action="{% url 'export_retry_word' job.pk %}" class="mt-3">{% csrf_token %}
+      <button class="btn btn-primary">ส่งออกเป็น Word แทน</button>
+    </form>
+    {% endif %}
   {% else %}
     <div class="mb-2 text-sm">กำลังสร้างเอกสาร {{ job.done }} / {{ job.total }} ({{ job.percent }}%)</div>
     <div class="h-2 w-full rounded bg-slate-200"><div class="h-2 rounded bg-blue-600" style="width: {{ job.percent }}%"></div></div>

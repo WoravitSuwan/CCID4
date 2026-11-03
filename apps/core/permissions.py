@@ -1,9 +1,8 @@
 """Role-based permission rules (single source of truth for views and templates).
 
-ผู้ดูแลระบบ: ทุกอย่าง
-หัวหน้า: ดูทั้งหมด ออกหมาย ส่งออก
-พนักงานสอบสวน: ดูทั้งหมด ออกหมายในคดีของตัวเอง
-ธุรการ: นำเข้า ออกหมาย ส่งออก
+Two roles only:
+  ผู้ดูแลระบบ (admin): everything - import, register, issue, export, calls, settings
+  เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): only the call pages for the cases assigned to them
 """
 from functools import wraps
 
@@ -26,75 +25,34 @@ def is_outsource(user) -> bool:
     return role_of(user) == Role.OUTSOURCE
 
 
-def can_manage_calls(user) -> bool:
-    """Assign cases to call staff, see every call result, export call reports."""
-    return role_of(user) in {Role.ADMIN, Role.HEAD, Role.CLERK}
+# Everything except the call pages is for administrators.
+can_import = can_export = can_export_register = can_manage_settings = can_manage_calls = is_admin
+can_issue_any = is_admin
+
+
+def can_issue_for_case(user, case) -> bool:
+    return is_admin(user)
+
+
+def can_edit_case(user, case) -> bool:
+    """Edit address / status / summons result."""
+    return is_admin(user)
+
+
+def can_view_full_id(user, case) -> bool:
+    return is_admin(user)
+
+
+def can_access_summons(user, summons) -> bool:
+    return is_admin(user)
 
 
 def can_record_call(user, case) -> bool:
-    if can_manage_calls(user):
+    if is_admin(user):
         return True
     if is_outsource(user):
         assignment = getattr(case, "call_assignment", None)
         return bool(assignment and assignment.assignee_id == user.pk)
-    return role_of(user) == Role.INVESTIGATOR and owns_case(user, case)
-
-
-def can_import(user) -> bool:
-    return role_of(user) in {Role.ADMIN, Role.CLERK}
-
-
-def can_export(user) -> bool:
-    return role_of(user) in {Role.ADMIN, Role.HEAD, Role.CLERK, Role.INVESTIGATOR}
-
-
-def can_export_register(user) -> bool:
-    return role_of(user) in {Role.ADMIN, Role.HEAD, Role.CLERK}
-
-
-def can_manage_settings(user) -> bool:
-    return is_admin(user)
-
-
-def owns_case(user, case) -> bool:
-    inv = case.investigator
-    return bool(inv and user.investigator_id and inv.pk == user.investigator_id)
-
-
-def can_issue_for_case(user, case) -> bool:
-    role = role_of(user)
-    if role in {Role.ADMIN, Role.HEAD, Role.CLERK}:
-        return True
-    if role == Role.INVESTIGATOR:
-        return owns_case(user, case)
-    return False
-
-
-def can_issue_any(user) -> bool:
-    role = role_of(user)
-    if role == Role.INVESTIGATOR:
-        return bool(user.investigator_id)
-    return role in {Role.ADMIN, Role.HEAD, Role.CLERK}
-
-
-def can_edit_case(user, case) -> bool:
-    """Edit address / summons result."""
-    return can_issue_for_case(user, case)
-
-
-def can_view_full_id(user, case) -> bool:
-    role = role_of(user)
-    if role in {Role.ADMIN, Role.HEAD}:
-        return True
-    return role == Role.INVESTIGATOR and owns_case(user, case)
-
-
-def can_access_summons(user, summons) -> bool:
-    role = role_of(user)
-    if role in {Role.ADMIN, Role.HEAD, Role.CLERK}:
-        return True
-    if role == Role.INVESTIGATOR:
-        return owns_case(user, summons.case) or summons.created_by_id == user.pk
     return False
 
 

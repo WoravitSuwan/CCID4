@@ -166,8 +166,6 @@ def issue_form(request):
 # --------------------------------------------------------------------------- summons list & downloads
 def summons_list(request):
     qs = Summons.objects.select_related("case", "issuer", "created_by")
-    if request.user.effective_role == "investigator":
-        qs = qs.filter(case__investigator_alias__investigator=request.user.investigator_id)
     result = request.GET.get("result")
     if result in SummonsResult.values:
         qs = qs.filter(result=result)
@@ -221,12 +219,15 @@ class ExportForm(StyledForm):
     include_summons = forms.BooleanField(label="หมายเรียก", required=False, initial=True)
     include_envelope = forms.BooleanField(label="ใบจ่าหน้าซอง", required=False, initial=True)
 
+    def __init__(self, *args, pdf=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not pdf:  # no LibreOffice here: only Word can be produced
+            self.fields["format"].choices = [(ExportFormat.DOCX, ExportFormat.DOCX.label)]
+            self.fields["format"].initial = ExportFormat.DOCX
+
 
 def _export_queryset(request):
     qs = Summons.objects.select_related("case", "issuer")
-    if request.user.effective_role == "investigator":
-        qs = qs.filter(case__investigator_alias__investigator=request.user.investigator_id) | qs.filter(
-            created_by=request.user)
     return qs
 
 
@@ -239,7 +240,8 @@ def export_new(request):
     summonses = list(_export_queryset(request).filter(pk__in=ids).order_by("issuer__sign_name", "case__receipt_no"))
     from .pdf import soffice_available
 
-    form = ExportForm(request.POST or None, initial={"format": "pdf" if soffice_available() else "docx"})
+    pdf_ok = soffice_available()
+    form = ExportForm(request.POST or None, pdf=pdf_ok, initial={"format": "pdf" if pdf_ok else "docx"})
     if request.method == "POST" and form.is_valid():
         chosen = {int(i) for i in request.POST.getlist("ids") if i.isdigit()}
         selected = [s for s in summonses if s.pk in chosen] if chosen else summonses
@@ -257,7 +259,11 @@ def export_new(request):
                 f"{', พร้อมใบจ่าหน้าซอง' if job.include_envelope else ''})")
             start_export(job)
             return redirect("export_job", pk=job.pk)
-    return render(request, "documents/export_new.html", {"form": form, "summonses": summonses})
+    from .pdf import pdf_unavailable_reason
+
+    return render(request, "documents/export_new.html", {
+        "form": form, "summonses": summonses, "pdf_reason": "" if pdf_ok else pdf_unavailable_reason(),
+    })
 
 
 def export_job(request, pk):
@@ -266,6 +272,20 @@ def export_job(request, pk):
         raise PermissionDenied
     template = "documents/_job_status.html" if request.headers.get("HX-Request") else "documents/export_job.html"
     return render(request, template, {"job": job})
+
+
+@require_POST
+def export_retry_word(request, pk):
+    """Re-run a failed export (e.g. no LibreOffice) as Word files."""
+    old = get_object_or_404(ExportJob, pk=pk)
+    if old.created_by_id != request.user.pk and not perms.is_admin(request.user):
+        raise PermissionDenied
+    job = ExportJob.objects.create(format=ExportFormat.DOCX, mode=old.mode, include_summons=old.include_summons,
+                                   include_envelope=old.include_envelope, created_by=request.user)
+    job.summonses.set(old.summonses.all())
+    log(request, AuditAction.EXPORT, job, f"ส่งออก {job.summonses.count()} ฉบับเป็น Word (แทนงาน #{old.pk})")
+    start_export(job)
+    return redirect("export_job", pk=job.pk)
 
 
 def export_download(request, pk):

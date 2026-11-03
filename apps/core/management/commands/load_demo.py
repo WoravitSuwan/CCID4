@@ -50,14 +50,9 @@ class Command(BaseCommand):
                 if alias.key.replace("หญิง", "") == key:
                     alias.investigator = inv
                     alias.save()
-        for username, role in (("admin", Role.ADMIN), ("head", Role.HEAD), ("clerk", Role.CLERK)):
-            if not User.objects.filter(username=username).exists():
-                User.objects.create_user(username, password=DEMO_PASSWORD, role=role, first_name=f"ทดลอง-{username}",
-                                         is_superuser=role == Role.ADMIN, is_staff=role == Role.ADMIN)
-        inv = Investigator.objects.filter(sign_name="ศักดิ์ชัย ใจดีสมมติ").first()
-        if inv and not User.objects.filter(username="inv").exists():
-            User.objects.create_user("inv", password=DEMO_PASSWORD, role=Role.INVESTIGATOR, investigator=inv,
-                                     first_name="ศักดิ์ชัย")
+        if not User.objects.filter(username="admin").exists():
+            User.objects.create_user("admin", password=DEMO_PASSWORD, role=Role.ADMIN, first_name="ทดลอง-admin",
+                                     is_superuser=True, is_staff=True)
         # outsource call staff with some assigned cases and a few recorded calls
         import datetime as dt
 
@@ -90,5 +85,5 @@ class Command(BaseCommand):
                 record_call(case, callers[0], outcome=outcome, note=note, appointment_at=appointment,
                             phone=case.victim_phone, called_at=now - dt.timedelta(hours=5 - idx))
         self.stdout.write(self.style.SUCCESS(
-            f"พร้อมแล้ว ผู้ใช้ทดลอง admin / head / clerk / inv / call1 / call2 รหัสผ่าน {DEMO_PASSWORD} "
+            f"พร้อมแล้ว ผู้ใช้ทดลอง admin (ผู้ดูแลระบบ) / call1, call2 (outsource) รหัสผ่าน {DEMO_PASSWORD} "
             "(ชื่อ 'ธนพล มั่นคงสมมติ' ปล่อยไว้ยังไม่ผูก เพื่อลองหน้าผูกชื่อ)"))

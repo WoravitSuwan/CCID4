@@ -37,14 +37,32 @@ def test_all_pages_render_for_admin(client, setup_signers):
 
 
 def test_role_permissions(client, setup_signers):
-    login(client, Role.HEAD)
-    assert client.get("/imports/").status_code == 403
-    assert client.get("/settings/users/").status_code == 403
-    assert client.get("/cases/").status_code == 200
+    """Only two roles: admin uses everything, outsource only the call pages."""
+    login(client, Role.ADMIN)
+    for url in ("/imports/", "/settings/users/", "/cases/", "/calls/", "/calls/assign/"):
+        assert client.get(url).status_code == 200, url
     client.logout()
-    login(client, Role.CLERK)
-    assert client.get("/imports/").status_code == 200
-    assert client.get("/settings/users/").status_code == 403
+    login(client, Role.OUTSOURCE)
+    for url in ("/imports/", "/settings/users/", "/cases/", "/summons/", "/exports/new/"):
+        resp = client.get(url)
+        assert resp.status_code == 302 and resp["Location"] == "/calls/", url
+    assert client.get("/calls/").status_code == 200
+    assert client.get("/calls/assign/").status_code == 403
+
+
+def test_only_two_roles_offered(client, db):
+    login(client, Role.ADMIN)
+    form = client.get("/settings/users/new/").context["form"]
+    assert [v for v, _ in form.fields["role"].choices if v] == ["admin", "outsource"]
+
+
+def test_admin_cannot_demote_self(client, db):
+    me = login(client, Role.ADMIN)
+    resp = client.post(f"/settings/users/{me.pk}/", {"username": me.username, "first_name": "", "last_name": "",
+                                                     "role": "outsource", "is_active": "on", "password": ""})
+    assert resp.status_code == 200 and "role" in resp.context["form"].errors
+    me.refresh_from_db()
+    assert me.role == "admin"
 
 
 def test_dashboard_numbers(client, setup_signers):
@@ -87,14 +105,16 @@ def test_reveal_id_is_logged(client, setup_signers):
     assert AuditLog.objects.filter(action="view_id", target_id=str(case.pk)).count() == 1
 
 
-def test_clerk_cannot_reveal_id(client, setup_signers):
-    login(client, Role.CLERK)
+def test_outsource_cannot_reveal_id(client, setup_signers):
+    login(client, Role.OUTSOURCE)
     case = Case.objects.exclude(complainant__national_id="").first()
-    assert client.post(f"/cases/{case.pk}/reveal-id/").status_code == 403
+    resp = client.post(f"/cases/{case.pk}/reveal-id/")
+    assert resp.status_code == 302 and resp["Location"] == "/calls/"
+    assert not AuditLog.objects.filter(action="view_id").exists()
 
 
 def test_address_override_and_conflict(client, setup_signers):
-    login(client, Role.CLERK)
+    login(client, Role.ADMIN)
     case = Case.objects.not_final().address_incomplete().first()
     data = {"house_no": "55/1", "moo": "", "building": "", "soi": "", "road": "", "subdistrict": "สุเทพ",
             "district": "เมืองเชียงใหม่", "province": "เชียงใหม่", "postcode": "50200", "recipient_name": "", "note": ""}
@@ -115,7 +135,7 @@ def test_address_override_and_conflict(client, setup_signers):
 
 
 def test_import_wizard(client, db):
-    login(client, Role.CLERK)
+    login(client, Role.ADMIN)
     with open(SAMPLE / "mock_case_register.xlsx", "rb") as fh:
         resp = client.post("/imports/", {"kind": "register", "file": fh})
     batch_url = resp["Location"]
@@ -137,7 +157,7 @@ def test_import_wizard(client, db):
 
 
 def test_issue_flow_via_web(client, setup_signers):
-    login(client, Role.CLERK)
+    login(client, Role.ADMIN)
     ids = [c.pk for c in Case.objects.not_final()[:5]]
     client.post("/summons/issue/start/", {"case_ids": ids})
     page = client.get("/summons/issue/")
@@ -162,12 +182,11 @@ def test_issue_flow_via_web(client, setup_signers):
     assert AuditLog.objects.filter(action="download").count() >= 2
 
 
-def test_investigator_sees_only_own_issue_rights(client, setup_signers):
-    case = Case.objects.not_final().exclude(investigator_alias__isnull=True).first()
-    login(client, Role.INVESTIGATOR, investigator=case.investigator)
-    other = Case.objects.exclude(investigator_alias__investigator=case.investigator).first()
-    assert client.get(f"/cases/{other.pk}/issue/").status_code == 403
-    assert client.get(f"/cases/{case.pk}/issue/").status_code == 302
+def test_outsource_cannot_issue(client, setup_signers):
+    case = Case.objects.not_final().first()
+    login(client, Role.OUTSOURCE)
+    assert client.get(f"/cases/{case.pk}/issue/")["Location"] == "/calls/"
+    assert client.post("/summons/issue/start/", {"case_ids": [case.pk]})["Location"] == "/calls/"
 
 
 def test_alias_linking(client, imported):

@@ -45,6 +45,7 @@ urlpatterns = [
     path("exports/new/", dv.export_new, name="export_new"),
     path("exports/<int:pk>/", dv.export_job, name="export_job"),
     path("exports/<int:pk>/download/", dv.export_download, name="export_download"),
+    path("exports/<int:pk>/retry-word/", dv.export_retry_word, name="export_retry_word"),
     # victim phone follow-up (outsource call staff)
     path("calls/", cv.queue, name="calls_queue"),
     path("calls/assign/", cv.assign_view, name="calls_assign"),

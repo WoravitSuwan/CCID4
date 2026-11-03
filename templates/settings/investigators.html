@@ -25,14 +25,13 @@
 <div class="card overflow-x-auto p-0">
   <div class="flex items-center px-4 pt-4"><h2>พนักงานสอบสวน (ผู้ลงนาม)</h2><a class="btn btn-sm ml-auto" href="{% url 'settings_investigator_new' %}">+ เพิ่ม</a></div>
   <table class="table mt-2">
-    <thead><tr><th>ยศ ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>โทรศัพท์</th><th>หน่วย</th><th>ชื่อในทะเบียนที่ผูกไว้</th><th>บัญชีผู้ใช้</th><th></th></tr></thead>
+    <thead><tr><th>ยศ ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>โทรศัพท์</th><th>หน่วย</th><th>ชื่อในทะเบียนที่ผูกไว้</th><th></th></tr></thead>
     <tbody>
     {% for i in investigators %}
       <tr class="{% if not i.is_active %}opacity-50{% endif %}">
         <td>{{ i }}{% if i.missing_signer_fields %}<div><span class="badge badge-amber">ขาด: {{ i.missing_signer_fields|join:", " }}</span></div>{% endif %}</td>
         <td>{{ i.position|default:"-" }}</td><td>{{ i.phone|default:"-" }}</td><td>{{ i.unit|default:"-" }}</td>
         <td class="text-xs">{% for a in i.aliases.all %}<form method="post" action="{% url 'settings_alias_unlink' a.pk %}" class="inline">{% csrf_token %}<span class="badge badge-gray">{{ a.raw_name }} <button title="ยกเลิกการผูก" class="ml-1 text-slate-500">✕</button></span></form> {% empty %}-{% endfor %}</td>
-        <td>{{ i.user.username|default:"-" }}</td>
         <td><a class="btn btn-sm" href="{% url 'settings_investigator_edit' i.pk %}">แก้ไข</a></td>
       </tr>
     {% empty %}<tr><td colspan="7" class="text-slate-500">ยังไม่มีข้อมูล</td></tr>{% endfor %}

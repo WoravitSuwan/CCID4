@@ -275,14 +275,10 @@ class UserForm(StyledModelForm):
 
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name", "role", "investigator", "is_active"]
+        fields = ["username", "first_name", "last_name", "role", "is_active"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        taken = User.objects.exclude(pk=self.instance.pk).exclude(investigator__isnull=True)
-        self.fields["investigator"].queryset = Investigator.objects.exclude(
-            pk__in=taken.values_list("investigator_id", flat=True))
-        self.fields["investigator"].help_text = "ผูกได้ 1 บัญชีต่อ 1 พนักงานสอบสวน (ใช้กำหนดว่าเป็นคดีของใคร)"
         if not self.instance.pk:
             self.fields["password"].required = True
 
@@ -292,14 +288,9 @@ class UserForm(StyledModelForm):
             raise forms.ValidationError("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร")
         return pw
 
-    def clean(self):
-        data = super().clean()
-        if data.get("role") == Role.INVESTIGATOR and not data.get("investigator"):
-            self.add_error("investigator", "บทบาทพนักงานสอบสวนต้องผูกกับข้อมูลพนักงานสอบสวน")
-        return data
-
     def save(self, commit=True):
         user = super().save(commit=False)
+        user.is_staff = user.is_superuser = user.role == Role.ADMIN
         if self.cleaned_data.get("password"):
             user.set_password(self.cleaned_data["password"])
         if commit:
@@ -310,7 +301,7 @@ class UserForm(StyledModelForm):
 @admin_only
 def users(request):
     return render(request, "settings/users.html", {
-        "users": User.objects.select_related("investigator").order_by("username"), "tab": "users",
+        "users": User.objects.order_by("username"), "tab": "users",
     })
 
 
@@ -319,19 +310,21 @@ def user_edit(request, pk=None):
     user = get_object_or_404(User, pk=pk) if pk else None
     form = UserForm(request.POST or None, instance=user)
     if request.method == "POST" and form.is_valid():
+        d = form.cleaned_data
+        demoting = d["role"] != Role.ADMIN or not d["is_active"]
+        other_admins = User.objects.filter(role=Role.ADMIN, is_active=True).exclude(pk=getattr(user, "pk", None))
+        if user is not None and demoting and (user.pk == request.user.pk or not other_admins.exists()):
+            form.add_error("role", "เปลี่ยนบทบาทหรือปิดบัญชีนี้ไม่ได้ ต้องมีผู้ดูแลระบบที่ใช้งานอยู่อย่างน้อย 1 คน "
+                                   "และห้ามลดสิทธิ์บัญชีของตนเอง")
+    if request.method == "POST" and form.is_valid():
         obj = form.save()
         log(request, AuditAction.SETTINGS, obj, f"{'แก้ไข' if user else 'เพิ่ม'}ผู้ใช้ {obj.username} ({obj.role_label})")
         messages.success(request, "บันทึกแล้ว")
         return redirect("settings_users")
-    suggestions = []
-    if user and not user.investigator_id:
-        suggestions = suggest(f"{user.first_name}{user.last_name}", Investigator.objects.filter(user__isnull=True),
-                              key=lambda i: i.sign_name)
     return render(request, "settings/form.html", {
         "form": form, "title": "แก้ไขผู้ใช้" if user else "เพิ่มผู้ใช้", "tab": "users", "back": "settings_users",
-        "suggestions": suggestions,
-        "help": "ผู้ดูแลระบบ: ทุกอย่าง · หัวหน้า: ดูทั้งหมด ออกหมาย ส่งออก · พนักงานสอบสวน: ดูทั้งหมด "
-                "ออกหมายเฉพาะคดีของตนเอง · ธุรการ: นำเข้า ออกหมาย ส่งออก",
+        "help": "ผู้ดูแลระบบ: ใช้งานได้ทุกส่วน (นำเข้า ทะเบียนคดี ออกหมาย ส่งออก มอบหมายงานโทร ตั้งค่า) · "
+                "เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): เห็นเฉพาะคดีที่ได้รับมอบหมาย และบันทึกผลการโทรเท่านั้น",
     })
 
 

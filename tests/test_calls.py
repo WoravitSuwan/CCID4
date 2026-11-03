@@ -21,7 +21,7 @@ def caller(db):
 
 @pytest.fixture
 def clerk(db):
-    return User.objects.create_user("clerk1", password="pass12345", role=Role.CLERK)
+    return User.objects.create_user("clerk1", password="pass12345", role=Role.ADMIN)
 
 
 def test_parse_receipt_list():

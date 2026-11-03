@@ -4,14 +4,11 @@ from django.db import models
 
 class Role(models.TextChoices):
     ADMIN = "admin", "ผู้ดูแลระบบ"
-    HEAD = "head", "หัวหน้า"
-    INVESTIGATOR = "investigator", "พนักงานสอบสวน"
-    CLERK = "clerk", "เจ้าหน้าที่ธุรการ"
     OUTSOURCE = "outsource", "เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource)"
 
 
 class User(AbstractUser):
-    role = models.CharField("บทบาท", max_length=20, choices=Role.choices, default=Role.CLERK)
+    role = models.CharField("บทบาท", max_length=20, choices=Role.choices, default=Role.OUTSOURCE)
     # 1:1 link set manually by an administrator (never auto-matched by name).
     investigator = models.OneToOneField(
         "registry.Investigator",
@@ -34,7 +31,7 @@ class User(AbstractUser):
 
     @property
     def role_label(self) -> str:
-        return Role(self.effective_role).label
+        return Role(self.effective_role).label if self.effective_role in Role.values else self.effective_role
 
     def display_name(self) -> str:
         full = f"{self.first_name} {self.last_name}".strip()
