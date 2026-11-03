@@ -192,6 +192,12 @@ if not DEBUG:
     CSRF_COOKIE_HTTPONLY = False
     X_FRAME_OPTIONS = "SAMEORIGIN"
 
+if env_bool("DJANGO_HTTPS", False):
+    # Served through an HTTPS reverse proxy (nginx / Traefik / load balancer) that sets X-Forwarded-Proto
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 if VERCEL:
     # Each serverless instance has its own /tmp database, so keep the login in a
     # signed cookie instead of the database; serve static files straight from the

@@ -157,6 +157,16 @@ docker compose exec web python manage.py load_demo
 ```
 คำสั่งนี้สร้างผู้ใช้ทดลอง 2 บัญชี: `admin` (ผู้ดูแลระบบ) และ `call1` (outsource) รหัสผ่าน `demo12345` **ห้ามรันบนเครื่องใช้งานจริง**
 
+### 1.8 ขึ้นเซิร์ฟเวอร์ (สำหรับผู้ดูแลเซิร์ฟเวอร์)
+- รันด้วย `docker compose up -d --build` บนเซิร์ฟเวอร์ (ต้องมี service `web`, `worker`, `db`, `redis` ตาม `docker-compose.yml`)
+- web ฟังที่พอร์ต `8000` (เปลี่ยนด้วย `WEB_PORT`) ให้วางหลัง reverse proxy ที่ทำ HTTPS และส่ง header `X-Forwarded-Proto`
+  - ตั้งใน `.env`: `DJANGO_HTTPS=1`, `DJANGO_ALLOWED_HOSTS=<โดเมน>`, `DJANGO_CSRF_TRUSTED_ORIGINS=https://<โดเมน>`
+  - ให้ proxy รับไฟล์อัปโหลดได้อย่างน้อย 30 MB (เช่น nginx `client_max_body_size 30m;`) และ timeout อย่างน้อย 300 วินาที (ส่งออกหลายร้อยฉบับ)
+- volume ที่ต้องเก็บถาวรและสำรอง: `pgdata` (ฐานข้อมูล) และ `media` (ไฟล์แนบการโทร) — `appdata` เก็บแค่ตารางเวลางานเบื้องหลัง
+- ไม่ต้องเปิดพอร์ตของ PostgreSQL/Redis ออกนอกเครื่อง (compose ไม่ได้เปิดไว้อยู่แล้ว)
+- ห้ามรัน `load_demo` บนเซิร์ฟเวอร์จริง
+- อัปเดต: `git pull` แล้ว `docker compose up -d --build` (migration รันให้เองตอน web เริ่ม)
+
 ---
 
 ## 2. การใช้งาน
