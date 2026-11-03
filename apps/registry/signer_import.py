@@ -67,9 +67,21 @@ def _match_abbr(text: str):
     return None, 0
 
 
+ACTING = "ว่าที่"  # 'ว่าที่ พ.ต.ต.' = acting rank, kept in front of the full rank: 'ว่าที่พันตำรวจตรี'
+
+
+def _split_acting(raw: str) -> tuple[str, str]:
+    if raw.startswith(ACTING):
+        return ACTING, raw[len(ACTING):].lstrip()
+    return "", raw
+
+
 def expand_rank(text: str) -> str:
     """'พ.ต.ท.' -> 'พันตำรวจโท', 'พ.ต.ต.หญิง' -> 'พันตำรวจตรีหญิง'; full ranks are kept."""
-    raw = clean_text(text)
+    acting, raw = _split_acting(clean_text(text))
+    if acting:
+        rank = expand_rank(raw)
+        return ACTING + rank if rank else ""
     abbr, end = _match_abbr(raw)
     if abbr:
         rest = _key(raw[end:])
@@ -80,6 +92,10 @@ def expand_rank(text: str) -> str:
 
 def split_rank(text: str) -> tuple[str, str]:
     """'พ.ต.ท.สมชาย ใจดี' -> ('พันตำรวจโท', 'สมชาย ใจดี'); no rank -> ('', text)."""
+    acting, raw = _split_acting(clean_text(text))
+    if acting:
+        rank, rest = split_rank(raw)
+        return (ACTING + rank, rest) if rank else ("", clean_text(text))
     raw = clean_text(text)
     abbr, end = _match_abbr(raw)
     if abbr:
@@ -179,6 +195,11 @@ def parse(file) -> tuple[list[SignerRow], str]:
         wb.close()
 
 
+def _surname_key(name: str) -> str:
+    parts = signer_name_from_register(name).split()
+    return _key(" ".join(parts[1:])) if len(parts) >= 2 else ""
+
+
 def plan(rows: list[SignerRow]) -> list[SignerRow]:
     """Match each row to an existing signer (by name, ignoring spacing and a leading 'หญิง')."""
     by_core = {}
@@ -186,6 +207,11 @@ def plan(rows: list[SignerRow]) -> list[SignerRow]:
         by_core.setdefault(person_core_key(inv.sign_name), inv)
         for alias in inv.aliases.all():
             by_core.setdefault(person_core_key(alias.raw_name), inv)
+    by_surname = {}
+    for inv in Investigator.objects.all():
+        key = _surname_key(inv.sign_name)
+        if key:
+            by_surname.setdefault(key, []).append(inv)
     seen = set()
     for row in rows:
         core = person_core_key(row.name)
@@ -196,6 +222,11 @@ def plan(rows: list[SignerRow]) -> list[SignerRow]:
         inv = by_core.get(core)
         if inv is None:
             row.action = "new"
+            surname = _surname_key(row.name)
+            similar = [i for i in by_surname.get(surname, []) if person_core_key(i.sign_name) != core] if surname else []
+            if similar:
+                row.problem = ("นามสกุลตรงกับ " + ", ".join(i.sign_name for i in similar)
+                               + " ในระบบ แต่ชื่อสะกดต่างกัน — ถ้าเป็นคนเดียวกัน แก้ชื่อในไฟล์ให้ตรงทะเบียนแล้วนำเข้าใหม่")
             continue
         row.investigator_id = inv.pk
         for label, attr, value in (("ยศ", "rank_full", row.rank), ("ตำแหน่ง", "position", row.position),

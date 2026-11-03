@@ -43,7 +43,7 @@
             <td class="text-slate-400">{{ r.row_number }}</td><td class="font-medium">{{ r.name }}</td>
             <td>{{ r.rank|default:"-" }}</td><td>{{ r.position|default:"-" }}</td><td class="font-mono">{{ r.phone|default:"-" }}</td>
             <td class="text-xs">
-              {% if r.action == 'new' %}<span class="badge badge-green">เพิ่มใหม่</span>
+              {% if r.action == 'new' %}<span class="badge badge-green">เพิ่มใหม่</span>{% if r.problem %}<div class="mt-1 rounded bg-amber-50 px-2 py-1 text-amber-900 ring-1 ring-amber-200">⚠ {{ r.problem }}</div>{% endif %}
               {% elif r.action == 'update' %}<span class="badge badge-blue">แก้ไข</span><div class="mt-1 text-slate-500">{{ r.changes|join:" · " }}</div>
               {% elif r.action == 'same' %}<span class="badge badge-gray">ไม่เปลี่ยน</span>
               {% else %}<span class="badge badge-amber">ข้าม</span> {{ r.problem }}{% endif %}

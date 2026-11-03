@@ -122,3 +122,20 @@ def test_rank_written_without_dots_or_with_spaces():
     assert si.split_rank("พ.ต.อ.(พิเศษ)สมชาย ใจดี") == ("พันตำรวจเอก (พิเศษ)", "สมชาย ใจดี")
     assert si.split_rank("พรทิพย์ ใจดี") == ("", "พรทิพย์ ใจดี")  # no dot: never treated as a rank
     assert si.expand_rank("พตท.") == "พันตำรวจโท"
+
+
+def test_acting_rank_prefix():
+    assert si.split_rank("ว่าที่ พ.ต.ต. ธนพัฒน์ ใจดี") == ("ว่าที่พันตำรวจตรี", "ธนพัฒน์ ใจดี")
+    assert si.expand_rank("ว่าที่ พ.ต.ต.") == "ว่าที่พันตำรวจตรี"
+    assert si.split_rank("ว่าที่ ธนพัฒน์ ใจดี") == ("", "ว่าที่ ธนพัฒน์ ใจดี")  # no rank after it: untouched
+
+
+def test_new_name_with_known_surname_is_flagged(imported):
+    from apps.registry.models import link_register_names
+
+    link_register_names()
+    inv = Investigator.objects.exclude(sign_name="").first()
+    first, last = inv.sign_name.split(maxsplit=1)
+    rows, _ = si.parse(xlsx([["ชื่อ-สกุล", "ยศ"], [f"{first[:-1]} {last}", "พ.ต.ต."]]))
+    row = si.plan(rows)[0]
+    assert row.action == "new" and inv.sign_name in row.problem
