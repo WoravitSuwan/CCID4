@@ -5,6 +5,7 @@ from django.urls import path
 
 from apps.calls import views as cv
 from apps.core import settings_views as sv
+from apps.core import stats_views as stv
 from apps.documents import views as dv
 from apps.imports import views as iv
 from apps.registry import views as rv
@@ -56,6 +57,7 @@ urlpatterns = [
     path("exports/<int:pk>/print-all/", dv.export_print_all, name="export_print_all"),
     path("exports/<int:pk>/retry-word/", dv.export_retry_word, name="export_retry_word"),
     # victim phone follow-up (outsource call staff)
+    path("stats/", stv.dashboard, name="stats_dashboard"),
     path("calls/", cv.queue, name="calls_queue"),
     path("calls/assign/", cv.assign_view, name="calls_assign"),
     path("calls/assign/bulk/", cv.assign_bulk, name="calls_assign_bulk"),
