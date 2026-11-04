@@ -1,47 +1,100 @@
-{% extends "base.html" %}{% load thai ui %}
+{% extends "base.html" %}{% load thai ui humanize %}
 {% block title %}หมายเรียก{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>หมายเรียกที่ออกแล้ว</h1><p class="page-sub">{{ page.paginator.count }} ฉบับ · เลือกรายการเพื่อส่งออกหรือพิมพ์ซ้ำ · ใส่เลข EMS เมื่อส่งไปรษณีย์แล้ว</p></div>
-  <a class="btn ml-auto" href="{% url 'summons_ems_bulk' %}">{% icon "envelope" "h-4 w-4" %} บันทึกเลข EMS หลายรายการ</a></div>
-<form method="get" class="card mb-4 grid grid-cols-2 gap-3 md:grid-cols-7">
-  <input class="input md:col-span-2" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ">
-  <select name="result" class="input"><option value="">ทุกผล</option>{% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-  <select name="ems" class="input"><option value="">EMS: ทั้งหมด</option><option value="no" {% if request.GET.ems == "no" %}selected{% endif %}>ยังไม่มีเลข EMS</option><option value="yes" {% if request.GET.ems == "yes" %}selected{% endif %}>ส่งแล้ว (มีเลข EMS)</option></select>
-  <select name="issuer" class="input"><option value="">ผู้ลงนามทุกคน</option>{% for i in issuers %}<option value="{{ i.pk }}" {% if request.GET.issuer == i.pk|stringformat:"s" %}selected{% endif %}>{{ i }}</option>{% endfor %}</select>
-  <input class="input" type="date" name="from" value="{{ request.GET.from }}" title="ออกหมายตั้งแต่">
-  <input class="input" type="date" name="to" value="{{ request.GET.to }}" title="ถึง">
-  <div class="flex gap-2 md:col-span-7"><button class="btn btn-primary">ค้นหา</button><a class="btn" href="{% url 'summons_list' %}">ล้าง</a></div>
-</form>
-<form method="get" action="{% url 'export_new' %}">
-  <div class="mb-2"><button class="btn btn-primary">ส่งออกรายการที่เลือก</button></div>
-  <div class="card overflow-x-auto p-0">
-  <table class="table">
-    <thead><tr><th><input type="checkbox" class="h-4 w-4" onclick="document.querySelectorAll('.s-cb').forEach(c=>c.checked=this.checked)"></th><th>เลขรับแจ้ง</th><th>ครั้งที่</th><th>ผู้ถูกเรียก</th><th>วันออกหมาย</th><th>วันเวลานัด</th><th>ผู้ลงนาม</th><th>ผู้กดออก</th><th>ผล</th><th>เลข EMS</th><th>ไฟล์</th></tr></thead>
-    <tbody>
+<div class="page-header">
+  <div><h1>หมายเรียกที่ออกแล้ว</h1><p class="page-sub">กดที่แถวเพื่อดูรายละเอียด เปิดไฟล์ หรือใส่เลข EMS</p></div>
+  <a class="btn ml-auto" href="{% url 'summons_ems_bulk' %}">{% icon "envelope" "h-4 w-4" %} บันทึกเลข EMS หลายรายการ</a>
+</div>
+
+<div class="card mb-4 space-y-3 p-3 sm:p-4">
+  <div class="inline-flex flex-wrap rounded-xl bg-slate-100 p-1" aria-label="การส่งไปรษณีย์">
+    {% for key, label, count_key in ems_tabs %}
+    <a href="?{% query_replace ems=key page="" %}" class="rounded-lg px-4 py-2 text-sm font-semibold {% if request.GET.ems|default:"" == key %}bg-white text-slate-900 shadow-sm ring-1 ring-slate-200{% else %}text-slate-500 hover:text-slate-800{% endif %}">{{ label }} <span class="ml-1 tabular-nums {% if request.GET.ems|default:"" == key %}text-indigo-600{% else %}text-slate-400{% endif %}">{{ ems_counts|get_item:count_key|intcomma }}</span></a>
+    {% endfor %}
+  </div>
+  <form method="get" class="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+    {% if request.GET.ems %}<input type="hidden" name="ems" value="{{ request.GET.ems }}">{% endif %}
+    <div class="relative min-w-[14rem] flex-1"><span class="pointer-events-none absolute left-3 top-2.5 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
+      <input class="input w-full py-2 pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ"></div>
+    <select name="issuer" class="input w-full py-2 sm:w-56" aria-label="ผู้ลงนาม"><option value="">ผู้ลงนาม: ทุกคน</option>{% for i in issuers %}<option value="{{ i.pk }}" {% if request.GET.issuer == i.pk|stringformat:"s" %}selected{% endif %}>{{ i }}</option>{% endfor %}</select>
+    <select name="result" class="input w-full py-2 sm:w-40" aria-label="ผล"><option value="">ผล: ทุกผล</option>{% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+    <label class="text-xs text-slate-500">ออกหมายตั้งแต่<input class="input mt-0.5 block py-2" type="date" name="from" value="{{ request.GET.from }}"></label>
+    <label class="text-xs text-slate-500">ถึง<input class="input mt-0.5 block py-2" type="date" name="to" value="{{ request.GET.to }}"></label>
+    <button class="btn btn-primary py-2">ค้นหา</button><a class="btn py-2" href="{% url 'summons_list' %}">ล้าง</a>
+  </form>
+</div>
+
+<form method="get" action="{% url 'export_new' %}" id="summons-form">
+  <div class="mb-2 flex flex-wrap items-center gap-2">
+    <button class="btn btn-primary btn-sm" id="export-selected" disabled>{% icon "download" "h-4 w-4" %} ส่งออก / พิมพ์รายการที่เลือก (<span id="sel-count">0</span>)</button>
+    <span class="text-sm text-slate-500">{{ page.paginator.count|intcomma }} ฉบับ</span>
+    <button type="button" class="btn btn-ghost btn-sm ml-auto" id="toggle-all">เปิดรายละเอียดทั้งหมด</button>
+  </div>
+
+  <div class="card overflow-hidden p-0">
+    <div class="hidden grid-cols-[2.5rem_10rem_1fr_12rem_10rem_1.5rem] items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-500 md:grid">
+      <input type="checkbox" class="check" id="check-all" aria-label="เลือกทั้งหมดในหน้านี้">
+      <span>เลขรับแจ้ง</span><span>ผู้ถูกเรียก</span><span>วันเวลานัด</span><span>การส่ง</span><span></span>
+    </div>
     {% for s in page %}
-      <tr>
-        <td><input type="checkbox" class="s-cb h-4 w-4" name="ids" value="{{ s.pk }}"></td>
-        <td class="font-mono"><a href="{% if is_outsource %}{% url 'call_case' s.case_id %}{% else %}{% url 'case_detail' s.case_id %}{% endif %}">{{ s.case.receipt_no }}</a></td>
-        <td>{{ s.number }}</td><td>{{ s.recipient_name }}</td><td>{{ s.issue_date|thai_date }}</td>
-        <td class="whitespace-nowrap">{{ s.appointment_at|thai_date:"datetime" }}</td><td>{{ s.issuer }}</td><td>{{ s.created_by.display_name|default:"-" }}</td>
-        <td><span class="badge {% if s.result == 'attended' %}badge-green{% elif s.result == 'absent' %}badge-red{% elif s.result == 'cancelled' %}badge-gray{% else %}badge-blue{% endif %}">{{ s.get_result_display }}</span></td>
-        <td>{% include "documents/_ems_cell.html" %}</td>
-        <td class="whitespace-nowrap">{% if pdf_available %}<a href="{% url 'summons_view' s.pk %}?back={{ request.get_full_path|urlencode }}">ดู / พิมพ์</a> · {% endif %}<a href="{% url 'summons_docx' s.pk %}">Word</a></td>
-      </tr>
-    {% empty %}<tr><td colspan="11" class="text-slate-500">ยังไม่มีหมายเรียก</td></tr>{% endfor %}
-    </tbody>
-  </table>
+    <details class="summons-row group border-b border-slate-100 last:border-0 open:bg-slate-50/60">
+      <summary class="grid cursor-pointer list-none grid-cols-[2.5rem_1fr_auto] items-center gap-x-3 gap-y-0.5 px-4 py-3 hover:bg-slate-50 md:grid-cols-[2.5rem_10rem_1fr_12rem_10rem_1.5rem] [&::-webkit-details-marker]:hidden">
+        <input type="checkbox" class="check s-cb row-span-2 md:row-span-1" name="ids" value="{{ s.pk }}" aria-label="เลือก {{ s.case.receipt_no }}">
+        <span class="font-mono text-sm font-medium text-indigo-700">{{ s.case.receipt_no }}<span class="ml-1.5 font-sans text-xs font-normal text-slate-400">ครั้งที่ {{ s.number }}</span></span>
+        <span class="col-start-2 truncate font-medium text-slate-800 md:col-start-auto" title="{{ s.recipient_name }}">{{ s.recipient_name }}</span>
+        <span class="col-start-2 whitespace-nowrap text-sm text-slate-600 md:col-start-auto">{{ s.appointment_at|thai_date:"datetime" }}</span>
+        <span class="col-start-3 row-start-1 md:col-start-auto md:row-start-auto">{% if s.ems_number %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} ส่งแล้ว</span>{% else %}<span class="badge badge-amber">ยังไม่ส่ง</span>{% endif %}</span>
+        <span class="hidden text-slate-400 transition group-open:rotate-90 md:block">{% icon "chevron-right" "h-4 w-4" %}</span>
+      </summary>
+      <div class="grid gap-4 px-4 pb-4 pt-1 md:ml-[2.5rem] md:grid-cols-[1fr_1fr_auto]">
+        <dl class="dl text-sm">
+          <dt>ผู้ลงนาม</dt><dd>{{ s.issuer }}</dd>
+          <dt>วันออกหมาย</dt><dd>{{ s.issue_date|thai_date:"full" }}</dd>
+          <dt>ผู้กดออก</dt><dd>{{ s.created_by.display_name|default:"-" }}</dd>
+          <dt>ผล</dt><dd><span class="badge {% if s.result == 'attended' %}badge-green{% elif s.result == 'absent' %}badge-red{% elif s.result == 'cancelled' %}badge-gray{% else %}badge-blue{% endif %}">{{ s.get_result_display }}</span></dd>
+        </dl>
+        <div class="space-y-3 text-sm">
+          <div><div class="text-xs font-medium text-slate-500">ที่อยู่ผู้รับ</div><div class="text-slate-700">{{ s.recipient_address|default:"-" }}</div></div>
+          <div><div class="mb-1 text-xs font-medium text-slate-500">เลข EMS</div>{% include "documents/_ems_cell.html" %}</div>
+        </div>
+        <div class="flex flex-wrap content-start gap-2 md:flex-col">
+          {% if pdf_available %}<a class="btn btn-primary btn-sm" href="{% url 'summons_view' s.pk %}?back={{ request.get_full_path|urlencode }}">{% icon "eye" "h-4 w-4" %} ดู / พิมพ์</a>{% endif %}
+          <a class="btn btn-sm" href="{% url 'summons_docx' s.pk %}">{% icon "download" "h-4 w-4" %} Word</a>
+          <a class="btn btn-sm" href="{% if is_outsource %}{% url 'call_case' s.case_id %}{% else %}{% url 'case_detail' s.case_id %}{% endif %}">{% icon "cases" "h-4 w-4" %} {% if is_outsource %}หน้าบันทึกผลการโทร{% else %}หน้าคดี{% endif %}</a>
+        </div>
+      </div>
+    </details>
+    {% empty %}
+    <div class="px-4 py-14 text-center text-slate-500">ยังไม่มีหมายเรียก{% if request.GET %}ที่ตรงกับตัวกรอง{% endif %}</div>
+    {% endfor %}
   </div>
 </form>
 {% include "_pagination.html" %}
 <script>
-// barcode scanner / keyboard: after saving one EMS number jump to the next empty box
-document.body.addEventListener("htmx:afterSwap", (e) => {
-  const cell = e.target.closest ? e.target : null;
-  if (!cell || !cell.classList || !cell.classList.contains("ems-cell") || cell.querySelector(".text-red-600")) return;
-  const boxes = [...document.querySelectorAll(".ems-input")];
-  const next = boxes.find((b) => b.compareDocumentPosition(cell) & Node.DOCUMENT_POSITION_PRECEDING);
-  if (next) next.focus();
-});
+(function () {
+  const rows = [...document.querySelectorAll(".summons-row")];
+  const exportBtn = document.getElementById("export-selected"), count = document.getElementById("sel-count");
+  const update = () => { const n = document.querySelectorAll(".s-cb:checked").length; count.textContent = n; exportBtn.disabled = n === 0; };
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "check-all") document.querySelectorAll(".s-cb").forEach((c) => (c.checked = e.target.checked));
+    update();
+  });
+  const toggle = document.getElementById("toggle-all");
+  toggle.addEventListener("click", () => {
+    const open = !rows.every((r) => r.open);
+    rows.forEach((r) => (r.open = open));
+    toggle.textContent = open ? "ปิดรายละเอียดทั้งหมด" : "เปิดรายละเอียดทั้งหมด";
+  });
+  // barcode scanner / keyboard: after saving one EMS number go to the next summons without a number
+  document.body.addEventListener("htmx:afterSwap", (e) => {
+    const cell = e.target;
+    if (!cell.classList || !cell.classList.contains("ems-cell") || cell.querySelector(".text-red-600")) return;
+    const row = cell.closest(".summons-row");
+    const badge = row && row.querySelector("summary .badge");
+    if (badge && cell.querySelector("a.font-mono")) { badge.className = "badge badge-green"; badge.textContent = "✓ ส่งแล้ว"; }
+    const next = rows.slice(rows.indexOf(row) + 1).find((r) => r.querySelector(".ems-input"));
+    if (next) { next.open = true; next.querySelector(".ems-input").focus(); next.scrollIntoView({block: "nearest"}); }
+  });
+})();
 </script>
 {% endblock %}

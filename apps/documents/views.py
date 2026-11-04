@@ -289,20 +289,24 @@ def summons_list(request):
     q = request.GET.get("q", "").strip()
     if q:
         qs = qs.filter(case__receipt_no__icontains=q.replace(" ", "")) | qs.filter(recipient_name__icontains=q)
-    sent = request.GET.get("ems")
-    if sent == "yes":
-        qs = qs.exclude(ems_number="")
-    elif sent == "no":
-        qs = qs.filter(ems_number="")
     date_from = request.GET.get("from")
     if date_from:
         qs = qs.filter(issue_date__gte=date_from)
     date_to = request.GET.get("to")
     if date_to:
         qs = qs.filter(issue_date__lte=date_to)
+    ems_counts = {"all": qs.count(), "no": qs.filter(ems_number="").count()}
+    ems_counts["yes"] = ems_counts["all"] - ems_counts["no"]
+    sent = request.GET.get("ems")
+    if sent == "yes":
+        qs = qs.exclude(ems_number="")
+    elif sent == "no":
+        qs = qs.filter(ems_number="")
     page = Paginator(qs.order_by("-created_at"), 50).get_page(request.GET.get("page"))
     return render(request, "documents/summons_list.html", {
         "page": page, "results": SummonsResult.choices, "issuers": Investigator.objects.all(),
+        "ems_counts": ems_counts, "ems_tabs": [("", "ทั้งหมด", "all"), ("no", "ยังไม่ส่ง", "no"),
+                                               ("yes", "ส่งแล้ว (มีเลข EMS)", "yes")],
     })
 
 
