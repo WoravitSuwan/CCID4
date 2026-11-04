@@ -360,11 +360,21 @@ def summons_ems(request, pk):
     return redirect(back)
 
 
+SCAN_PENDING_LIMIT = 500
+
+
 def summons_scan(request):
-    """Scan station: scan the barcode on the envelope, then the EMS label - saved at once."""
+    """Scan station: pick the summons (typed reference or the list of those without a number), scan the EMS
+    label - saved at once - then print the envelopes, which carry the EMS barcode. Scanning an EMS barcode
+    with nothing picked tells whose envelope it is (a check after printing)."""
     if not perms.can_export(request.user):
         raise PermissionDenied
-    return render(request, "documents/scan.html", {})
+    pending = _own_summonses(request, Summons.objects.filter(ems_number="").exclude(
+        result=SummonsResult.CANCELLED).select_related("case")).order_by("case__receipt_no", "number")
+    return render(request, "documents/scan.html", {
+        "pending": [_scan_payload(s) for s in pending[:SCAN_PENDING_LIMIT]],
+        "pending_total": pending.count(), "pending_limit": SCAN_PENDING_LIMIT,
+    })
 
 
 def _scan_payload(summons) -> dict:
@@ -375,7 +385,8 @@ def _scan_payload(summons) -> dict:
 
 @require_POST
 def summons_scan_lookup(request):
-    """The scanned/typed code -> which summons: envelope barcode (9 + id), 'เลขรับแจ้ง-ครั้งที่' or เลขรับแจ้ง."""
+    """The scanned/typed code -> which summons: 'เลขรับแจ้ง-ครั้งที่', เลขรับแจ้ง, an old envelope barcode
+    (9 + id) or an EMS number already recorded (verify=True: checking a printed envelope)."""
     import re
 
     from django.http import JsonResponse
@@ -397,8 +408,13 @@ def summons_scan_lookup(request):
             found = qs.filter(case__receipt_no=m.group(1))
             summons = (found.filter(number=int(m.group(2))) if m.group(2) else found.order_by("-number")).first()
     if summons is None:
-        if not ems.validate(code)[1]:
-            return JsonResponse({"ok": False, "error": "นี่คือเลข EMS — ยิงบาร์โค้ดบนซองก่อน แล้วค่อยยิงเลข EMS"})
+        number, problem = ems.validate(code)
+        if not problem:
+            owner = qs.filter(ems_number=number).first()
+            if owner:
+                return JsonResponse({**_scan_payload(owner), "verify": True})
+            return JsonResponse({"ok": False, "error": f"เลข EMS {number} ยังไม่ได้บันทึกให้หมายฉบับใด — "
+                                                       "เลือกหมายจากรายการ หรือพิมพ์เลขรับแจ้งก่อน แล้วค่อยยิงเลข EMS"})
         return JsonResponse({"ok": False, "error": f"ไม่พบหมายเรียกของรหัส {code or '(ว่าง)'}"})
     return JsonResponse(_scan_payload(summons))
 

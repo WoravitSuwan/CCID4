@@ -158,6 +158,34 @@ def queue(request):
     })
 
 
+@require_POST
+def issue_filtered(request):
+    """"ติดต่อไม่ได้ · รอออกหมาย" with the current scope/search: send every case of it to the issue page."""
+    from django.http import QueryDict
+
+    from apps.documents.views import SESSION_CASES, SESSION_EXCLUDED, SESSION_OPTS
+
+    if not perms.can_issue_any(request.user):
+        raise PermissionDenied
+    request.GET = QueryDict(request.POST.get("query", ""))
+    scope = request.GET.get("scope", "open")
+    qs = _apply_tab(_apply_scope(_apply_filters(request, _queue(request)), scope if scope in dict(SCOPES)
+                                 else "open"), "to_issue")
+    ids = list(qs.order_by("case__receipt_no").values_list("case_id", flat=True)[:MAX_ISSUE_AT_ONCE])
+    if not ids:
+        messages.info(request, "ไม่มีคดีที่ติดต่อไม่ได้และรอออกหมาย")
+        return redirect(f"{reverse('calls_queue')}?{request.GET.urlencode()}")
+    request.session[SESSION_CASES] = ids
+    for key in (SESSION_OPTS, SESSION_EXCLUDED):
+        request.session.pop(key, None)
+    if len(ids) == MAX_ISSUE_AT_ONCE:
+        messages.info(request, f"ออกหมายได้ครั้งละ {MAX_ISSUE_AT_ONCE:,} คดี เมื่อออกชุดนี้แล้วกดปุ่มอีกครั้งสำหรับชุดถัดไป")
+    return redirect("issue_form")
+
+
+MAX_ISSUE_AT_ONCE = 1000
+
+
 # --------------------------------------------------------------------------- record a call
 class CallForm(StyledForm):
     outcome = forms.ChoiceField(label="ผลการติดต่อ", choices=CallOutcome.choices, widget=forms.RadioSelect)

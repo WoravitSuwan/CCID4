@@ -1,24 +1,27 @@
-{% extends "base.html" %}{% load ui %}
-{% block title %}ยิงบาร์โค้ด{% endblock %}
+{% extends "base.html" %}{% load ui humanize %}
+{% block title %}ยิงบาร์โค้ด EMS{% endblock %}
 {% block content %}
 <div class="mb-3"><a href="{% url 'summons_list' %}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} หมายเรียกที่ออก</a></div>
 <div class="page-header"><div><h1>ยิงบาร์โค้ด บันทึกเลข EMS</h1>
-  <p class="page-sub">1) ยิงบาร์โค้ดบนซอง → ระบบขึ้นข้อมูลหมายฉบับนั้น · 2) ยิงบาร์โค้ด EMS บนใบรับฝาก → บันทึกทันที แล้วยิงซองถัดไปได้เลย</p></div></div>
+  <p class="page-sub">1) เลือกหมาย: กดจากรายการ "ยังไม่มีเลข EMS" หรือพิมพ์เลขรับแจ้ง · 2) ยิงบาร์โค้ด EMS → บันทึกทันที ระบบเลือกฉบับถัดไปให้ · 3) พิมพ์ซอง: บาร์โค้ดและเลข EMS ขึ้นบนซองเอง</p></div></div>
 
 <div class="grid gap-5 lg:grid-cols-[1fr_22rem]">
   <div class="space-y-4">
     <div class="card">
-      <div class="mb-3 flex items-center gap-3">
-        <span id="step1" class="inline-flex h-8 items-center rounded-full bg-indigo-600 px-3 text-sm font-semibold text-white">1 ยิงบาร์โค้ดบนซอง</span>
+      <div class="mb-3 flex flex-wrap items-center gap-3">
+        <span id="step1" class="inline-flex h-8 items-center rounded-full bg-indigo-600 px-3 text-sm font-semibold text-white">1 เลือกหมาย</span>
         <span class="text-slate-300">{% icon "chevron-right" "h-4 w-4" %}</span>
         <span id="step2" class="inline-flex h-8 items-center rounded-full bg-slate-100 px-3 text-sm font-semibold text-slate-500">2 ยิงบาร์โค้ด EMS</span>
+        <label class="ml-auto inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" class="check" id="auto-next" checked> ไปฉบับถัดไปอัตโนมัติ</label>
       </div>
       <form id="scan-form" autocomplete="off">{% csrf_token %}
         <input id="scan-input" class="input w-full py-4 text-center font-mono text-2xl uppercase tracking-wider" placeholder="ยิงบาร์โค้ด หรือพิมพ์แล้วกด Enter" autofocus aria-label="รหัสที่ยิง">
       </form>
-      <div id="scan-msg" class="mt-3 min-h-[1.5rem] text-sm text-slate-500">พร้อมรับบาร์โค้ดซอง (หรือพิมพ์ เลขรับแจ้ง-ครั้งที่ เช่น C660611953-1)</div>
+      <div id="scan-msg" class="mt-3 min-h-[1.5rem] text-sm text-slate-500">เลือกหมายจากรายการด้านล่าง หรือพิมพ์ เลขรับแจ้ง-ครั้งที่ (เช่น C660611953-1) · ยิงบาร์โค้ดบนซองที่พิมพ์แล้วเพื่อตรวจว่าเป็นของใคร</div>
     </div>
-    <div id="current" class="card hidden">
+
+    <div id="current" class="card hidden border-2 border-indigo-200">
+      <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-600" id="c-title">กำลังบันทึกเลข EMS ให้</div>
       <div class="flex flex-wrap items-start gap-3">
         <div class="min-w-0 flex-1">
           <div class="font-mono text-lg font-semibold text-indigo-700"><span id="c-receipt"></span> <span class="font-sans text-sm font-normal text-slate-400">ครั้งที่ <span id="c-number"></span></span></div>
@@ -27,20 +30,43 @@
         </div>
         <div class="text-right"><div class="text-xs text-slate-500">เลข EMS</div><div id="c-ems" class="font-mono text-lg"></div></div>
       </div>
-      <div class="mt-3 flex gap-2"><button type="button" id="cancel" class="btn btn-sm">ยกเลิกฉบับนี้</button></div>
+      <div class="mt-3 flex gap-2"><button type="button" id="cancel" class="btn btn-sm">ยกเลิก / เลือกฉบับอื่น</button></div>
+    </div>
+
+    <div class="card p-0">
+      <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
+        <h2>ยังไม่มีเลข EMS</h2><span id="pending-count" class="badge badge-amber">{{ pending_total|intcomma }}</span>
+        <input id="pending-filter" class="input ml-auto w-full py-1.5 text-sm sm:w-56" placeholder="กรองรายการ: เลขรับแจ้ง / ชื่อ" aria-label="กรองรายการ">
+      </div>
+      {% if pending_total > pending_limit %}<p class="border-b border-slate-100 px-4 py-2 text-xs text-slate-500">แสดง {{ pending_limit|intcomma }} ฉบับแรก (เรียงตามเลขรับแจ้ง) ฉบับอื่นพิมพ์เลขรับแจ้งในช่องด้านบน</p>{% endif %}
+      <ol id="pending" class="max-h-[50vh] divide-y divide-slate-100 overflow-y-auto text-sm"></ol>
+      <p id="pending-empty" class="hidden px-4 py-6 text-center text-slate-400">ทุกฉบับมีเลข EMS แล้ว</p>
     </div>
   </div>
+
   <div class="card self-start p-0">
     <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3"><h2>บันทึกในรอบนี้</h2><span id="count" class="badge badge-green ml-auto">0</span></div>
-    <ol id="history" class="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto text-sm"><li class="px-4 py-6 text-center text-slate-400" id="empty">ยังไม่มี</li></ol>
+    <ol id="history" class="max-h-[50vh] divide-y divide-slate-100 overflow-y-auto text-sm"><li class="px-4 py-6 text-center text-slate-400" id="empty">ยังไม่มี</li></ol>
+    <div class="border-t border-slate-100 p-3">
+      <a id="print-link" class="btn btn-primary pointer-events-none w-full justify-center opacity-50" href="{% url 'export_new' %}">{% icon "envelope" "h-4 w-4" %} พิมพ์ซองของรายการนี้ (<span id="print-count">0</span>)</a>
+      <p class="mt-2 text-xs text-slate-500">ในหน้าถัดไปเลือก "ใบจ่าหน้าซอง" บาร์โค้ดและเลข EMS จะขึ้นบนซองเอง</p>
+    </div>
   </div>
 </div>
+{{ pending|json_script:"pending-data" }}
 <script>
 (function () {
   const input = document.getElementById("scan-input"), msg = document.getElementById("scan-msg");
   const csrf = document.querySelector("#scan-form [name=csrfmiddlewaretoken]").value;
   const box = document.getElementById("current"), history = document.getElementById("history");
-  let current = null, saved = 0;
+  const list = document.getElementById("pending"), filter = document.getElementById("pending-filter");
+  const autoNext = document.getElementById("auto-next");
+  const exportUrl = "{% url 'export_new' %}";
+  let pending = JSON.parse(document.getElementById("pending-data").textContent);
+  let pendingTotal = {{ pending_total }};
+  let current = null;
+  const savedIds = [];
+  const S10 = /^[A-Z]{2}\d{9}[A-Z]{2}$/;
   const ctx = window.AudioContext ? new AudioContext() : null;
   function beep(ok) {  // short sound: high = saved, low = problem (scanner stations often have no eyes on screen)
     if (!ctx) return;
@@ -56,37 +82,59 @@
     document.getElementById("step1").className = "inline-flex h-8 items-center rounded-full px-3 text-sm font-semibold " + (n === 1 ? "bg-indigo-600 text-white" : "bg-emerald-100 text-emerald-800");
     document.getElementById("step2").className = "inline-flex h-8 items-center rounded-full px-3 text-sm font-semibold " + (n === 2 ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500");
   }
-  function show(s) {
-    current = s;
+  function fill(s, title, verify) {
+    const t = document.getElementById("c-title");
+    t.textContent = title;
+    t.className = "mb-2 text-xs font-semibold uppercase tracking-wide " + (verify ? "text-emerald-700" : "text-indigo-600");
     document.getElementById("c-receipt").textContent = s.receipt;
     document.getElementById("c-number").textContent = s.number;
     document.getElementById("c-name").textContent = s.name;
     document.getElementById("c-address").textContent = s.address;
     document.getElementById("c-ems").textContent = s.ems || "ยังไม่มี";
-    box.classList.remove("hidden");
-    step(2);
+    box.className = "card border-2 " + (verify ? "border-emerald-300 bg-emerald-50/40" : "border-indigo-200");
   }
-  function reset() { current = null; box.classList.add("hidden"); step(1); input.focus(); }
+  function show(s) {
+    current = s;
+    fill(s, "กำลังบันทึกเลข EMS ให้", false);
+    step(2); renderList(); input.focus();
+    say(s.ems ? "ฉบับนี้มีเลข EMS แล้ว (" + s.ems + ") — ยิงเลขใหม่เพื่อแทนที่ หรือกดยกเลิก" : "ยิงบาร์โค้ด EMS ของ " + s.receipt + " (" + s.name + ")", s.ems ? "err" : "ok");
+  }
+  function verify(s) {  // an EMS barcode scanned with nothing picked: whose envelope is this?
+    current = null;
+    fill(s, "ตรวจสอบซอง: เลข EMS นี้เป็นของ", true);
+    step(1); renderList();
+    say("✓ เลข " + s.ems + " เป็นของ " + s.receipt + "-" + s.number + " " + s.name + " — ตรงกับชื่อบนซองหรือไม่", "ok");
+  }
+  function reset() { current = null; box.classList.add("hidden"); step(1); renderList(); input.focus(); }
+  function renderList() {
+    const q = filter.value.trim().toLowerCase();
+    list.replaceChildren();
+    pending.filter((s) => !q || s.receipt.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 200).forEach((s) => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50" + (current && current.id === s.id ? " bg-indigo-50 ring-1 ring-inset ring-indigo-200" : "");
+      b.innerHTML = '<span class="font-mono font-medium text-indigo-700"></span><span class="min-w-0 flex-1 truncate text-slate-700"></span><span class="text-xs text-slate-400">เลือก</span>';
+      b.children[0].textContent = s.receipt + "-" + s.number;
+      b.children[1].textContent = s.name;
+      b.addEventListener("click", () => show(s));
+      li.appendChild(b); list.appendChild(li);
+    });
+    document.getElementById("pending-count").textContent = pendingTotal.toLocaleString();
+    document.getElementById("pending-empty").classList.toggle("hidden", pending.length > 0);
+  }
   async function post(url, data) {
     const body = new URLSearchParams(data);
     const r = await fetch(url, {method: "POST", body, headers: {"X-CSRFToken": csrf}});
     return r.ok ? r.json() : {ok: false, error: "บันทึกไม่ได้ (" + r.status + ")"};
   }
-  document.getElementById("scan-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const code = input.value.trim(); input.value = "";
-    if (!code) return;
-    if (!current) {
-      const s = await post("{% url 'summons_scan_lookup' %}", {code});
-      if (!s.ok) { beep(false); say(s.error, "err"); return; }
-      show(s); beep(true);
-      say(s.ems ? "ฉบับนี้มีเลข EMS แล้ว (" + s.ems + ") — ยิงเลขใหม่เพื่อแทนที่ หรือกดยกเลิก" : "ยิงบาร์โค้ด EMS ของซองนี้", s.ems ? "err" : "ok");
-      return;
-    }
-    const r = await post("{% url 'summons_scan_save' %}", {id: current.id, ems: code});
-    if (!r.ok) { beep(false); say(r.error, "err"); return; }
-    beep(true); saved += 1;
-    document.getElementById("count").textContent = saved;
+  async function lookup(code) {
+    const s = await post("{% url 'summons_scan_lookup' %}", {code});
+    if (!s.ok) { beep(false); say(s.error, "err"); return; }
+    beep(true);
+    if (s.verify) verify(s); else show(s);
+  }
+  function addHistory(r) {
     const empty = document.getElementById("empty"); if (empty) empty.remove();
     const li = document.createElement("li"); li.className = "px-4 py-2.5";
     li.innerHTML = `<div class="flex justify-between gap-2"><span class="font-mono font-medium"></span><a class="font-mono text-indigo-700" target="_blank" rel="noopener noreferrer"></a></div><div class="truncate text-xs text-slate-500"></div>`;
@@ -94,11 +142,33 @@
     li.querySelector("a").textContent = r.ems; li.querySelector("a").href = r.tracking;
     li.querySelector("div.text-xs").textContent = r.name;
     history.prepend(li);
-    say(`บันทึก ${r.ems} ให้ ${r.receipt} (${r.name}) แล้ว — ยิงซองถัดไปได้เลย`, "ok");
-    reset();
+    if (!savedIds.includes(r.id)) savedIds.push(r.id);
+    document.getElementById("count").textContent = savedIds.length;
+    document.getElementById("print-count").textContent = savedIds.length;
+    const link = document.getElementById("print-link");
+    link.href = exportUrl + "?" + savedIds.map((id) => "ids=" + id).join("&");
+    link.classList.remove("pointer-events-none", "opacity-50");
+  }
+  document.getElementById("scan-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = input.value.trim(); input.value = "";
+    if (!code) return;
+    const compact = code.toUpperCase().replace(/[\s-]/g, "");
+    if (!current || !S10.test(compact)) { await lookup(code); return; }  // a reference always (re)picks the summons
+    const r = await post("{% url 'summons_scan_save' %}", {id: current.id, ems: code});
+    if (!r.ok) { beep(false); say(r.error, "err"); return; }
+    beep(true); addHistory(r);
+    const at = pending.findIndex((s) => s.id === r.id);
+    if (at >= 0) { pending.splice(at, 1); pendingTotal = Math.max(0, pendingTotal - 1); }
+    const next = autoNext.checked && at >= 0 ? pending[at] : null;
+    say(`บันทึก ${r.ems} ให้ ${r.receipt} (${r.name}) แล้ว` + (next ? "" : " — เลือกฉบับถัดไปได้เลย"), "ok");
+    if (next) { show(next); say(`บันทึก ${r.ems} ให้ ${r.receipt} แล้ว · ต่อไป: ยิงบาร์โค้ด EMS ของ ${next.receipt} (${next.name})`, "ok"); }
+    else reset();
   });
-  document.getElementById("cancel").addEventListener("click", () => { reset(); say("ยกเลิกแล้ว พร้อมรับบาร์โค้ดซอง"); });
-  document.addEventListener("click", (e) => { if (!e.target.closest("a,button,input")) input.focus(); });  // keep the scanner typing into the box
+  document.getElementById("cancel").addEventListener("click", () => { reset(); say("ยกเลิกแล้ว เลือกหมายฉบับอื่นได้"); });
+  filter.addEventListener("input", renderList);
+  document.addEventListener("click", (e) => { if (!e.target.closest("a,button,input,label")) input.focus(); });  // keep the scanner typing into the box
+  renderList();
 })();
 </script>
 {% endblock %}

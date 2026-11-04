@@ -32,34 +32,34 @@ NOT_WANT_Q = (SYSTEM_CALL & Q(last_outcome=CallOutcome.NOT_PROCEED)) | (FILE_ONL
 UNDECIDED_Q = REACHED_Q & ~WANT_Q & ~NOT_WANT_Q
 ISSUED = Q(has_summons=True)
 
+# The users' view: of all cases, how many were reached - wanting to proceed or not - and how many could
+# not be reached, which go on to a summons by post. "ติดต่อไม่ได้" = called but not reached, including calls
+# whose result was never written down. Cases nobody has called yet are kept apart ("ยังไม่ได้โทร"), so a
+# summons is not sent to someone who was never phoned.
+NOT_REACHED_ALL = CALLED & ~REACHED_Q
+
 # key -> (label, filter); the order is the order of the tabs / nodes
 STAGES = {
     "all": ("ทั้งหมด", Q()),
-    "never": ("ยังไม่ได้โทร", NEVER),
-    "called": ("โทรเสร็จสิ้น", CALLED),
     "reached": ("ติดต่อได้", REACHED_Q),
-    "not_reached": ("ติดต่อไม่ได้", NOT_REACHED_Q),
-    "unknown": ("โทรแล้ว ไม่ทราบผล", UNKNOWN_Q),
     "want": ("ประสงค์ดำเนินคดี", WANT_Q),
     "not_want": ("ไม่ประสงค์ดำเนินคดี", NOT_WANT_Q),
     "undecided": ("ติดต่อได้ ยังไม่ระบุ", UNDECIDED_Q),
-    "want_issued": ("ประสงค์ · ออกหมายแล้ว", WANT_Q & ISSUED),
-    "want_pending": ("ประสงค์ · ยังไม่ออกหมาย", WANT_Q & ~ISSUED),
-    "issued": ("ออกหมายแล้ว", ISSUED),
+    "not_reached": ("ติดต่อไม่ได้", NOT_REACHED_ALL),
+    "to_issue": ("ติดต่อไม่ได้ · รอออกหมาย", NOT_REACHED_ALL & ~ISSUED),
+    "issued_nr": ("ติดต่อไม่ได้ · ออกหมายแล้ว", NOT_REACHED_ALL & ISSUED),
+    "never": ("ยังไม่ได้โทร", NEVER),
 }
-TAB_KEYS = ["all", "never", "called", "reached", "not_reached", "want", "not_want", "issued"]
+TAB_KEYS = ["all", "reached", "want", "not_want", "not_reached", "to_issue", "issued_nr"]
 
-# the diagram: columns of nodes, each node's parent; drop-offs are orange, the main path blue
-COLUMNS = [["all"], ["called", "never"], ["reached", "not_reached", "unknown"],
-           ["want", "not_want", "undecided"], ["want_issued", "want_pending"]]
-PARENT = {"called": "all", "never": "all", "reached": "called", "not_reached": "called", "unknown": "called",
-          "want": "reached", "not_want": "reached", "undecided": "reached",
-          "want_issued": "want", "want_pending": "want"}
-TONE = {"all": "neutral", "called": "main", "reached": "main", "want": "main", "want_issued": "main",
-        "never": "muted", "unknown": "muted", "undecided": "muted", "want_pending": "muted",
-        "not_reached": "drop", "not_want": "drop"}
-COLORS = {"main": "var(--series-1)", "drop": "var(--series-2)", "muted": "var(--muted-node)",
-          "neutral": "var(--text-muted)"}
+# the diagram: columns of nodes and each node's parent
+COLUMNS = [["all"], ["reached", "not_reached", "never"], ["want", "not_want", "undecided", "to_issue", "issued_nr"]]
+PARENT = {"reached": "all", "not_reached": "all", "never": "all", "want": "reached", "not_want": "reached",
+          "undecided": "reached", "to_issue": "not_reached", "issued_nr": "not_reached"}
+TONE = {"all": "neutral", "reached": "good", "want": "good", "not_want": "plain", "undecided": "muted",
+        "not_reached": "drop", "to_issue": "drop", "issued_nr": "done", "never": "muted"}
+COLORS = {"good": "var(--series-1)", "drop": "var(--series-2)", "done": "var(--series-3)",
+          "plain": "var(--plain-node)", "muted": "var(--muted-node)", "neutral": "var(--text-muted)"}
 
 
 def with_summons_flag(qs):
@@ -77,11 +77,10 @@ def counts(qs) -> dict:
 
 
 # shorter names inside the diagram (the column already says "ประสงค์ดำเนินคดี")
-DIAGRAM_LABEL = {"want_issued": "ออกหมายแล้ว", "want_pending": "ยังไม่ออกหมาย", "undecided": "ยังไม่ระบุ",
-                 "unknown": "ไม่ทราบผล"}
+DIAGRAM_LABEL = {"to_issue": "รอออกหมายเรียก", "issued_nr": "ออกหมายเรียกแล้ว", "undecided": "ยังไม่ระบุ"}
 
 
-def sankey(n: dict, width=1040, height=300, node_w=14, gap=16, label_w=190) -> dict:
+def sankey(n: dict, width=1040, height=320, node_w=16, gap=22, label_w=230, label_gap=34) -> dict:
     """Node rectangles and link bands for the funnel (all in SVG units)."""
     total = n.get("all", 0)
     if not total:
@@ -92,20 +91,21 @@ def sankey(n: dict, width=1040, height=300, node_w=14, gap=16, label_w=190) -> d
     scale = usable / total
     nodes = {}
     for ci, column in enumerate(COLUMNS):
-        y = 0.0
-        parent = nodes.get(PARENT.get(column[0], ""))
-        if parent:  # line children up with their parent's top so the bands stay short and do not cross
-            y = parent["y"]
+        y, last_label = 0.0, -1e9
         for key in column:
             if not n.get(key):
                 continue
-            h = max(n[key] * scale, 2.0)
+            parent = nodes.get(PARENT.get(key, ""))
+            if parent:  # each group of children starts level with its parent: short bands, no crossings
+                y = max(y, parent["y"])
+            h = max(n[key] * scale, 3.0)
+            ly = max(y + (h / 2 - 3 if h > 40 else 11), last_label + label_gap)  # labels never overlap
+            last_label = ly
             nodes[key] = {"key": key, "label": DIAGRAM_LABEL.get(key, STAGES[key][0]), "n": n[key],
                           "full_label": STAGES[key][0], "x": round(ci * step, 1),
                           "y": round(y, 1), "h": round(h, 1), "w": node_w, "color": COLORS[TONE[key]],
                           "pct": round(n[key] / total * 100), "out": 0.0,
-                          "lx": round(ci * step + node_w + 6, 1),  # label: right of the node,
-                          "ly": round(y + (h / 2 + 5 if h > 26 else 12), 1)}  # centred on tall nodes
+                          "lx": round(ci * step + node_w + 8, 1), "ly": round(ly, 1)}
             y += h + gap
     links = []
     for key, node in nodes.items():
@@ -123,6 +123,6 @@ def sankey(n: dict, width=1040, height=300, node_w=14, gap=16, label_w=190) -> d
                       "d": (f"M{x0:.1f},{y0:.1f} C{xm:.1f},{y0:.1f} {xm:.1f},{y1:.1f} {x1:.1f},{y1:.1f} "
                             f"L{x1:.1f},{y1 + h:.1f} "
                             f"C{xm:.1f},{y1 + h:.1f} {xm:.1f},{y0 + h:.1f} {x0:.1f},{y0 + h:.1f} Z")})
-    bottom = max(nd["y"] + nd["h"] for nd in nodes.values())
+    bottom = max(max(nd["y"] + nd["h"], nd["ly"] + 20) for nd in nodes.values())
     return {"empty": False, "w": width, "h": round(bottom + 4, 1), "nodes": list(nodes.values()), "links": links,
             "node_w": node_w}

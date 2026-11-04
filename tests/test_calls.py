@@ -184,32 +184,61 @@ def test_queue_tabs_and_status_filter(client, imported, caller):
     page = client.get("/calls/")  # default: open cases, tab "ทั้งหมด"
     counts, scopes = page.context["counts"], page.context["scope_counts"]
     assert scopes == {"open": open_cases, "final": total - open_cases, "all": total}  # same on every tab
-    assert counts["all"] == open_cases and counts["called"] == 5 and counts["never"] == open_cases - 5
+    assert counts["all"] == open_cases and counts["never"] == open_cases - 5
     assert (counts["reached"], counts["not_reached"]) == (3, 2)  # c2 c3 c5 / c1 c4
-    assert (counts["want"], counts["not_want"]) == (2, 1)  # c2 (info given) c5 / c3
-    assert [k for k, _ in page.context["tabs"]] == ["all", "never", "called", "reached", "not_reached", "want",
-                                                    "not_want", "issued"]
+    assert (counts["want"], counts["not_want"], counts["undecided"]) == (2, 1, 0)  # c2 (info given) c5 / c3
+    assert (counts["to_issue"], counts["issued_nr"]) == (2, 0)
+    assert [k for k, _ in page.context["tabs"]] == ["all", "reached", "want", "not_want", "not_reached", "to_issue",
+                                                    "issued_nr"]
     sk = page.context["sankey"]
-    assert {n["key"]: n["n"] for n in sk["nodes"]}["want"] == 2 and len(sk["links"]) == len(sk["nodes"]) - 1
+    nodes = {n["key"]: n for n in sk["nodes"]}
+    assert nodes["want"]["n"] == 2 and nodes["never"]["n"] == open_cases - 5
+    assert len(sk["links"]) == len(sk["nodes"]) - 1
+    labels = sorted((n["ly"], n["x"]) for n in sk["nodes"])
+    for col in {x for _, x in labels}:  # labels in one column never overlap
+        ys = [y for y, x in labels if x == col]
+        assert all(b - a >= 30 for a, b in zip(ys, ys[1:]))
     want_ids = {a.case_id for a in client.get("/calls/?tab=want").context["page"].paginator.object_list}
     assert want_ids == {c2.pk, c5.pk}
-    pending = client.get("/calls/?tab=want_pending").content.decode()  # a diagram-only stage
-    assert "กำลังดู:" in pending and "ประสงค์ · ยังไม่ออกหมาย" in pending
+    unreached = client.get("/calls/?tab=not_reached")
+    assert {a.case_id for a in unreached.context["page"]} == {c1.pk, c4.pk}
+    assert "ออกหมายเรียกทุกคดีที่รอออกหมาย (2)" in unreached.content.decode()
+    undecided = client.get("/calls/?tab=undecided").content.decode()  # a diagram-only stage
+    assert "กำลังดู:" in undecided and "ติดต่อได้ ยังไม่ระบุ" in undecided
     html = page.content.decode()
     assert "ยังไม่สิ้นสุด" in html and "สิ้นสุดแล้ว" in html and 'name="assignee"' not in html
     all_page = client.get("/calls/?tab=all&scope=all")
     assert all_page.context["page"].paginator.count == total
     assert all_page.context["scope_counts"] == {"open": open_cases, "final": total - open_cases, "all": total}
-    final_page = client.get("/calls/?tab=called&scope=final")
-    assert final_page.context["page"].paginator.count == total - open_cases  # closed cases count as called
-    assert final_page.context["counts"]["never"] == 0
+    final_page = client.get("/calls/?tab=all&scope=final")
+    assert final_page.context["page"].paginator.count == total - open_cases
+    assert final_page.context["counts"]["never"] == 0  # closed cases count as called
     # latest result filter, kept across tabs
-    reached = client.get("/calls/?tab=called&result=reached").context["page"]
+    reached = client.get("/calls/?tab=all&result=reached").context["page"]
     assert {a.case_id for a in reached} == {c2.pk, c3.pk, c5.pk}
-    not_reached = client.get("/calls/?tab=called&result=not_reached").context["page"]
+    not_reached = client.get("/calls/?tab=all&result=not_reached").context["page"]
     assert {a.case_id for a in not_reached} == {c1.pk, c4.pk}
-    html = client.get("/calls/?tab=called").content.decode()
+    html = client.get("/calls/?tab=all").content.decode()
     assert "ติดต่อได้ (ไฟล์)" in html and "โทรแล้ว (ไฟล์)" in html
-    off = client.get("/calls/?tab=called&result=off").context["page"]
+    off = client.get("/calls/?tab=all&result=off").context["page"]
     assert [a.case_id for a in off] == [c1.pk]
-    assert "result=off" in client.get("/calls/?tab=called&result=off").content.decode()
+    assert "result=off" in client.get("/calls/?tab=all&result=off").content.decode()
+
+
+def test_issue_every_unreached_case(client, imported, caller):
+    """"ติดต่อไม่ได้" → one button sends every case still waiting for a summons to the issue page."""
+    client.force_login(caller)
+    Case.objects.update(contact_log="")
+    c1, c2, c3 = Case.objects.not_final().order_by("receipt_no")[:3]
+    record_call(c1, caller, outcome=CallOutcome.OFF)
+    record_call(c2, caller, outcome=CallOutcome.NO_ANSWER)
+    record_call(c3, caller, outcome=CallOutcome.APPOINTED)  # reached: not included
+    resp = client.post("/calls/issue-unreached/", {"query": "tab=to_issue&scope=open"})
+    assert resp.status_code == 302 and resp["Location"] == "/summons/issue/"
+    assert sorted(client.session["issue_case_ids"]) == sorted([c1.pk, c2.pk])
+    # a search narrows it down
+    client.post("/calls/issue-unreached/", {"query": f"tab=to_issue&q={c2.receipt_no}"})
+    assert client.session["issue_case_ids"] == [c2.pk]
+    # nothing left: back to the list with a message
+    resp = client.post("/calls/issue-unreached/", {"query": "q=ไม่มีแน่นอน"})
+    assert resp.status_code == 302 and resp["Location"].startswith("/calls/")

@@ -16,13 +16,6 @@
 
 <style>
   .viz-root { --series-1: #2a78d6; --series-2: #eb6834; --muted-node: #94a3b8; --text-muted: #64748b; }
-  .sankey-link { opacity: .28; transition: opacity .15s; }
-  .sankey a:hover .sankey-link, .sankey-link:hover { opacity: .5; }
-  .sankey-node rect { transition: filter .15s; }
-  .sankey-node:hover rect, .sankey-node.is-active rect { filter: brightness(.85); }
-  .sankey-node.is-active .sankey-label { text-decoration: underline; }
-  .sankey-label { font-size: 13px; fill: #0f172a; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
-  .sankey-num { fill: #334155; } .sankey-pct { fill: #64748b; font-size: 12px; }
 </style>
 <div class="viz-root card mb-5">
   <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ภาพรวมการโทร → ออกหมาย</h2>
@@ -70,6 +63,16 @@
   </nav>
 </div>
 
+{% if can_issue and tab == "not_reached" or can_issue and tab == "to_issue" %}
+<div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-orange-50 p-3 ring-1 ring-orange-200">
+  <div class="text-sm text-orange-900">ติดต่อไม่ได้ <b class="tabular-nums">{{ counts.not_reached|intcomma }}</b> คดี · รอออกหมายเรียก <b class="tabular-nums">{{ counts.to_issue|intcomma }}</b> คดี
+    <span class="text-orange-700">— ส่งหมายเรียกทางไปรษณีย์แทนการโทร</span></div>
+  <form method="post" action="{% url 'calls_issue_filtered' %}" class="ml-auto">{% csrf_token %}
+    <input type="hidden" name="query" value="{{ request.GET.urlencode }}">
+    <button class="btn btn-primary" {% if not counts.to_issue %}disabled{% endif %}>{% icon "document" "h-4 w-4" %} ออกหมายเรียกทุกคดีที่รอออกหมาย ({{ counts.to_issue|intcomma }})</button>
+  </form>
+</div>
+{% endif %}
 {% if not tab_in_nav %}
 <div class="mb-3 flex items-center gap-2 text-sm"><span class="text-slate-500">กำลังดู:</span>
   <span class="badge badge-blue">{{ tab_label }} · {{ counts|get_item:tab|intcomma }}</span>

@@ -132,8 +132,6 @@ def _collect(start, end):
         "summonses": all_summons.count(), "ems_sent": all_summons.exclude(ems_number="").count(),
         "ems_waiting": all_summons.filter(ems_number="").count(),
     }
-    overall["called"] = stages["called"]
-    overall["called_pct"] = round(overall["called"] / overall["cases"] * 100) if overall["cases"] else 0
 
     days = [start + dt.timedelta(days=i) for i in range((end - start).days + 1)]
     reached_by_day = _by_day(reached, "called_at")

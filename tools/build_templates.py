@@ -423,12 +423,12 @@ def build_envelope_official_portrait():
     _cell_para(c_sender, "{ชื่อหน่วย}", 13, bold=True, first=True)
     _cell_para(c_sender, "{ที่อยู่หน่วย}", 13, bold=True)
 
-    # row 3 left: document number line + barcode (level with 'กรุณาส่ง', as on the printed sheet)
+    # row 3 left: document number line + EMS barcode with its number under it (level with 'กรุณาส่ง')
     c_docno = grid.cell(2, 0).merge(grid.cell(2, 1))
     _cell_para(c_docno, "เลขที่หนังสือ: {เลขที่หนังสือ} ลงวันที่: {วันที่หนังสือ}", 10, first=True,
                indent_cm=1.9)
     _cell_para(c_docno, "{บาร์โค้ด}", 10, space_before=1, indent_cm=1.9)
-    _cell_para(c_docno, "{รหัสซอง}", 8, indent_cm=1.9)
+    _cell_para(c_docno, "{รหัสซอง}", 12, indent_cm=1.9)
 
     # row 3: 'กรุณาส่ง' + recipient from the middle of the sheet, running under the permit box
     c_to = grid.cell(2, 2).merge(grid.cell(2, 3))

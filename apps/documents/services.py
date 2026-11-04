@@ -262,7 +262,8 @@ def ensure_pdf(summons: Summons) -> Path:
 
 
 # Envelope fields that may legitimately be empty (no postcode found, no permit box text, ...)
-ENVELOPE_OPTIONAL = frozenset({"รหัสไปรษณีย์", "ใบอนุญาตฝากส่ง", "เลขคดีอาญา", "ที่อยู่หน่วย"})
+ENVELOPE_OPTIONAL = frozenset({"รหัสไปรษณีย์", "ใบอนุญาตฝากส่ง", "เลขคดีอาญา", "ที่อยู่หน่วย",
+                               "บาร์โค้ด"})  # empty until the EMS number is scanned in
 
 
 def complete_context(summons: Summons) -> dict:
@@ -292,29 +293,32 @@ def envelope_values(summons: Summons) -> dict:
     from apps.core.models import SystemSetting
     from apps.core.thai_format import thai_date_full, to_arabic_digits
 
-    from .barcodes import summons_code
-
     values = {k: v if k in KEEP_DIGITS_ON_ENVELOPE else to_arabic_digits(v)
               for k, v in complete_context(summons).items()}
     values.update({
         "เลขที่หนังสือ": SystemSetting.get().letter_number,
         "วันที่หนังสือ": thai_date_full(summons.issue_date, thai_digits=False),
-        "บาร์โค้ด": BARCODE_MARK,
-        "รหัสซอง": f"{summons.case.receipt_no}-{summons.number}  ({summons_code(summons)})",
+        # the EMS barcode appears once someone has scanned the EMS label into the system; before that the
+        # line is left for the number, so an envelope printed early can still be written on by hand
+        "บาร์โค้ด": BARCODE_MARK if summons.ems_number else "",
+        "รหัสซอง": (f"EMS {summons.ems_number}" if summons.ems_number else "EMS ..................................")
+                   + f"   ·   {summons.case.receipt_no}-{summons.number}",
     })
     return values
 
 
 def _insert_barcode(docx_path, summons) -> None:
-    """Put the summons barcode where the template has {บาร์โค้ด}."""
+    """Put the EMS-number barcode where the template has {บาร์โค้ด} (the number itself is printed under it)."""
     from docx import Document
     from docx.oxml.ns import qn
     from docx.shared import Cm
     from docx.text.paragraph import Paragraph
     from docx.text.run import Run
 
-    from .barcodes import code128_png, summons_code
+    from .barcodes import code128_png
 
+    if not summons.ems_number:
+        return
     doc = Document(str(docx_path))
     found = False
     for run in list(doc.element.body.iter(qn("w:r"))):
@@ -323,8 +327,8 @@ def _insert_barcode(docx_path, summons) -> None:
             for t in texts:
                 t.text = (t.text or "").replace(BARCODE_MARK, "")
             paragraph = Paragraph(run.getparent(), doc._body)
-            Run(run, paragraph).add_picture(io.BytesIO(code128_png(summons_code(summons))), width=Cm(3.2),
-                                            height=Cm(0.75))
+            Run(run, paragraph).add_picture(io.BytesIO(code128_png(summons.ems_number)), width=Cm(4.6),
+                                            height=Cm(0.85))
             found = True
     if found:
         doc.save(str(docx_path))

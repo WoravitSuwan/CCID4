@@ -79,14 +79,20 @@ def test_scan_station_envelope_then_ems(client, issued):
     assert found["ok"] and found["id"] == s.pk and found["receipt"] == s.case.receipt_no
     by_receipt = client.post("/summons/scan/lookup/", {"code": f"{s.case.receipt_no}-{s.number}"}).json()
     assert by_receipt["id"] == s.pk
+    page = client.get("/summons/scan/")
+    assert {p["id"] for p in page.context["pending"]} == {x.pk for x in issued}  # none has a number yet
     ems_first = client.post("/summons/scan/lookup/", {"code": "EB123456785TH"}).json()
-    assert not ems_first["ok"] and "ยิงบาร์โค้ดบนซองก่อน" in ems_first["error"]
+    assert not ems_first["ok"] and "ยังไม่ได้บันทึกให้หมายฉบับใด" in ems_first["error"]
     wrong = client.post("/summons/scan/save/", {"id": s.pk, "ems": code}).json()
     assert not wrong["ok"] and "บาร์โค้ดซอง" in wrong["error"]
     saved = client.post("/summons/scan/save/", {"id": s.pk, "ems": "EB123456785TH"}).json()
     assert saved["ok"] and saved["ems"] == "EB123456785TH"
     s.refresh_from_db()
     assert s.ems_number == "EB123456785TH" and s.ems_by == caller
+    # scanning the EMS barcode printed on the envelope tells whose it is
+    check = client.post("/summons/scan/lookup/", {"code": "EB 1234 5678 5 TH"}).json()
+    assert check["ok"] and check["verify"] and check["id"] == s.pk and check["name"] == s.recipient_name
+    assert s.pk not in {p["id"] for p in client.get("/summons/scan/").context["pending"]}
 
 
 def test_envelope_has_letter_number_and_barcode(issued, tmp_path):
@@ -99,8 +105,18 @@ def test_envelope_has_letter_number_and_barcode(issued, tmp_path):
     setting = SystemSetting.get()
     setting.letter_number = "ตช.0039.52/1548"
     setting.save()
-    out = render_envelope(issued[0], tmp_path / "env.docx")
+    s = issued[0]
+    # before the EMS label is scanned: a blank line for the number, no barcode
+    out = render_envelope(s, tmp_path / "env.docx")
     text = docx_engine.document_text(out)
     assert "เลขที่หนังสือ: ตช.0039.52/1548 ลงวันที่: 9 กุมภาพันธ์ 2569" in text
-    assert "[[BARCODE]]" not in text and f"{issued[0].case.receipt_no}-1" in text
-    assert any(n.startswith("word/media/") for n in zipfile.ZipFile(out).namelist())  # barcode picture
+    assert "[[BARCODE]]" not in text and f"{s.case.receipt_no}-1" in text and "EMS ....." in text
+    media = [n for n in zipfile.ZipFile(out).namelist() if n.startswith("word/media/")]
+    # after: the EMS barcode, with the same number printed under it to check by eye
+    s.ems_number = "EB123456785TH"
+    s.save()
+    out = render_envelope(s, tmp_path / "env2.docx")
+    text = docx_engine.document_text(out)
+    assert "EMS EB123456785TH" in text and "[[BARCODE]]" not in text
+    pictures = [n for n in zipfile.ZipFile(out).namelist() if n.startswith("word/media/")]
+    assert len(pictures) == len(media) + 1
