@@ -45,7 +45,7 @@ DT_WIDGET = forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-
 ADDRESS_PREFIX = "addr"  # keeps address field ids apart from the call form (both have "note")
 TABS = [("todo", "ต้องโทร"), ("never", "ยังไม่ได้โทร"), ("called", "โทรแล้ว"), ("callback", "นัดโทรกลับ"),
         ("done", "ติดต่อเสร็จแล้ว"), ("all", "ทั้งหมด")]
-RESULTS = [("reached", "ติดต่อได้ (ทุกแบบ)"), ("not_reached", "ติดต่อไม่ได้ (ทุกแบบ)")]
+RESULTS = [("reached", "ติดต่อได้ (ทุกแบบ รวมจากไฟล์)"), ("not_reached", "ติดต่อไม่ได้ (ทุกแบบ รวมจากไฟล์)")]
 
 
 def call_staff():
@@ -71,6 +71,14 @@ def _queue(request):
 
 
 OPEN_CASE = Q(case__status__isnull=True) | Q(case__status__is_final=False)
+# Calls made before this system are in the register's "บันทึกการติดต่อ" column. Until someone records a
+# call here, that column decides: any text = already called; "(ไม่)ประสงค์ดำเนินคดี" / "ติดต่อแล้ว" /
+# "ติดต่อได้" = the victim was reached, nothing left to do.
+NO_SYSTEM_CALL = Q(attempt_count=0)
+FILE_LOG = ~Q(case__contact_log="")
+FILE_REACHED = (Q(case__contact_log__contains="ประสง") | Q(case__contact_log__contains="ติดต่อแล้ว")
+                | (Q(case__contact_log__contains="ติดต่อได้") & ~Q(case__contact_log__contains="ไม่สามารถติดต่อ")))
+FILE_DONE = NO_SYSTEM_CALL & FILE_REACHED
 
 
 SCOPES = [("open", "ยังไม่สิ้นสุด"), ("final", "สิ้นสุดแล้ว"), ("all", "ทั้งหมด")]
@@ -86,16 +94,17 @@ def _apply_scope(qs, scope):
 
 def _apply_tab(qs, tab):
     now = timezone.now()
-    if tab == "todo":  # closed cases never need a call
-        return qs.filter(OPEN_CASE, is_done=False).filter(Q(callback_at__isnull=True) | Q(callback_at__lte=now))
+    if tab == "todo":  # closed cases never need a call; nor do victims the register says were reached
+        return (qs.filter(OPEN_CASE, is_done=False).filter(Q(callback_at__isnull=True) | Q(callback_at__lte=now))
+                .exclude(FILE_DONE))
     if tab == "callback":
         return qs.filter(OPEN_CASE, is_done=False, callback_at__isnull=False)
-    if tab == "never":
-        return qs.filter(attempt_count=0)
-    if tab == "called":
-        return qs.filter(attempt_count__gt=0)
+    if tab == "never":  # open, not called here, and nothing in the register's contact log
+        return qs.filter(OPEN_CASE, NO_SYSTEM_CALL).exclude(FILE_LOG)
+    if tab == "called":  # called here, or in the register (contact log), or the case is closed
+        return qs.filter(~NO_SYSTEM_CALL | FILE_LOG | ~OPEN_CASE)
     if tab == "done":
-        return qs.filter(is_done=True)
+        return qs.filter(Q(is_done=True) | FILE_DONE)
     return qs
 
 
@@ -107,9 +116,9 @@ def _apply_filters(request, qs):
                        | Q(case__victim_phone__icontains=q))
     result = request.GET.get("result", "")
     if result == "reached":
-        qs = qs.filter(last_outcome__in=REACHED)
+        qs = qs.filter(Q(last_outcome__in=REACHED) | FILE_DONE)
     elif result == "not_reached":
-        qs = qs.filter(attempt_count__gt=0).exclude(last_outcome__in=REACHED)
+        qs = qs.filter((~NO_SYSTEM_CALL & ~Q(last_outcome__in=REACHED)) | (NO_SYSTEM_CALL & FILE_LOG & ~FILE_REACHED))
     elif result in CallOutcome.values:
         qs = qs.filter(last_outcome=result)
     return qs

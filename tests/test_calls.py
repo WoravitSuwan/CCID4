@@ -171,26 +171,35 @@ def test_shared_list_first_caller_takes_the_case_and_busy_warning(client, import
 
 def test_queue_tabs_and_status_filter(client, imported, caller):
     client.force_login(caller)
-    c1, c2 = Case.objects.not_final().order_by("receipt_no")[:2]
+    Case.objects.update(contact_log="")  # control what the register's contact log says
+    c1, c2, c3, c4 = Case.objects.not_final().order_by("receipt_no")[:4]
     record_call(c1, caller, outcome=CallOutcome.OFF)
     record_call(c2, caller, outcome=CallOutcome.INFO)
+    Case.objects.filter(pk=c3.pk).update(contact_log="ไม่ประสงค์ดำเนินคดี วันที่ 3 ก.ค. 68")  # reached before
+    Case.objects.filter(pk=c4.pk).update(contact_log="ครั้งที่ 1 ไม่สามารถติดต่อได้ (ปิดเครื่อง)")  # called, not reached
     total, open_cases = Case.objects.count(), Case.objects.not_final().count()
     page = client.get("/calls/")  # default: open cases, tab "ต้องโทร"
     counts, scopes = page.context["counts"], page.context["scope_counts"]
     assert scopes == {"open": open_cases, "final": total - open_cases, "all": total}  # same on every tab
-    assert counts["all"] == open_cases and counts["called"] == 2 and counts["never"] == open_cases - 2
-    assert counts["done"] == 1 and counts["todo"] == open_cases - 1
+    assert counts["all"] == open_cases and counts["called"] == 4 and counts["never"] == open_cases - 4
+    assert counts["done"] == 2 and counts["todo"] == open_cases - 2  # c2 (here) and c3 (register) are done
+    todo_ids = {a.case_id for a in page.context["page"].paginator.object_list}
+    assert c3.pk not in todo_ids and c4.pk in todo_ids
     html = page.content.decode()
     assert "ยังไม่สิ้นสุด" in html and "สิ้นสุดแล้ว" in html and 'name="assignee"' not in html
     all_page = client.get("/calls/?tab=all&scope=all")
     assert all_page.context["page"].paginator.count == total
     assert all_page.context["scope_counts"] == {"open": open_cases, "final": total - open_cases, "all": total}
-    final_page = client.get("/calls/?tab=never&scope=final")
-    assert final_page.context["page"].paginator.count == total - open_cases  # closed, never called
-    assert final_page.context["counts"]["todo"] == 0  # closed cases never need a call
+    final_page = client.get("/calls/?tab=called&scope=final")
+    assert final_page.context["page"].paginator.count == total - open_cases  # closed cases count as called
+    assert final_page.context["counts"]["never"] == 0 and final_page.context["counts"]["todo"] == 0
     # latest result filter, kept across tabs
     reached = client.get("/calls/?tab=called&result=reached").context["page"]
-    assert [a.case_id for a in reached] == [c2.pk]
+    assert {a.case_id for a in reached} == {c2.pk, c3.pk}
+    not_reached = client.get("/calls/?tab=called&result=not_reached").context["page"]
+    assert {a.case_id for a in not_reached} == {c1.pk, c4.pk}
+    html = client.get("/calls/?tab=called").content.decode()
+    assert "ติดต่อได้ (ไฟล์)" in html and "โทรแล้ว (ไฟล์)" in html
     off = client.get("/calls/?tab=called&result=off").context["page"]
     assert [a.case_id for a in off] == [c1.pk]
     assert "result=off" in client.get("/calls/?tab=called&result=off").content.decode()

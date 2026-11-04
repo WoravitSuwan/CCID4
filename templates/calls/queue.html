@@ -80,14 +80,18 @@
         <td class="whitespace-nowrap font-mono">{{ a.case.victim_phone|default:a.case.complainant.phone|default:"-" }}</td>
         <td class="max-w-[11rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
         <td class="whitespace-nowrap">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}</td>
-        <td class="text-center tabular-nums">{% if a.attempt_count %}{{ a.attempt_count }}{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
-        <td class="text-sm">
+        <td class="text-center tabular-nums">{% if a.attempt_count %}{{ a.attempt_count }}{% elif a.case.contact_log %}<span class="badge badge-gray" title="โทรแล้วตามบันทึกการติดต่อในไฟล์ทะเบียน">ในไฟล์</span>{% elif a.case.status.is_final %}<span class="text-slate-300">–</span>{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
+        <td class="max-w-[16rem] text-sm">
           {% if a.last_outcome %}<span class="badge {% if a.last_reached %}badge-green{% else %}badge-amber{% endif %}">{{ a.get_last_outcome_display }}</span>
-          <div class="text-xs text-slate-400">{{ a.last_call_at|thai_date:"datetime" }}</div>{% else %}<span class="text-slate-300">–</span>{% endif %}
+          <div class="text-xs text-slate-400">{{ a.last_call_at|thai_date:"datetime" }}</div>
+          {% elif a.case.contact_log %}<span class="badge {% if a.file_reached %}badge-green{% else %}badge-amber{% endif %}">{% if a.file_reached %}ติดต่อได้ (ไฟล์){% else %}โทรแล้ว (ไฟล์){% endif %}</span>
+          <div class="truncate text-xs text-slate-500" title="{{ a.case.contact_log }}">{{ a.file_log_line }}</div>
+          {% elif a.case.status.is_final %}<span class="badge badge-gray">คดีสิ้นสุดแล้ว</span>
+          {% else %}<span class="text-slate-300">–</span>{% endif %}
           {% if a.assignee %}<div class="text-xs text-slate-400">ผู้รับผิดชอบ {{ a.assignee.first_name|default:a.assignee.username }}</div>{% endif %}
           {% if a.callback_at and not a.is_done %}<div class="text-xs {% if a.callback_due %}font-semibold text-amber-700{% else %}text-slate-500{% endif %}">โทรกลับ {{ a.callback_at|thai_date:"datetime" }}</div>{% endif %}
         </td>
-        <td class="text-right">{% if a.is_done %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
+        <td class="text-right">{% if a.is_done or not a.attempt_count and a.file_reached %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% elif a.case.status.is_final %}<a class="btn btn-sm" href="{% url 'call_case' a.case_id %}">ดู</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
       </tr>
     {% empty %}
       <tr><td colspan="9" class="py-16 text-center">

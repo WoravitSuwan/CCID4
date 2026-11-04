@@ -85,6 +85,18 @@ class CallAssignment(models.Model):
         return self.opened_by
 
     @property
+    def file_log_line(self) -> str:
+        """Latest line of the register's contact log (calls made before this system)."""
+        lines = [ln.strip() for ln in (self.case.contact_log or "").splitlines() if ln.strip()]
+        return lines[-1] if lines else ""
+
+    @property
+    def file_reached(self) -> bool:
+        log = self.case.contact_log or ""
+        return ("ประสง" in log or "ติดต่อแล้ว" in log
+                or ("ติดต่อได้" in log and "ไม่สามารถติดต่อ" not in log))
+
+    @property
     def last_reached(self) -> bool:
         return self.last_outcome in REACHED
 
