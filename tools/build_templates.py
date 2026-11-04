@@ -388,7 +388,7 @@ def build_envelope_official_portrait():
     face = row.cells[0]
 
     # positions measured on the printed sheet (cm from the left edge of the paper):
-    # Garuda 0.9-2.6, sender 2.6-9.0, 'กรุณาส่ง' from ~9, permit box 14.3-20.1, '(ใช้ในราชการ...)' at the top centre
+    # Garuda 0.9-3.1, sender 3.1-9.5, 'กรุณาส่ง' from ~9.5, permit box 14.3-20.1, '(ใช้ในราชการ...)' at the top centre
     grid = face.add_table(rows=3, cols=4)
     grid.autofit = False
     tbl_pr = grid._tbl.tblPr
@@ -396,7 +396,7 @@ def build_envelope_official_portrait():
     layout.set(qn("w:type"), "fixed")
     tbl_pr.append(layout)
     _borders(tbl_pr, "w:tblBorders", top="nil", left="nil", bottom="nil", right="nil", insideH="nil", insideV="nil")
-    widths = [1.7, 6.4, 5.3, 5.8]
+    widths = [2.2, 6.4, 4.8, 5.8]  # Garuda column: 1.8 cm image is 1.74 cm wide + cell padding
     for r in grid.rows:
         for cell, w in zip(r.cells, widths):
             cell.width = Cm(w)

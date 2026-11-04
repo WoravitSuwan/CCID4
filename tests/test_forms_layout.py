@@ -78,3 +78,21 @@ def test_envelope_uses_arabic_digits_and_permit(setup_signers, admin_user, tmp_p
     # the summons itself keeps Thai digits and shows the address after the 'บ้านเลขที่' label
     stext = docx_engine.document_text(summons.docx_file.path)
     assert "บ้านเลขที่" in stext and "บ้านเลขที่ บ้านเลขที่" not in stext
+
+
+def test_portrait_envelope_garuda_fits_its_column():
+    """The Garuda must not be wider than its table column (it was cut off at the left)."""
+    from pathlib import Path
+
+    from django.conf import settings
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    doc = Document(str(Path(settings.TEMPLATES_DOCX_DIR) / "envelope_official_portrait.docx"))
+    face = doc.tables[0].rows[0].cells[0]
+    grid = face.tables[0]
+    logo_cell = grid.cell(1, 0)
+    [extent] = logo_cell._tc.iter(qn("wp:extent"))
+    image_width = int(extent.get("cx"))
+    padding = 2 * 108 * 635  # Word's default cell margin: 0.19 cm (108 twips) each side, in EMU
+    assert image_width + padding <= logo_cell.width
