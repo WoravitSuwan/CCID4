@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.models import Role
 from apps.documents import docx_engine
 from apps.documents.models import DocTemplate, TemplateKind
-from apps.documents.placeholders import SUMMONS_PLACEHOLDERS
+from apps.documents.placeholders import ENVELOPE_PLACEHOLDERS, SUMMONS_PLACEHOLDERS
 from apps.registry.forms import SignerForm, StyledForm, StyledModelForm
 from apps.registry.models import Investigator, InvestigatorAlias, Status, Unit
 
@@ -284,7 +284,8 @@ def templates(request):
             tpl.save()
             if d["activate"]:
                 tpl.activate()
-        unknown = [p for p in tpl.placeholders if p not in SUMMONS_PLACEHOLDERS]
+        known = ENVELOPE_PLACEHOLDERS if tpl.kind == TemplateKind.ENVELOPE else SUMMONS_PLACEHOLDERS
+        unknown = [p for p in tpl.placeholders if p not in known]
         log(request, AuditAction.SETTINGS, tpl, f"อัปโหลดแบบฟอร์ม {tpl}")
         if unknown:
             messages.warning(request, "แบบฟอร์มมีตัวแทนที่ระบบไม่รู้จัก (ต้องแก้ก่อนออกหมาย): "
@@ -294,9 +295,10 @@ def templates(request):
         return redirect("settings_templates")
     rows = DocTemplate.objects.all()
     for t in rows:
-        t.unknown = [p for p in t.placeholders if p not in SUMMONS_PLACEHOLDERS]
+        known = ENVELOPE_PLACEHOLDERS if t.kind == TemplateKind.ENVELOPE else SUMMONS_PLACEHOLDERS
+        t.unknown = [p for p in t.placeholders if p not in known]
     return render(request, "settings/templates.html", {
-        "templates": rows, "form": form, "supported": SUMMONS_PLACEHOLDERS, "tab": "templates",
+        "templates": rows, "form": form, "supported": ENVELOPE_PLACEHOLDERS, "tab": "templates",
     })
 
 
@@ -407,7 +409,7 @@ class SystemForm(StyledModelForm):
 
     class Meta:
         model = SystemSetting
-        fields = ["retention_days", "default_reason", "default_appointment_days"]
+        fields = ["retention_days", "default_reason", "default_appointment_days", "letter_number"]
 
     def clean_logo(self):
         f = self.cleaned_data.get("logo")

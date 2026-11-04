@@ -1,0 +1,24 @@
+{% load thai %}{# params: chart, title_id #}
+<div class="relative">
+  {% if chart.empty %}<div class="flex h-40 items-center justify-center text-sm text-slate-400">ไม่มีข้อมูลในช่วงนี้</div>{% else %}
+  <svg viewBox="0 0 {{ chart.w }} {{ chart.h }}" class="viz-line block h-auto w-full" role="img" aria-labelledby="{{ title_id }}">
+    {% for g in chart.grid %}
+    <line x1="{{ chart.pad_l }}" x2="{{ chart.right }}" y1="{{ g.y }}" y2="{{ g.y }}" stroke="var(--grid)" stroke-width="1" {% if not forloop.first %}stroke-dasharray="2 3"{% endif %}/>
+    <text x="{{ chart.pad_l|add:'-6' }}" y="{{ g.y }}" dy="4" text-anchor="end" font-size="11" fill="var(--text-muted)">{{ g.v }}</text>
+    {% endfor %}
+    {% for t in chart.ticks %}<text x="{{ t.x }}" y="{{ chart.h|add:'-8' }}" text-anchor="middle" font-size="11" fill="var(--text-muted)">{{ t.label }}</text>{% endfor %}
+    {% for ln in chart.lines %}
+    <polyline points="{{ ln.points }}" fill="none" stroke="{{ ln.color }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    {% for x, y in ln.markers %}<circle cx="{{ x }}" cy="{{ y }}" r="2.5" fill="{{ ln.color }}"/>{% endfor %}
+    {% endfor %}
+    {% for h in chart.hover %}
+    <g class="viz-day" data-date="{{ h.date|thai_date:'full' }}" data-values="{% for label, color, n in h.values %}{{ label }}|{{ color }}|{{ n }}{% if not forloop.last %};{% endif %}{% endfor %}">
+      <rect x="{{ h.x }}" y="{{ chart.top_y }}" width="{{ h.w }}" height="{{ chart.base_y|add:'0' }}" fill="transparent"/>
+      <line class="viz-x" x1="{{ h.cx }}" x2="{{ h.cx }}" y1="{{ chart.top_y }}" y2="{{ chart.base_y }}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3"/>
+      {% for p in h.points %}<circle class="viz-x" cx="{{ h.cx }}" cy="{{ p.y }}" r="4.5" fill="{{ p.color }}" stroke="#fff" stroke-width="2"/>{% endfor %}
+    </g>
+    {% endfor %}
+  </svg>
+  <div class="viz-tip pointer-events-none absolute z-10 hidden min-w-[9rem] rounded-lg bg-white px-3 py-2 text-xs shadow-lg ring-1 ring-slate-200"></div>
+  {% endif %}
+</div>

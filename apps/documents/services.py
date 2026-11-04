@@ -284,19 +284,56 @@ def complete_context(summons: Summons) -> dict:
 
 
 KEEP_DIGITS_ON_ENVELOPE = {"ใบอนุญาตฝากส่ง"}  # the permit box is printed as typed (๑๙/๒๕๖๘)
+BARCODE_MARK = "[[BARCODE]]"  # replaced by the barcode picture after the text is filled in
 
 
 def envelope_values(summons: Summons) -> dict:
     """Envelope text uses Arabic digits, like the agency's printed envelopes (except the permit box)."""
-    from apps.core.thai_format import to_arabic_digits
+    from apps.core.models import SystemSetting
+    from apps.core.thai_format import thai_date_full, to_arabic_digits
 
-    return {k: v if k in KEEP_DIGITS_ON_ENVELOPE else to_arabic_digits(v)
-            for k, v in complete_context(summons).items()}
+    from .barcodes import summons_code
+
+    values = {k: v if k in KEEP_DIGITS_ON_ENVELOPE else to_arabic_digits(v)
+              for k, v in complete_context(summons).items()}
+    values.update({
+        "เลขที่หนังสือ": SystemSetting.get().letter_number,
+        "วันที่หนังสือ": thai_date_full(summons.issue_date, thai_digits=False),
+        "บาร์โค้ด": BARCODE_MARK,
+        "รหัสซอง": f"{summons.case.receipt_no}-{summons.number}  ({summons_code(summons)})",
+    })
+    return values
+
+
+def _insert_barcode(docx_path, summons) -> None:
+    """Put the summons barcode where the template has {บาร์โค้ด}."""
+    from docx import Document
+    from docx.oxml.ns import qn
+    from docx.shared import Cm
+    from docx.text.paragraph import Paragraph
+    from docx.text.run import Run
+
+    from .barcodes import code128_png, summons_code
+
+    doc = Document(str(docx_path))
+    found = False
+    for run in list(doc.element.body.iter(qn("w:r"))):
+        texts = run.findall(qn("w:t"))
+        if any(BARCODE_MARK in (t.text or "") for t in texts):
+            for t in texts:
+                t.text = (t.text or "").replace(BARCODE_MARK, "")
+            paragraph = Paragraph(run.getparent(), doc._body)
+            Run(run, paragraph).add_picture(io.BytesIO(code128_png(summons_code(summons))), width=Cm(3.2),
+                                            height=Cm(0.75))
+            found = True
+    if found:
+        doc.save(str(docx_path))
 
 
 def render_envelope(summons: Summons, out_path, tpl: DocTemplate | None = None) -> Path:
     tpl = tpl or get_template(TemplateKind.ENVELOPE)
     render_docx(tpl, envelope_values(summons), out_path, optional=ENVELOPE_OPTIONAL)
+    _insert_barcode(out_path, summons)
     return Path(out_path)
 
 

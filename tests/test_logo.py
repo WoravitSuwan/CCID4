@@ -13,7 +13,7 @@ PNG = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08
 def form(**extra):
     s = SystemSetting.get()
     return {"retention_days": s.retention_days, "default_reason": s.default_reason,
-            "default_appointment_days": s.default_appointment_days, **extra}
+            "default_appointment_days": s.default_appointment_days, "letter_number": s.letter_number, **extra}
 
 
 def test_upload_show_and_remove_logo(client, admin_user):

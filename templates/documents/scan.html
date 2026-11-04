@@ -1,0 +1,104 @@
+{% extends "base.html" %}{% load ui %}
+{% block title %}ยิงบาร์โค้ด{% endblock %}
+{% block content %}
+<div class="mb-3"><a href="{% url 'summons_list' %}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} หมายเรียกที่ออก</a></div>
+<div class="page-header"><div><h1>ยิงบาร์โค้ด บันทึกเลข EMS</h1>
+  <p class="page-sub">1) ยิงบาร์โค้ดบนซอง → ระบบขึ้นข้อมูลหมายฉบับนั้น · 2) ยิงบาร์โค้ด EMS บนใบรับฝาก → บันทึกทันที แล้วยิงซองถัดไปได้เลย</p></div></div>
+
+<div class="grid gap-5 lg:grid-cols-[1fr_22rem]">
+  <div class="space-y-4">
+    <div class="card">
+      <div class="mb-3 flex items-center gap-3">
+        <span id="step1" class="inline-flex h-8 items-center rounded-full bg-indigo-600 px-3 text-sm font-semibold text-white">1 ยิงบาร์โค้ดบนซอง</span>
+        <span class="text-slate-300">{% icon "chevron-right" "h-4 w-4" %}</span>
+        <span id="step2" class="inline-flex h-8 items-center rounded-full bg-slate-100 px-3 text-sm font-semibold text-slate-500">2 ยิงบาร์โค้ด EMS</span>
+      </div>
+      <form id="scan-form" autocomplete="off">{% csrf_token %}
+        <input id="scan-input" class="input w-full py-4 text-center font-mono text-2xl uppercase tracking-wider" placeholder="ยิงบาร์โค้ด หรือพิมพ์แล้วกด Enter" autofocus aria-label="รหัสที่ยิง">
+      </form>
+      <div id="scan-msg" class="mt-3 min-h-[1.5rem] text-sm text-slate-500">พร้อมรับบาร์โค้ดซอง (หรือพิมพ์ เลขรับแจ้ง-ครั้งที่ เช่น C660611953-1)</div>
+    </div>
+    <div id="current" class="card hidden">
+      <div class="flex flex-wrap items-start gap-3">
+        <div class="min-w-0 flex-1">
+          <div class="font-mono text-lg font-semibold text-indigo-700"><span id="c-receipt"></span> <span class="font-sans text-sm font-normal text-slate-400">ครั้งที่ <span id="c-number"></span></span></div>
+          <div id="c-name" class="text-xl font-semibold text-slate-900"></div>
+          <div id="c-address" class="mt-1 text-sm text-slate-600"></div>
+        </div>
+        <div class="text-right"><div class="text-xs text-slate-500">เลข EMS</div><div id="c-ems" class="font-mono text-lg"></div></div>
+      </div>
+      <div class="mt-3 flex gap-2"><button type="button" id="cancel" class="btn btn-sm">ยกเลิกฉบับนี้</button></div>
+    </div>
+  </div>
+  <div class="card self-start p-0">
+    <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3"><h2>บันทึกในรอบนี้</h2><span id="count" class="badge badge-green ml-auto">0</span></div>
+    <ol id="history" class="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto text-sm"><li class="px-4 py-6 text-center text-slate-400" id="empty">ยังไม่มี</li></ol>
+  </div>
+</div>
+<script>
+(function () {
+  const input = document.getElementById("scan-input"), msg = document.getElementById("scan-msg");
+  const csrf = document.querySelector("#scan-form [name=csrfmiddlewaretoken]").value;
+  const box = document.getElementById("current"), history = document.getElementById("history");
+  let current = null, saved = 0;
+  const ctx = window.AudioContext ? new AudioContext() : null;
+  function beep(ok) {  // short sound: high = saved, low = problem (scanner stations often have no eyes on screen)
+    if (!ctx) return;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = ok ? 1200 : 220; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + (ok ? 0.12 : 0.35));
+  }
+  function say(text, kind) {
+    msg.textContent = text;
+    msg.className = "mt-3 min-h-[1.5rem] text-sm " + ({ok: "font-medium text-emerald-700", err: "font-medium text-red-600"}[kind] || "text-slate-500");
+  }
+  function step(n) {
+    document.getElementById("step1").className = "inline-flex h-8 items-center rounded-full px-3 text-sm font-semibold " + (n === 1 ? "bg-indigo-600 text-white" : "bg-emerald-100 text-emerald-800");
+    document.getElementById("step2").className = "inline-flex h-8 items-center rounded-full px-3 text-sm font-semibold " + (n === 2 ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500");
+  }
+  function show(s) {
+    current = s;
+    document.getElementById("c-receipt").textContent = s.receipt;
+    document.getElementById("c-number").textContent = s.number;
+    document.getElementById("c-name").textContent = s.name;
+    document.getElementById("c-address").textContent = s.address;
+    document.getElementById("c-ems").textContent = s.ems || "ยังไม่มี";
+    box.classList.remove("hidden");
+    step(2);
+  }
+  function reset() { current = null; box.classList.add("hidden"); step(1); input.focus(); }
+  async function post(url, data) {
+    const body = new URLSearchParams(data);
+    const r = await fetch(url, {method: "POST", body, headers: {"X-CSRFToken": csrf}});
+    return r.ok ? r.json() : {ok: false, error: "บันทึกไม่ได้ (" + r.status + ")"};
+  }
+  document.getElementById("scan-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = input.value.trim(); input.value = "";
+    if (!code) return;
+    if (!current) {
+      const s = await post("{% url 'summons_scan_lookup' %}", {code});
+      if (!s.ok) { beep(false); say(s.error, "err"); return; }
+      show(s); beep(true);
+      say(s.ems ? "ฉบับนี้มีเลข EMS แล้ว (" + s.ems + ") — ยิงเลขใหม่เพื่อแทนที่ หรือกดยกเลิก" : "ยิงบาร์โค้ด EMS ของซองนี้", s.ems ? "err" : "ok");
+      return;
+    }
+    const r = await post("{% url 'summons_scan_save' %}", {id: current.id, ems: code});
+    if (!r.ok) { beep(false); say(r.error, "err"); return; }
+    beep(true); saved += 1;
+    document.getElementById("count").textContent = saved;
+    const empty = document.getElementById("empty"); if (empty) empty.remove();
+    const li = document.createElement("li"); li.className = "px-4 py-2.5";
+    li.innerHTML = `<div class="flex justify-between gap-2"><span class="font-mono font-medium"></span><a class="font-mono text-indigo-700" target="_blank" rel="noopener noreferrer"></a></div><div class="truncate text-xs text-slate-500"></div>`;
+    li.querySelector("span").textContent = `${r.receipt}-${r.number}`;
+    li.querySelector("a").textContent = r.ems; li.querySelector("a").href = r.tracking;
+    li.querySelector("div.text-xs").textContent = r.name;
+    history.prepend(li);
+    say(`บันทึก ${r.ems} ให้ ${r.receipt} (${r.name}) แล้ว — ยิงซองถัดไปได้เลย`, "ok");
+    reset();
+  });
+  document.getElementById("cancel").addEventListener("click", () => { reset(); say("ยกเลิกแล้ว พร้อมรับบาร์โค้ดซอง"); });
+  document.addEventListener("click", (e) => { if (!e.target.closest("a,button,input")) input.focus(); });  // keep the scanner typing into the box
+})();
+</script>
+{% endblock %}

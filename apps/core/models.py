@@ -50,6 +50,9 @@ class SystemSetting(models.Model):
         default="มาให้การต่อพนักงานสอบสวนตามประเด็นที่เกี่ยวข้องกับคดี",
     )
     default_appointment_days = models.PositiveIntegerField("นัดหลังวันออกหมาย (วัน)", default=14)
+    letter_number = models.CharField(
+        "เลขที่หนังสือ (บนซอง)", max_length=100, default="ตช.0039.52/.....",
+        help_text="พิมพ์ใต้ที่อยู่ผู้ส่งบนซอง: 'เลขที่หนังสือ: … ลงวันที่: (วันที่ออกหมาย)'")
     # unit logo (kept in the database so it is part of the database backup and survives a data wipe)
     logo_data = models.BinaryField("โลโก้หน่วย", null=True, blank=True, editable=False)
     logo_type = models.CharField(max_length=30, blank=True, editable=False)

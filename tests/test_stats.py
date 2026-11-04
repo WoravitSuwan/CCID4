@@ -36,7 +36,7 @@ def test_outsource_and_admin_see_stats(client, calls, admin_user):
     assert period["cases_called"] == 2
     assert page.context["overall"]["cases"] == Case.objects.count()
     assert [p["calls"] for p in page.context["people"]] == [3]
-    assert len(page.context["calls_chart"]["bars"]) == 30
+    assert len(page.context["calls_chart"]["hover"]) == 30 and len(page.context["calls_chart"]["lines"]) == 2
     week = client.get("/stats/?range=7").context["period"]
     assert week["calls"] == 2  # the call 10 days ago is outside
     custom = client.get(f"/stats/?from={(timezone.localdate() - dt.timedelta(days=70)).isoformat()}"

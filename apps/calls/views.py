@@ -28,6 +28,7 @@ from apps.registry.address_edit import address_form, save_address
 from apps.registry.forms import StyledForm
 from apps.registry.models import Case, Status
 
+from . import funnel
 from .models import OPEN_LOCK_MINUTES, REACHED, SHORT_LABELS, CallAssignment, CallAttachment, CallAttempt, CallOutcome
 from .services import (
     ALLOWED_EXTENSIONS,
@@ -43,8 +44,7 @@ from .services import (
 User = get_user_model()
 DT_WIDGET = forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M")
 ADDRESS_PREFIX = "addr"  # keeps address field ids apart from the call form (both have "note")
-TABS = [("todo", "ต้องโทร"), ("never", "ยังไม่ได้โทร"), ("called", "โทรแล้ว"), ("callback", "นัดโทรกลับ"),
-        ("done", "ติดต่อเสร็จแล้ว"), ("all", "ทั้งหมด")]
+TABS = [(key, funnel.STAGES[key][0]) for key in funnel.TAB_KEYS]
 RESULTS = [("reached", "ติดต่อได้ (ทุกแบบ รวมจากไฟล์)"), ("not_reached", "ติดต่อไม่ได้ (ทุกแบบ รวมจากไฟล์)")]
 
 
@@ -58,8 +58,8 @@ def _queue(request):
     if not (perms.is_outsource(request.user) or perms.can_manage_calls(request.user)):
         raise PermissionDenied
     ensure_call_pool()
-    qs = CallAssignment.objects.select_related("case", "case__complainant", "case__status", "assignee",
-                                               "opened_by")
+    qs = funnel.with_summons_flag(CallAssignment.objects.select_related(
+        "case", "case__complainant", "case__status", "assignee", "opened_by"))
     who = request.GET.get("assignee", "")
     if who == "me":
         qs = qs.filter(assignee=request.user)
@@ -70,15 +70,9 @@ def _queue(request):
     return qs
 
 
-OPEN_CASE = Q(case__status__isnull=True) | Q(case__status__is_final=False)
-# Calls made before this system are in the register's "บันทึกการติดต่อ" column. Until someone records a
-# call here, that column decides: any text = already called; "(ไม่)ประสงค์ดำเนินคดี" / "ติดต่อแล้ว" /
-# "ติดต่อได้" = the victim was reached, nothing left to do.
-NO_SYSTEM_CALL = Q(attempt_count=0)
-FILE_LOG = ~Q(case__contact_log="")
-FILE_REACHED = (Q(case__contact_log__contains="ประสง") | Q(case__contact_log__contains="ติดต่อแล้ว")
-                | (Q(case__contact_log__contains="ติดต่อได้") & ~Q(case__contact_log__contains="ไม่สามารถติดต่อ")))
-FILE_DONE = NO_SYSTEM_CALL & FILE_REACHED
+OPEN_CASE, NO_SYSTEM_CALL, FILE_LOG, FILE_REACHED = (funnel.OPEN_CASE, funnel.NO_SYSTEM_CALL, funnel.FILE_LOG,
+                                                     funnel.FILE_REACHED)
+FILE_DONE = NO_SYSTEM_CALL & FILE_REACHED  # reached before this system: nothing left to do
 
 
 SCOPES = [("open", "ยังไม่สิ้นสุด"), ("final", "สิ้นสุดแล้ว"), ("all", "ทั้งหมด")]
@@ -93,19 +87,11 @@ def _apply_scope(qs, scope):
 
 
 def _apply_tab(qs, tab):
-    now = timezone.now()
-    if tab == "todo":  # closed cases never need a call; nor do victims the register says were reached
+    if tab == "todo":  # for "next case": open, not finished, call-back due, not reached before this system
+        now = timezone.now()
         return (qs.filter(OPEN_CASE, is_done=False).filter(Q(callback_at__isnull=True) | Q(callback_at__lte=now))
                 .exclude(FILE_DONE))
-    if tab == "callback":
-        return qs.filter(OPEN_CASE, is_done=False, callback_at__isnull=False)
-    if tab == "never":  # open, not called here, and nothing in the register's contact log
-        return qs.filter(OPEN_CASE, NO_SYSTEM_CALL).exclude(FILE_LOG)
-    if tab == "called":  # called here, or in the register (contact log), or the case is closed
-        return qs.filter(~NO_SYSTEM_CALL | FILE_LOG | ~OPEN_CASE)
-    if tab == "done":
-        return qs.filter(Q(is_done=True) | FILE_DONE)
-    return qs
+    return funnel.stage(qs, tab)
 
 
 def _apply_filters(request, qs):
@@ -116,9 +102,9 @@ def _apply_filters(request, qs):
                        | Q(case__victim_phone__icontains=q))
     result = request.GET.get("result", "")
     if result == "reached":
-        qs = qs.filter(Q(last_outcome__in=REACHED) | FILE_DONE)
+        qs = qs.filter(funnel.REACHED_Q)
     elif result == "not_reached":
-        qs = qs.filter((~NO_SYSTEM_CALL & ~Q(last_outcome__in=REACHED)) | (NO_SYSTEM_CALL & FILE_LOG & ~FILE_REACHED))
+        qs = qs.filter(funnel.NOT_REACHED_Q)
     elif result in CallOutcome.values:
         qs = qs.filter(last_outcome=result)
     return qs
@@ -131,15 +117,15 @@ def _ordered(qs):
 
 def queue(request):
     base = _queue(request)
-    tab = request.GET.get("tab", "todo")
-    if tab not in dict(TABS):
-        tab = "todo"
+    tab = request.GET.get("tab", "all")
+    if tab not in funnel.STAGES:
+        tab = "all"
     filtered = _apply_filters(request, base)
     scope = request.GET.get("scope", "open")
     if scope not in dict(SCOPES):
         scope = "open"
     scoped = _apply_scope(filtered, scope)
-    counts = {key: _apply_tab(scoped, key).count() for key, _ in TABS}
+    counts = funnel.counts(scoped)
     scope_counts = {key: _apply_scope(filtered, key).count() for key, _ in SCOPES}
     qs = _apply_tab(scoped, tab)
     today = timezone.localdate()
@@ -161,6 +147,8 @@ def queue(request):
     page = Paginator(_ordered(qs), 50).get_page(request.GET.get("page"))
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
+        "tab_label": funnel.STAGES[tab][0], "tab_in_nav": tab in funnel.TAB_KEYS,
+        "sankey": funnel.sankey(counts),
         "scope": scope, "scopes": SCOPES, "scope_counts": scope_counts,
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),

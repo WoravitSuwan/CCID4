@@ -360,6 +360,68 @@ def summons_ems(request, pk):
     return redirect(back)
 
 
+def summons_scan(request):
+    """Scan station: scan the barcode on the envelope, then the EMS label - saved at once."""
+    if not perms.can_export(request.user):
+        raise PermissionDenied
+    return render(request, "documents/scan.html", {})
+
+
+def _scan_payload(summons) -> dict:
+    return {"ok": True, "id": summons.pk, "receipt": summons.case.receipt_no, "number": summons.number,
+            "name": summons.recipient_name, "address": summons.recipient_address, "ems": summons.ems_number,
+            "tracking": summons.ems_tracking_url}
+
+
+@require_POST
+def summons_scan_lookup(request):
+    """The scanned/typed code -> which summons: envelope barcode (9 + id), 'เลขรับแจ้ง-ครั้งที่' or เลขรับแจ้ง."""
+    import re
+
+    from django.http import JsonResponse
+
+    from . import ems
+    from .barcodes import summons_id_from_code
+
+    if not perms.can_export(request.user):
+        raise PermissionDenied
+    code = re.sub(r"\s", "", request.POST.get("code", "")).upper()
+    qs = _own_summonses(request, Summons.objects.select_related("case"))
+    summons = None
+    pk = summons_id_from_code(code)
+    if pk:
+        summons = qs.filter(pk=pk).first()
+    else:
+        m = re.match(r"^([LWTC]\d{5,12})(?:-(\d+))?$", code)
+        if m:
+            found = qs.filter(case__receipt_no=m.group(1))
+            summons = (found.filter(number=int(m.group(2))) if m.group(2) else found.order_by("-number")).first()
+    if summons is None:
+        if not ems.validate(code)[1]:
+            return JsonResponse({"ok": False, "error": "นี่คือเลข EMS — ยิงบาร์โค้ดบนซองก่อน แล้วค่อยยิงเลข EMS"})
+        return JsonResponse({"ok": False, "error": f"ไม่พบหมายเรียกของรหัส {code or '(ว่าง)'}"})
+    return JsonResponse(_scan_payload(summons))
+
+
+@require_POST
+def summons_scan_save(request):
+    from django.http import JsonResponse
+
+    summons = get_object_or_404(Summons.objects.select_related("case"), pk=request.POST.get("id") or 0)
+    if not perms.can_access_summons(request.user, summons):
+        raise PermissionDenied
+    code = request.POST.get("ems", "")
+    from .barcodes import summons_id_from_code
+
+    if summons_id_from_code(code):
+        return JsonResponse({"ok": False, "error": "นี่คือบาร์โค้ดซอง ไม่ใช่เลข EMS — ยิงบาร์โค้ดบนใบรับฝาก EMS"})
+    error = _save_ems(request, summons, code)
+    if error:
+        return JsonResponse({"ok": False, "error": error})
+    summons.refresh_from_db()
+    return JsonResponse(_scan_payload(summons))
+
+
 def summons_ems_bulk(request):
     """Paste 'เลขรับแจ้ง เลข EMS' lines (e.g. from the post office receipt) to record many at once."""
     import re

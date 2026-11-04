@@ -64,3 +64,43 @@ def test_bulk_paste(client, admin_user, issued):
     assert Summons.objects.get(pk=issued[1].pk).ems_number == "RR473124829GB"
     assert not Summons.objects.get(pk=issued[2].pk).ems_number
     assert "EB123456785TH" in client.get(f"/cases/{issued[0].case_id}/").content.decode()
+
+
+def test_scan_station_envelope_then_ems(client, issued):
+    from apps.documents.barcodes import code128_png, summons_code
+
+    caller = User.objects.create_user("scanner", password="x" * 10, role=Role.OUTSOURCE)
+    client.force_login(caller)
+    s = issued[0]
+    assert client.get("/summons/scan/").status_code == 200
+    code = summons_code(s)
+    assert code == f"9{s.pk:07d}" and code128_png(code).startswith(b"\x89PNG")
+    found = client.post("/summons/scan/lookup/", {"code": code}).json()
+    assert found["ok"] and found["id"] == s.pk and found["receipt"] == s.case.receipt_no
+    by_receipt = client.post("/summons/scan/lookup/", {"code": f"{s.case.receipt_no}-{s.number}"}).json()
+    assert by_receipt["id"] == s.pk
+    ems_first = client.post("/summons/scan/lookup/", {"code": "EB123456785TH"}).json()
+    assert not ems_first["ok"] and "ยิงบาร์โค้ดบนซองก่อน" in ems_first["error"]
+    wrong = client.post("/summons/scan/save/", {"id": s.pk, "ems": code}).json()
+    assert not wrong["ok"] and "บาร์โค้ดซอง" in wrong["error"]
+    saved = client.post("/summons/scan/save/", {"id": s.pk, "ems": "EB123456785TH"}).json()
+    assert saved["ok"] and saved["ems"] == "EB123456785TH"
+    s.refresh_from_db()
+    assert s.ems_number == "EB123456785TH" and s.ems_by == caller
+
+
+def test_envelope_has_letter_number_and_barcode(issued, tmp_path):
+    import zipfile
+
+    from apps.core.models import SystemSetting
+    from apps.documents import docx_engine
+    from apps.documents.services import render_envelope
+
+    setting = SystemSetting.get()
+    setting.letter_number = "ตช.0039.52/1548"
+    setting.save()
+    out = render_envelope(issued[0], tmp_path / "env.docx")
+    text = docx_engine.document_text(out)
+    assert "เลขที่หนังสือ: ตช.0039.52/1548 ลงวันที่: 9 กุมภาพันธ์ 2569" in text
+    assert "[[BARCODE]]" not in text and f"{issued[0].case.receipt_no}-1" in text
+    assert any(n.startswith("word/media/") for n in zipfile.ZipFile(out).namelist())  # barcode picture

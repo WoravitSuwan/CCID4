@@ -69,44 +69,45 @@ def _nice_max(value: int) -> int:
     return value
 
 
-def _bar_chart(days, series, width=CHART_W, height=CHART_H):
-    """Geometry for a (stacked) daily bar chart: series = [(key, label, css_var, {date: n})].
+def _line_chart(days, series, width=CHART_W, height=CHART_H):
+    """Geometry for a daily line chart: series = [(key, label, css_var, {date: n})].
 
     Small cards get a narrower viewBox so axis text keeps its size instead of shrinking with the chart.
     """
     plot_w, plot_h = width - PAD_L - PAD_R, height - PAD_T - PAD_B
-    totals = [sum(s[3].get(d, 0) for s in series) for d in days]
-    top = _nice_max(max(totals or [0]))
+    top = _nice_max(max([s[3].get(d, 0) for s in series for d in days] or [0]))
     slot = plot_w / max(len(days), 1)
-    bar_w = max(min(slot - 2, 28), 1.5)  # 2-unit gap between neighbours
-    bars = []
+    base_y = PAD_T + plot_h
+
+    def y_of(n):
+        return round(base_y - n / top * plot_h, 2)
+
+    lines = []
+    for key, label, color, data in series:
+        pts = [(round(PAD_L + (i + 0.5) * slot, 2), y_of(data.get(d, 0))) for i, d in enumerate(days)]
+        lines.append({"key": key, "label": label, "color": color,
+                      "points": " ".join(f"{x},{y}" for x, y in pts),
+                      "markers": pts if len(days) <= 45 else [],
+                      "last": {"x": pts[-1][0], "y": pts[-1][1], "n": data.get(days[-1], 0)} if pts else None})
+    hover = []
     for i, d in enumerate(days):
-        x = PAD_L + i * slot + (slot - bar_w) / 2
-        y_base = PAD_T + plot_h
-        segs = []
-        for s_i, (key, label, color, data) in enumerate(series):
-            n = data.get(d, 0)
-            if not n:
-                continue
-            h = n / top * plot_h
-            gap = 1 if segs else 0  # surface gap between stacked segments
-            segs.append({"x": round(x, 2), "y": round(y_base - h + gap, 2), "w": round(bar_w, 2),
-                         "h": round(max(h - gap, 0.8), 2), "color": color, "n": n, "label": label})
-            y_base -= h
-        bars.append({"x": round(PAD_L + i * slot, 2), "w": round(slot, 2), "segs": segs, "date": d,
-                     "total": totals[i], "values": [(s[1], s[2], s[3].get(d, 0)) for s in series]})
-    grid = [{"y": round(PAD_T + plot_h - k / 4 * plot_h, 2), "v": int(top * k / 4)} for k in range(5)]
+        cx = round(PAD_L + (i + 0.5) * slot, 2)
+        hover.append({"x": round(PAD_L + i * slot, 2), "w": round(slot, 2), "cx": cx, "date": d,
+                      "points": [{"y": y_of(s[3].get(d, 0)), "color": s[2]} for s in series],
+                      "values": [(s[1], s[2], s[3].get(d, 0)) for s in series]})
+    grid = [{"y": round(base_y - k / 4 * plot_h, 2), "v": int(top * k / 4)} for k in range(5)]
     every = max(1, math.ceil(len(days) / max(int(plot_w / 70), 2)))
-    ticks = [{"x": round(b["x"] + b["w"] / 2, 2), "label": f"{b['date'].day}/{b['date'].month}"}
-             for i, b in enumerate(bars) if i % every == 0]
-    return {"w": width, "h": height, "bars": bars, "grid": grid, "ticks": ticks, "pad_l": PAD_L,
-            "right": width - PAD_R, "base_y": PAD_T + plot_h, "series": series, "empty": not any(totals)}
+    ticks = [{"x": h["cx"], "label": f"{h['date'].day}/{h['date'].month}"} for i, h in enumerate(hover)
+             if i % every == 0]
+    empty = not any(s[3].get(d, 0) for s in series for d in days)
+    return {"w": width, "h": height, "lines": lines, "hover": hover, "grid": grid, "ticks": ticks,
+            "pad_l": PAD_L, "right": width - PAD_R, "top_y": PAD_T, "base_y": base_y, "empty": empty}
 
 
 def _collect(start, end):
+    from apps.calls import funnel
     from apps.calls.models import REACHED, CallAssignment, CallAttempt, CallOutcome
     from apps.calls.services import ensure_call_pool
-    from apps.calls.views import FILE_DONE, FILE_LOG, NO_SYSTEM_CALL, OPEN_CASE
     from apps.documents.models import Summons
     from apps.registry.models import Case
 
@@ -123,21 +124,15 @@ def _collect(start, end):
         "appointed": calls.filter(outcome=CallOutcome.APPOINTED).count(),
         "summonses": summonses.count(), "ems": ems.count(),
     }
-    pool = CallAssignment.objects.all()
-    open_pool = pool.filter(OPEN_CASE)
-    now = timezone.now()
+    stages = funnel.counts(funnel.with_summons_flag(CallAssignment.objects.all()))
     all_summons = Summons.objects.all()
     overall = {
         "cases": Case.objects.count(), "open": Case.objects.not_final().count(),
-        "final": Case.objects.final().count(),
-        "never": open_pool.filter(NO_SYSTEM_CALL).exclude(FILE_LOG).count(),
-        "called": pool.filter(~NO_SYSTEM_CALL | FILE_LOG | ~OPEN_CASE).count(),
-        "todo": open_pool.filter(is_done=False).filter(Q(callback_at__isnull=True) | Q(callback_at__lte=now))
-        .exclude(FILE_DONE).count(),
-        "done": pool.filter(Q(is_done=True) | FILE_DONE).count(),
+        "final": Case.objects.final().count(), "stages": stages, "sankey": funnel.sankey(stages),
         "summonses": all_summons.count(), "ems_sent": all_summons.exclude(ems_number="").count(),
         "ems_waiting": all_summons.filter(ems_number="").count(),
     }
+    overall["called"] = stages["called"]
     overall["called_pct"] = round(overall["called"] / overall["cases"] * 100) if overall["cases"] else 0
 
     days = [start + dt.timedelta(days=i) for i in range((end - start).days + 1)]
@@ -188,10 +183,10 @@ def dashboard(request):
     period, overall, daily, days, outcomes, people, (reached, not_reached, summons, ems) = _collect(start, end)
     if request.GET.get("format") == "xlsx":
         return _excel(start, end, period, daily, people)
-    calls_chart = _bar_chart(days, [("reached", "ติดต่อได้", "var(--series-1)", reached),
+    calls_chart = _line_chart(days, [("reached", "ติดต่อได้", "var(--series-1)", reached),
                                     ("not_reached", "ติดต่อไม่ได้", "var(--series-2)", not_reached)])
-    summons_chart = _bar_chart(days, [("summonses", "ออกหมายเรียก", "var(--series-1)", summons)], width=380, height=210)
-    ems_chart = _bar_chart(days, [("ems", "บันทึกเลข EMS", "var(--series-1)", ems)], width=380, height=210)
+    summons_chart = _line_chart(days, [("summonses", "ออกหมายเรียก", "var(--series-1)", summons)], width=560, height=220)
+    ems_chart = _line_chart(days, [("ems", "บันทึกเลข EMS", "var(--series-1)", ems)], width=560, height=220)
     return render(request, "stats/dashboard.html", {
         "start": start, "end": end, "preset": preset, "presets": PRESETS, "period": period, "overall": overall,
         "daily": [d for d in reversed(daily) if any(d[k] for k in ("calls", "summonses", "ems"))],

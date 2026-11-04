@@ -54,9 +54,10 @@ def test_outsource_sees_every_open_case_without_assignment(client, imported, cal
     page = client.get("/calls/?tab=all&scope=all")
     open_cases = Case.objects.not_final().count()
     assert page.context["page"].paginator.count == Case.objects.count()  # every case, no assigning needed
-    assert client.get("/calls/").context["counts"]["todo"] == open_cases  # default: open cases
+    assert client.get("/calls/").context["counts"]["all"] == open_cases  # default: open cases
     final = Case.objects.final().first()
-    assert final.pk not in [a.case_id for a in client.get("/calls/?tab=todo").context["page"].paginator.object_list]
+    never = client.get("/calls/?tab=never&scope=all").context["page"].paginator.object_list
+    assert final.pk not in [a.case_id for a in never]  # closed cases count as called
     mine_only = client.get("/calls/?tab=all&assignee=me").context["page"]
     assert [a.case_id for a in mine_only] == [mine.pk]
     other = Case.objects.not_final().exclude(pk=mine.pk).first()
@@ -92,9 +93,10 @@ def test_record_calls_flow(client, imported, caller, clerk):
     assert a.is_done and a.attempt_count == 2
     assert CallAttempt.objects.filter(case=c1).count() == 2
     assert AuditLog.objects.filter(action="call", target_id=str(c1.pk)).count() == 2
-    # queue tabs
-    page = client.get("/calls/?tab=done")
-    assert [x.case_id for x in page.context["page"]] == [c1.pk]
+    # queue tabs: appointed = reached and wants to proceed
+    Case.objects.filter(pk=c1.pk).update(contact_log="")
+    page = client.get("/calls/?tab=want")
+    assert c1.pk in [x.case_id for x in page.context["page"].paginator.object_list]
 
 
 def test_callback_hides_case_until_due(imported, caller):
@@ -172,19 +174,27 @@ def test_shared_list_first_caller_takes_the_case_and_busy_warning(client, import
 def test_queue_tabs_and_status_filter(client, imported, caller):
     client.force_login(caller)
     Case.objects.update(contact_log="")  # control what the register's contact log says
-    c1, c2, c3, c4 = Case.objects.not_final().order_by("receipt_no")[:4]
+    c1, c2, c3, c4, c5 = Case.objects.not_final().order_by("receipt_no")[:5]
     record_call(c1, caller, outcome=CallOutcome.OFF)
     record_call(c2, caller, outcome=CallOutcome.INFO)
     Case.objects.filter(pk=c3.pk).update(contact_log="ไม่ประสงค์ดำเนินคดี วันที่ 3 ก.ค. 68")  # reached before
     Case.objects.filter(pk=c4.pk).update(contact_log="ครั้งที่ 1 ไม่สามารถติดต่อได้ (ปิดเครื่อง)")  # called, not reached
+    Case.objects.filter(pk=c5.pk).update(contact_log="ประสงค์ดำเนินคดี")
     total, open_cases = Case.objects.count(), Case.objects.not_final().count()
-    page = client.get("/calls/")  # default: open cases, tab "ต้องโทร"
+    page = client.get("/calls/")  # default: open cases, tab "ทั้งหมด"
     counts, scopes = page.context["counts"], page.context["scope_counts"]
     assert scopes == {"open": open_cases, "final": total - open_cases, "all": total}  # same on every tab
-    assert counts["all"] == open_cases and counts["called"] == 4 and counts["never"] == open_cases - 4
-    assert counts["done"] == 2 and counts["todo"] == open_cases - 2  # c2 (here) and c3 (register) are done
-    todo_ids = {a.case_id for a in page.context["page"].paginator.object_list}
-    assert c3.pk not in todo_ids and c4.pk in todo_ids
+    assert counts["all"] == open_cases and counts["called"] == 5 and counts["never"] == open_cases - 5
+    assert (counts["reached"], counts["not_reached"]) == (3, 2)  # c2 c3 c5 / c1 c4
+    assert (counts["want"], counts["not_want"]) == (2, 1)  # c2 (info given) c5 / c3
+    assert [k for k, _ in page.context["tabs"]] == ["all", "never", "called", "reached", "not_reached", "want",
+                                                    "not_want", "issued"]
+    sk = page.context["sankey"]
+    assert {n["key"]: n["n"] for n in sk["nodes"]}["want"] == 2 and len(sk["links"]) == len(sk["nodes"]) - 1
+    want_ids = {a.case_id for a in client.get("/calls/?tab=want").context["page"].paginator.object_list}
+    assert want_ids == {c2.pk, c5.pk}
+    pending = client.get("/calls/?tab=want_pending").content.decode()  # a diagram-only stage
+    assert "กำลังดู:" in pending and "ประสงค์ · ยังไม่ออกหมาย" in pending
     html = page.content.decode()
     assert "ยังไม่สิ้นสุด" in html and "สิ้นสุดแล้ว" in html and 'name="assignee"' not in html
     all_page = client.get("/calls/?tab=all&scope=all")
@@ -192,10 +202,10 @@ def test_queue_tabs_and_status_filter(client, imported, caller):
     assert all_page.context["scope_counts"] == {"open": open_cases, "final": total - open_cases, "all": total}
     final_page = client.get("/calls/?tab=called&scope=final")
     assert final_page.context["page"].paginator.count == total - open_cases  # closed cases count as called
-    assert final_page.context["counts"]["never"] == 0 and final_page.context["counts"]["todo"] == 0
+    assert final_page.context["counts"]["never"] == 0
     # latest result filter, kept across tabs
     reached = client.get("/calls/?tab=called&result=reached").context["page"]
-    assert {a.case_id for a in reached} == {c2.pk, c3.pk}
+    assert {a.case_id for a in reached} == {c2.pk, c3.pk, c5.pk}
     not_reached = client.get("/calls/?tab=called&result=not_reached").context["page"]
     assert {a.case_id for a in not_reached} == {c1.pk, c4.pk}
     html = client.get("/calls/?tab=called").content.decode()

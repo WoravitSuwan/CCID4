@@ -14,11 +14,22 @@
   {% endif %}
 </div>
 
-<div class="mb-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-  <div class="stat"><div class="stat-icon bg-indigo-50 text-indigo-600">{% icon "refresh" "h-6 w-6" %}</div><div><div class="stat-label">ต้องโทร</div><div class="stat-value">{{ counts.todo|intcomma }}</div></div></div>
-  <div class="stat"><div class="stat-icon bg-amber-50 text-amber-600">{% icon "clock" "h-6 w-6" %}</div><div><div class="stat-label">นัดโทรกลับ</div><div class="stat-value">{{ counts.callback|intcomma }}</div></div></div>
-  <div class="stat"><div class="stat-icon bg-sky-50 text-sky-600">{% icon "calendar" "h-6 w-6" %}</div><div><div class="stat-label">โทรวันนี้</div><div class="stat-value">{{ stats.today|intcomma }}</div><div class="text-xs text-slate-400">ติดต่อได้ {{ stats.today_reached }}{% if perm_settings and stats.today %} · <a href="{% url 'settings_wipe' %}?scope=calls_today" class="text-slate-400 underline hover:text-red-600">รีเซ็ต</a>{% endif %}</div></div></div>
-  <div class="stat"><div class="stat-icon bg-emerald-50 text-emerald-600">{% icon "check" "h-6 w-6" %}</div><div><div class="stat-label">เสร็จแล้ว</div><div class="stat-value">{{ counts.done|intcomma }}</div><div class="text-xs text-slate-400">จาก {{ counts.all|intcomma }} คดี</div></div></div>
+<style>
+  .viz-root { --series-1: #2a78d6; --series-2: #eb6834; --muted-node: #94a3b8; --text-muted: #64748b; }
+  .sankey-link { opacity: .28; transition: opacity .15s; }
+  .sankey a:hover .sankey-link, .sankey-link:hover { opacity: .5; }
+  .sankey-node rect { transition: filter .15s; }
+  .sankey-node:hover rect, .sankey-node.is-active rect { filter: brightness(.85); }
+  .sankey-node.is-active .sankey-label { text-decoration: underline; }
+  .sankey-label { font-size: 13px; fill: #0f172a; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+  .sankey-num { fill: #334155; } .sankey-pct { fill: #64748b; font-size: 12px; }
+</style>
+<div class="viz-root card mb-5">
+  <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ภาพรวมการโทร → ออกหมาย</h2>
+    <span class="text-sm text-slate-500">กดที่กล่องหรือแถบเพื่อดูรายการ</span>
+    <span class="ml-auto text-sm text-slate-600">โทรวันนี้ <b class="tabular-nums">{{ stats.today|intcomma }}</b> (ติดต่อได้ {{ stats.today_reached }}){% if perm_settings and stats.today %} · <a href="{% url 'settings_wipe' %}?scope=calls_today" class="text-slate-400 underline hover:text-red-600">รีเซ็ต</a>{% endif %}</span>
+  </div>
+  {% include "calls/_sankey.html" %}
 </div>
 
 {% if can_manage and per_staff %}
@@ -59,6 +70,11 @@
   </nav>
 </div>
 
+{% if not tab_in_nav %}
+<div class="mb-3 flex items-center gap-2 text-sm"><span class="text-slate-500">กำลังดู:</span>
+  <span class="badge badge-blue">{{ tab_label }} · {{ counts|get_item:tab|intcomma }}</span>
+  <a href="?{% query_replace tab='all' page='' %}" class="text-slate-400 hover:text-slate-700">ล้าง ✕</a></div>
+{% endif %}
 <form method="post" action="{% url 'issue_start' %}" id="queue-form">{% csrf_token %}
 <input type="hidden" name="next" value="{{ request.get_full_path }}">
 {% if can_issue %}
