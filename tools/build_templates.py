@@ -325,11 +325,39 @@ def build_envelope_official():
     print(f"wrote {out}")
 
 
-def build_envelope_official_portrait():
-    """A4 portrait version of the government envelope (same paper direction as the summons).
+def _tiny(p):
+    """Collapse an empty paragraph (required after a table inside a cell) to ~1 pt."""
+    from docx.enum.text import WD_LINE_SPACING
 
-    Top half = envelope face: Garuda + sender (top left), '(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)' and
-    the postage-permit box (top right), 'กรุณาส่ง' + recipient below; dashed fold/cut line at half page.
+    fmt = p.paragraph_format
+    fmt.space_before = fmt.space_after = Pt(0)
+    fmt.line_spacing_rule = WD_LINE_SPACING.EXACTLY
+    fmt.line_spacing = Pt(1)
+    return p
+
+
+def _drop_leading_paragraph(cell):
+    """A cell starts with an empty paragraph; with a table added after it that line only pushes things down."""
+    first = cell._tc.find(qn("w:p"))
+    if first is not None and first.getnext() is not None and first.getnext().tag == qn("w:tbl") \
+            and not "".join(first.itertext()).strip():
+        cell._tc.remove(first)
+
+
+def _shrink_empty_paragraphs(cell):
+    from docx.text.paragraph import Paragraph
+
+    for p_el in cell._tc.findall(qn("w:p")):
+        if not "".join(t.text or "" for t in p_el.iter(qn("w:t"))).strip():
+            _tiny(Paragraph(p_el, cell))
+
+
+def build_envelope_official_portrait():
+    """A4 portrait government envelope, folded in three: the top third is the envelope face.
+
+    Modelled on the agency's printed sheet: '(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)' at the top centre and the
+    postage-permit box top right; Garuda + sender below on the left; 'กรุณาส่ง' + recipient level with the
+    sender, starting near the middle; a dashed fold line one third down the page.
     """
     import io
     import zipfile
@@ -342,7 +370,7 @@ def build_envelope_official_portrait():
     sec = doc.sections[0]
     sec.orientation = WD_ORIENT.PORTRAIT
     sec.page_width, sec.page_height = Cm(21.0), Cm(29.7)
-    sec.top_margin, sec.bottom_margin = Cm(1.0), Cm(1.0)
+    sec.top_margin, sec.bottom_margin = Cm(0.9), Cm(1.0)
     sec.left_margin, sec.right_margin = Cm(1.2), Cm(1.2)
     normal = doc.styles["Normal"]
     normal.font.name = ENVELOPE_FONT
@@ -351,41 +379,63 @@ def build_envelope_official_portrait():
     for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
         fonts.set(qn(attr), ENVELOPE_FONT)
 
-    # outer frame = envelope face: upper half of the sheet, dashed bottom edge = fold/cut line
-    outer = _fixed_table(doc, [18.6])
+    # outer frame = envelope face: top third of the sheet (29.7 / 3 = 9.9 cm), dashed bottom = fold line
+    outer = _fixed_table(doc, [19.2])
     row = outer.rows[0]
-    row.height = Cm(13.8)
-    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST  # never clip the address; the line moves down if needed
+    row.height = Cm(9.9 - 0.9)  # top margin + this row = 9.9 cm: the fold line one third down the page
+    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST  # never clip a long address; the line moves down if needed
     _borders(outer._tbl.tblPr, "w:tblBorders", bottom=("dashed", 8))
     face = row.cells[0]
 
-    header = _fixed_table(face, [2.3, 9.3, 6.8])
-    c_logo, c_sender, c_right = header.rows[0].cells
-    c_logo.paragraphs[0].add_run().add_picture(io.BytesIO(garuda), height=Cm(2.0))
-    _cell_para(c_sender, "{ชื่อหน่วย}", 15, bold=True, first=True)
-    _cell_para(c_sender, "{ที่อยู่หน่วย}", 15, bold=True)
-    _cell_para(c_right, "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)", 14, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER,
-               first=True)
-    box = _fixed_table(c_right, [6.4])
+    # positions measured on the printed sheet (cm from the left edge of the paper):
+    # Garuda 0.9-2.6, sender 2.6-9.0, 'กรุณาส่ง' from ~9, permit box 14.3-20.1, '(ใช้ในราชการ...)' at the top centre
+    grid = face.add_table(rows=3, cols=4)
+    grid.autofit = False
+    tbl_pr = grid._tbl.tblPr
+    layout = OxmlElement("w:tblLayout")
+    layout.set(qn("w:type"), "fixed")
+    tbl_pr.append(layout)
+    _borders(tbl_pr, "w:tblBorders", top="nil", left="nil", bottom="nil", right="nil", insideH="nil", insideV="nil")
+    widths = [1.7, 6.4, 5.3, 5.8]
+    for r in grid.rows:
+        for cell, w in zip(r.cells, widths):
+            cell.width = Cm(w)
+    for col, w in zip(grid.columns, widths):
+        col.width = Cm(w)
+
+    # row 1: '(ใช้ในราชการ...)' on its own line at the top centre; the permit box spans rows 1-2 on the right
+    c_official = grid.cell(0, 1).merge(grid.cell(0, 2))
+    _cell_para(c_official, "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)", 13, bold=True, align=WD_ALIGN_PARAGRAPH.RIGHT,
+               first=True, space_before=8).paragraph_format.right_indent = Cm(1.7)
+    c_box_col = grid.cell(0, 3).merge(grid.cell(1, 3))
+    box = _fixed_table(c_box_col, [5.6])
     c_box = box.rows[0].cells[0]
-    _cell_para(c_box, "{ใบอนุญาตฝากส่ง}", 14, align=WD_ALIGN_PARAGRAPH.CENTER, first=True)
+    _cell_para(c_box, "{ใบอนุญาตฝากส่ง}", 17, align=WD_ALIGN_PARAGRAPH.CENTER, first=True)
     c_box.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
     _borders(c_box._tc.get_or_add_tcPr(), "w:tcBorders",
              top=("single", 8), left=("single", 8), bottom=("single", 8), right=("single", 8))
-    _cell_para(c_right, "", 6)  # Word needs a paragraph after a nested table
+    _drop_leading_paragraph(c_box_col)
+    _shrink_empty_paragraphs(c_box_col)  # the paragraph Word needs after a nested table: ~1 pt high
 
-    # recipient: right part of the face
-    _cell_para(face, "กรุณาส่ง", 18, bold=True, space_before=30, indent_cm=7.0)
-    _cell_para(face, "{ชื่อผู้แจ้ง}", 18, space_before=6, indent_cm=7.0)
-    _cell_para(face, "{ที่อยู่หลายบรรทัด}", 18, indent_cm=7.0)
-    _cell_para(face, "{รหัสไปรษณีย์}", 18, indent_cm=7.0)
+    # row 2: Garuda + sender on the left
+    c_logo, c_sender = grid.cell(1, 0), grid.cell(1, 1)
+    c_logo.paragraphs[0].add_run().add_picture(io.BytesIO(garuda), height=Cm(1.8))
+    _cell_para(c_sender, "{ชื่อหน่วย}", 13, bold=True, first=True)
+    _cell_para(c_sender, "{ที่อยู่หน่วย}", 13, bold=True)
 
-    doc.core_properties.title = "ใบจ่าหน้าซองราชการ (A4 แนวตั้ง)"
+    # row 3: 'กรุณาส่ง' + recipient from the middle of the sheet, running under the permit box
+    c_to = grid.cell(2, 2).merge(grid.cell(2, 3))
+    _cell_para(c_to, "กรุณาส่ง", 17, bold=True, first=True)
+    for i, text in enumerate(["{ชื่อผู้แจ้ง}", "{ที่อยู่หลายบรรทัด}", "{รหัสไปรษณีย์}"]):
+        _cell_para(c_to, text, 16, space_before=4 if i == 0 else 0).paragraph_format.line_spacing = 0.92
+    _drop_leading_paragraph(face)
+    _shrink_empty_paragraphs(face)
+
+    doc.core_properties.title = "ใบจ่าหน้าซองราชการ (A4 แนวตั้ง พับ 3)"
     doc.core_properties.author = ""
     out = OUT / "envelope_official_portrait.docx"
     doc.save(str(out))
     print(f"wrote {out}")
-
 
 if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "summons":
