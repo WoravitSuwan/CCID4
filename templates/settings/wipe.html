@@ -2,13 +2,18 @@
 {% block title %}ล้างข้อมูล{% endblock %}
 {% block content %}
 {% include "settings/_tabs.html" %}
-<form method="post" class="grid max-w-5xl gap-5 lg:grid-cols-2" onsubmit="return confirm(this.scope.value === 'all' ? 'ยืนยันลบข้อมูลคดีทั้งหมด? ลบแล้วกู้คืนไม่ได้' : 'ยืนยันลบหมายเรียกที่ออกทั้งหมด? ลบแล้วกู้คืนไม่ได้')">{% csrf_token %}
+<form method="post" class="grid max-w-5xl gap-5 lg:grid-cols-2" onsubmit="return confirm('ยืนยันลบ: ' + this.querySelector('input[name=scope]:checked').closest('label').textContent.trim() + ' ? ลบแล้วกู้คืนไม่ได้')">{% csrf_token %}
   <div class="card space-y-3">
     <div class="card-header">{% icon "alert" "h-5 w-5 text-red-500" %}<h2>ล้างข้อมูลทดลอง</h2></div>
     <p class="text-sm text-slate-600">ลบแล้ว <b class="text-red-700">กู้คืนจากหน้าเว็บไม่ได้</b> ถ้าอาจต้องใช้ข้อมูลเดิมอีก ให้สำรองข้อมูลก่อน (คู่มือข้อ 11)</p>
     {{ form.scope.errors }}
     <div class="rounded-lg p-3 ring-1 ring-slate-200 has-[input[name=scope]:checked]:bg-red-50 has-[input[name=scope]:checked]:ring-red-300">
-      <label class="flex cursor-pointer items-start gap-2 text-sm font-semibold"><input type="radio" name="scope" value="summons" class="mt-0.5" {% if form.scope.value != "all" %}checked{% endif %}> ลบเฉพาะหมายเรียกที่ออก</label>
+      <label class="flex cursor-pointer items-start gap-2 text-sm font-semibold"><input type="radio" name="scope" value="calls_today" class="mt-0.5" {% if form.scope.value == "calls_today" %}checked{% endif %}> ลบบันทึกการโทรของวันนี้ <span class="ml-auto tabular-nums font-normal">{{ call_counts.today|intcomma }} ครั้ง</span></label>
+      <label class="mt-2 flex cursor-pointer items-start gap-2 text-sm font-semibold"><input type="radio" name="scope" value="calls" class="mt-0.5" {% if form.scope.value == "calls" %}checked{% endif %}> ลบบันทึกการโทรทั้งหมด <span class="ml-auto tabular-nums font-normal">{{ call_counts.all|intcomma }} ครั้ง</span></label>
+      <p class="ml-6 mt-1 text-xs text-slate-500">ลบผลการโทรและไฟล์แนบของการโทรเหล่านั้น คดีกลับเป็นเหมือนก่อนโทร (จำนวนครั้ง ผลล่าสุด นัดโทรกลับ ผู้รับผิดชอบที่ได้จากการโทร) ส่วนบันทึกการติดต่อจากไฟล์ทะเบียนยังอยู่ · "โทรวันนี้" กลับเป็น 0 เองทุกเที่ยงคืนอยู่แล้ว</p>
+    </div>
+    <div class="rounded-lg p-3 ring-1 ring-slate-200 has-[input[name=scope]:checked]:bg-red-50 has-[input[name=scope]:checked]:ring-red-300">
+      <label class="flex cursor-pointer items-start gap-2 text-sm font-semibold"><input type="radio" name="scope" value="summons" class="mt-0.5" {% if form.scope.value == "summons" %}checked{% endif %}> ลบเฉพาะหมายเรียกที่ออก</label>
       <ul class="ml-6 mt-1 space-y-0.5 text-sm text-slate-700">
         {% for k, v in summons_counts.items %}<li class="flex justify-between gap-2"><span>{{ k }}</span><span class="tabular-nums">{{ v|intcomma }}</span></li>{% endfor %}
         <li class="text-xs text-slate-500">เก็บคดี ข้อมูลผู้แจ้ง ที่อยู่ที่แก้ บันทึกการโทรและไฟล์แนบไว้ ออกหมายใหม่ได้ทันที (ครั้งที่เริ่มจาก 1)</li>

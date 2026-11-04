@@ -79,3 +79,33 @@ def test_delete_only_summonses_and_restore_status(client, admin, setup_signers, 
     assert not Case.objects.filter(pk__in=before, status_manual_at__isnull=False).exists()
     log = AuditLog.objects.get(action="wipe")
     assert "ลบหมายเรียกที่ออกทั้งหมด" in log.detail and f"หมายเรียกที่ออก {len(created)}" in log.detail
+
+
+def test_delete_todays_calls_puts_cases_back(client, admin, django_capture_on_commit_callbacks):
+    import datetime as dt
+
+    from apps.calls.models import CallAssignment, CallAttempt, CallOutcome
+    from apps.calls.services import ensure_call_pool, record_call
+
+    ensure_call_pool()
+    caller = User.objects.create_user("callw", password="x" * 10, role=Role.OUTSOURCE)
+    c1, c2 = Case.objects.not_final().order_by("receipt_no")[:2]
+    yesterday = timezone.now() - dt.timedelta(days=1)
+    record_call(c1, caller, outcome=CallOutcome.OFF, called_at=yesterday)  # kept
+    record_call(c1, caller, outcome=CallOutcome.INFO)  # today: deleted
+    record_call(c2, caller, outcome=CallOutcome.APPOINTED, appointment_at=timezone.now())  # today: deleted
+    assert client.get("/calls/").context["stats"]["today"] == 2
+    page = client.get("/settings/wipe/?scope=calls_today").content.decode()
+    assert 'value="calls_today" class="mt-0.5" checked' in page
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.post("/settings/wipe/", {**GOOD, "scope": "calls_today"})
+    assert resp["Location"] == "/calls/"
+    assert client.get("/calls/").context["stats"]["today"] == 0
+    a1, a2 = CallAssignment.objects.get(case=c1), CallAssignment.objects.get(case=c2)
+    assert (a1.attempt_count, a1.last_outcome, a1.is_done, a1.assignee) == (1, "off", False, caller)
+    assert (a2.attempt_count, a2.last_outcome, a2.is_done, a2.assignee) == (0, "", False, None)
+    assert CallAttempt.objects.count() == 1
+    assert "ลบบันทึกการโทรของวันนี้" in AuditLog.objects.get(action="wipe").detail
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post("/settings/wipe/", {**GOOD, "scope": "calls"})
+    assert not CallAttempt.objects.exists() and CallAssignment.objects.get(case=c1).assignee is None

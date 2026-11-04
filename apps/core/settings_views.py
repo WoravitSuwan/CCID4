@@ -487,6 +487,8 @@ WIPE_PHRASE = "ลบข้อมูลทั้งหมด"
 
 class WipeForm(StyledForm):
     scope = forms.ChoiceField(label="ต้องการลบอะไร", widget=forms.RadioSelect, initial="summons", choices=[
+        ("calls_today", "บันทึกการโทรของวันนี้"),
+        ("calls", "บันทึกการโทรทั้งหมด"),
         ("summons", "เฉพาะหมายเรียกที่ออก (เก็บคดี ข้อมูลผู้แจ้ง และบันทึกการโทรไว้)"),
         ("all", "ข้อมูลคดีทั้งหมด (เริ่มนำเข้าใหม่ตั้งแต่ต้น)")])
     restore_status = forms.BooleanField(
@@ -521,11 +523,22 @@ class WipeForm(StyledForm):
 @admin_only
 def wipe(request):
     """Delete every case, import, summons and call record - to start the trial over."""
-    from .wipe import counts, summons_counts, wipe_case_data, wipe_summonses
+    from .wipe import call_counts, counts, summons_counts, wipe_calls, wipe_case_data, wipe_summonses
 
-    form = WipeForm(request.POST or None, user=request.user)
+    form = WipeForm(request.POST or None, user=request.user,
+                    initial={"scope": request.GET.get("scope") or "summons"})
     if request.method == "POST" and form.is_valid():
-        everything = form.cleaned_data["scope"] == "all"
+        scope = form.cleaned_data["scope"]
+        if scope in ("calls_today", "calls"):
+            before = wipe_calls(today_only=scope == "calls_today")
+            summary = ", ".join(f"{k} {v:,}" for k, v in before.items())
+            what = "ลบบันทึกการโทรของวันนี้" if scope == "calls_today" else "ลบบันทึกการโทรทั้งหมด"
+            log(request, AuditAction.WIPE, None,
+                f"{what} โดย {form.cleaned_data['deleted_by']} (บัญชี {request.user.username}): {summary}",
+                deleted_by=form.cleaned_data["deleted_by"], scope=scope, counts=before)
+            messages.success(request, f"{what}แล้ว ({summary}) — คดีกลับเป็นเหมือนก่อนโทร")
+            return redirect("calls_queue")
+        everything = scope == "all"
         before = wipe_case_data() if everything else wipe_summonses(form.cleaned_data["restore_status"])
         summary = ", ".join(f"{k} {v:,}" for k, v in before.items())
         what = "ล้างข้อมูลคดีทั้งหมด" if everything else "ลบหมายเรียกที่ออกทั้งหมด"
@@ -538,5 +551,5 @@ def wipe(request):
         messages.success(request, f"ลบหมายเรียกแล้ว ({summary}) — ออกหมายใหม่ได้ เลขครั้งที่จะเริ่มจาก 1")
         return redirect("summons_list")
     return render(request, "settings/wipe.html", {"form": form, "counts": counts(), "summons_counts": summons_counts(),
-                                                  "phrase": WIPE_PHRASE, "tab": "wipe"})
+                                                  "call_counts": call_counts(), "phrase": WIPE_PHRASE, "tab": "wipe"})
 

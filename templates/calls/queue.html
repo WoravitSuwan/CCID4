@@ -17,7 +17,7 @@
 <div class="mb-5 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
   <div class="stat"><div class="stat-icon bg-indigo-50 text-indigo-600">{% icon "refresh" "h-6 w-6" %}</div><div><div class="stat-label">ต้องโทร</div><div class="stat-value">{{ counts.todo|intcomma }}</div></div></div>
   <div class="stat"><div class="stat-icon bg-amber-50 text-amber-600">{% icon "clock" "h-6 w-6" %}</div><div><div class="stat-label">นัดโทรกลับ</div><div class="stat-value">{{ counts.callback|intcomma }}</div></div></div>
-  <div class="stat"><div class="stat-icon bg-sky-50 text-sky-600">{% icon "calendar" "h-6 w-6" %}</div><div><div class="stat-label">โทรวันนี้</div><div class="stat-value">{{ stats.today|intcomma }}</div><div class="text-xs text-slate-400">ติดต่อได้ {{ stats.today_reached }}</div></div></div>
+  <div class="stat"><div class="stat-icon bg-sky-50 text-sky-600">{% icon "calendar" "h-6 w-6" %}</div><div><div class="stat-label">โทรวันนี้</div><div class="stat-value">{{ stats.today|intcomma }}</div><div class="text-xs text-slate-400">ติดต่อได้ {{ stats.today_reached }}{% if perm_settings and stats.today %} · <a href="{% url 'settings_wipe' %}?scope=calls_today" class="text-slate-400 underline hover:text-red-600">รีเซ็ต</a>{% endif %}</div></div></div>
   <div class="stat"><div class="stat-icon bg-emerald-50 text-emerald-600">{% icon "check" "h-6 w-6" %}</div><div><div class="stat-label">เสร็จแล้ว</div><div class="stat-value">{{ counts.done|intcomma }}</div><div class="text-xs text-slate-400">จาก {{ counts.all|intcomma }} คดี</div></div></div>
 </div>
 
