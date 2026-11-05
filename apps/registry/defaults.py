@@ -26,14 +26,6 @@ DEFAULT_UNITS = [
         "sender_address": "เลขที่ ๓๗๐ หมู่ ๓ ตำบลดอนแก้ว อำเภอแม่ริม จังหวัดเชียงใหม่ ๕๐๑๘๐",
         "postage_permit": POSTAGE_PERMIT,
     },
-    {
-        # Address of กก.2 is not in the provided form: administrators must fill it in
-        # (summons for กก.2 cases are blocked until then).
-        "name": "กก.2 บก.สอท.4",
-        "full_name": "กองกำกับการ ๒ กองบังคับการตำรวจสืบสวนสอบสวนอาชญากรรมทางเทคโนโลยี ๔",
-        "appointment_place": "",
-        "sender_address": "",
-    },
 ]
 
 
@@ -47,6 +39,6 @@ POLICE_RANKS = [
 POLICE_RANKS = POLICE_RANKS + [f"{rank}หญิง" for rank in POLICE_RANKS]
 COMMON_POSITIONS = [
     f"{title} กก.{unit} บก.สอท.๔ บช.สอท."
-    for unit in ("๑", "๒")
+    for unit in ("๑",)
     for title in ("ผกก.", "รอง ผกก.(สอบสวน)", "สว.(สอบสวน)", "รอง สว.(สอบสวน)")
 ]

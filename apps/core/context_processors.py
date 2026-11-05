@@ -47,10 +47,11 @@ def app_context(request):
         "is_outsource": perms.is_outsource(user),
     }
     if perms.is_admin(user):
-        from apps.registry.models import InvestigatorAlias, Status
+        from apps.registry.models import InvestigatorAlias, Status, other_unit_cases
 
         ctx["admin_alerts"] = {
             "new_statuses": Status.objects.filter(needs_review=True).count(),
             "unlinked_aliases": InvestigatorAlias.objects.filter(investigator__isnull=True).count(),
+            "other_unit_cases": other_unit_cases().count(), "own_unit": settings.OWN_UNIT,
         }
     return ctx

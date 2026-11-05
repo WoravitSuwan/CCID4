@@ -347,6 +347,26 @@ def complainant_address_snapshot(complainant: Complainant | None) -> dict:
     return complainant.address().as_dict()
 
 
+def unit_key(name) -> str:
+    """'กก.1 บก.สอท.4', 'กก. ๑ บก.สอท.๔' -> the same key."""
+    from apps.core.thai_format import to_arabic_digits
+
+    return re.sub(r"\s", "", to_arabic_digits(str(name or ""))).lower()
+
+
+def is_own_unit(name) -> bool:
+    """The unit this system is for (settings.OWN_UNIT). A blank unit cannot be told apart: kept."""
+    from django.conf import settings
+
+    return not str(name or "").strip() or unit_key(name) == unit_key(settings.OWN_UNIT)
+
+
+def other_unit_cases():
+    """Cases of another unit already in the system (from imports made before the one-unit rule)."""
+    other = [u.pk for u in Unit.objects.all() if not is_own_unit(u.name)]
+    return Case.objects.filter(unit_id__in=other)
+
+
 # A case is "สิ้นสุด" when its status says so, or when the person said they do not want to go on
 # (ไม่ประสงค์ดำเนินคดี): the last call in this system, or - before any call here - the register's contact log.
 NOT_WANT_CASE = (Q(call_assignment__attempt_count__gt=0, call_assignment__last_outcome="not_proceed")

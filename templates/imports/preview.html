@@ -10,6 +10,18 @@
 {% else %}
   {% with s=batch.summary %}
   {% if batch.status == 'done' %}<div class="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">นำเข้าสำเร็จ{% if s.linked %} · จับคู่คดีกับผู้แจ้งเพิ่ม {{ s.linked|intcomma }} คดี{% endif %}</div>{% endif %}
+  {% if s.other_unit_rows or s.remove_count or s.kept_with_summons %}
+  <div class="mb-4 rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950">
+    <b>ระบบนี้ใช้เฉพาะ {{ s.own_unit }}</b>
+    {% if s.other_unit_rows %}<div>ไม่นำเข้าคดีของหน่วยอื่น {{ s.other_unit_rows|intcomma }} แถว:{% for name, n in s.other_units.items %} {{ name }} {{ n|intcomma }}{% if not forloop.last %} ·{% endif %}{% endfor %}</div>{% endif %}
+    {% if batch.status == 'done' %}
+      {% if s.removed %}<div>เอาคดีของหน่วยอื่นที่เคยนำเข้าไว้ออกจากระบบแล้ว {{ s.removed|intcomma }} คดี</div>{% endif %}
+    {% elif s.remove_count %}
+      <div class="font-medium text-amber-800">เมื่อยืนยัน จะเอาคดีของหน่วยอื่นที่เคยนำเข้าไว้ออกจากระบบ {{ s.remove_count|intcomma }} คดี{% if s.remove_calls %} (รวมบันทึกการโทร {{ s.remove_calls|intcomma }} ครั้งของคดีเหล่านั้น){% endif %} · ไฟล์ทะเบียนไม่ได้ถูกแก้</div>
+    {% endif %}
+    {% if s.kept_with_summons %}<div>คดีของหน่วยอื่นที่ออกหมายเรียกไปแล้ว {{ s.kept_with_summons|intcomma }} คดี ยังเก็บไว้ (ระบบไม่ลบหมายเรียก)</div>{% endif %}
+  </div>
+  {% endif %}
   <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
     <div class="card"><div class="stat-label">จำนวนแถว</div><div class="stat-value">{{ s.total_rows|intcomma }}</div><div class="text-xs text-slate-500">ข้ามแถวว่าง {{ s.skipped_blank|intcomma }}</div></div>
     <div class="card"><div class="stat-label">เพิ่มใหม่</div><div class="stat-value text-green-700">{{ s.new|intcomma }}</div></div>

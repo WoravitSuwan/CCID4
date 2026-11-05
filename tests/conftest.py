@@ -52,13 +52,9 @@ def imported(db):
 
 @pytest.fixture
 def setup_signers(imported):
-    """Bind every register name to a signer with complete data; configure กก.2."""
-    from apps.registry.models import InvestigatorAlias, Unit, normalize_person_key
+    """Bind every register name to a signer with complete data."""
+    from apps.registry.models import InvestigatorAlias, normalize_person_key
 
-    unit2 = Unit.objects.get(name="กก.2 บก.สอท.4")
-    unit2.appointment_place = "กองกำกับการ ๒ เลขที่ ๙๙ ตำบลช้างเผือก อำเภอเมืองเชียงใหม่ จังหวัดเชียงใหม่ ๕๐๓๐๐"
-    unit2.sender_address = "เลขที่ ๙๙ ตำบลช้างเผือก อำเภอเมืองเชียงใหม่ จังหวัดเชียงใหม่ ๕๐๓๐๐"
-    unit2.save()
     # the import created one signer per person (spacing / leading หญิง ignored): complete them
     by_key = {}
     for alias in InvestigatorAlias.objects.select_related("investigator"):

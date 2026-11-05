@@ -12,10 +12,11 @@
   </div>
 </div>
 
-{% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases %}
+{% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases or admin_alerts.other_unit_cases %}
 <div class="alert alert-warning mb-5">
   {% icon "alert" "h-5 w-5 shrink-0" %}
   <div class="space-y-1">
+    {% if admin_alerts.other_unit_cases %}<div>ในระบบยังมีคดีของหน่วยอื่น {{ admin_alerts.other_unit_cases|intcomma }} คดี (ระบบนี้ใช้เฉพาะ {{ admin_alerts.own_unit }}) · <a class="underline" href="{% url 'import_home' %}">นำเข้าไฟล์ทะเบียนอีกครั้ง</a> ระบบจะเอาออกให้</div>{% endif %}
     {% if admin_alerts.new_statuses %}<div>พบสถานะใหม่ {{ admin_alerts.new_statuses }} รายการจากการนำเข้า (ตั้งเป็น "ยังไม่สิ้นสุด" ไว้ก่อน) — <a class="font-medium underline" href="{% url 'settings_statuses' %}">ตรวจสอบ</a></div>{% endif %}
     {% if admin_alerts.unlinked_aliases %}<div>มีชื่อพนักงานสอบสวน {{ admin_alerts.unlinked_aliases }} ชื่อที่ยังไม่ได้ผูกกับผู้ลงนาม (คดีเหล่านี้ยังออกหมายไม่ได้) — <a class="font-medium underline" href="{% url 'settings_investigators' %}">ผูกชื่อ</a></div>{% endif %}
   </div>

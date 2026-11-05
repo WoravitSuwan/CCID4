@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
 import openpyxl
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -17,7 +18,7 @@ from apps.core.thai_format import normalize_year_to_ce
 from apps.registry.address import clean_text
 from apps.registry.defaults import FINAL_BY_DEFAULT
 from apps.registry.models import (
-    Case, Complainant, InvestigatorAlias, Status, Unit, link_register_names,
+    Case, Complainant, InvestigatorAlias, Status, Unit, is_own_unit, link_register_names, other_unit_cases,
     normalize_person_key, normalize_receipt_no,
 )
 
@@ -174,6 +175,11 @@ class Analysis:
     manual_status_kept: set = field(default_factory=set)
     manual_status_released: set = field(default_factory=set)
     per_sheet: Counter = field(default_factory=Counter)
+    other_units: Counter = field(default_factory=Counter)  # register rows of another unit: not imported
+    other_unit_keys: list = field(default_factory=list)
+    remove_count: int = 0  # cases of another unit already in the system, removed on import
+    remove_calls: int = 0
+    kept_with_summons: int = 0
 
     def add_issue(self, row: ParsedRow | None, issue_type, message="", sheet="", row_number=None, key=""):
         self.issues.append({
@@ -270,6 +276,11 @@ def analyze(batch: ImportBatch, progress=None) -> Analysis:
                 prow.values = parse_complainant_row(raw, batch.mapping)
             else:
                 prow.values = parse_register_row(raw, batch.mapping, sheet, analysis, prow)
+                if not is_own_unit(prow.values["unit_raw"]):  # this system is for one unit only
+                    analysis.total_rows -= 1  # counted apart, in other_units
+                    analysis.other_units[prow.values["unit_raw"]] += 1
+                    analysis.other_unit_keys.append(key)
+                    continue
             if not RECEIPT_RE.match(key):
                 analysis.add_issue(prow, IssueType.BAD_KEY, "ควรเป็น L, W, T หรือ C ตามด้วยตัวเลข")
             if key in analysis.rows:
@@ -285,10 +296,49 @@ def analyze(batch: ImportBatch, progress=None) -> Analysis:
         analysis.per_sheet[prow.sheet] += 1
         if kind == ImportKind.COMPLAINANTS:
             complainant_issues(analysis, prow)
+    if kind == ImportKind.REGISTER:
+        _count_other_unit_cases(analysis)
     _diff(analysis)
     if progress:
         progress(100)
     return analysis
+
+
+def _other_unit_ids(analysis: Analysis) -> list:
+    """Cases in the system that are not this unit's: saved under another unit, or listed under another unit
+    in this file. A case this file lists under our unit is never one of them."""
+    own_keys = analysis.rows.keys()
+    found = dict(other_unit_cases().values_list("pk", "receipt_no"))
+    for chunk in _chunks([k for k in analysis.other_unit_keys if k not in own_keys]):
+        found.update(Case.objects.filter(receipt_no__in=chunk).values_list("pk", "receipt_no"))
+    return [pk for pk, receipt in found.items() if receipt not in own_keys]
+
+
+def _removable(ids) -> list:
+    """A summons is never deleted, so a case that has one stays."""
+    from apps.documents.models import Summons
+
+    with_summons = set()
+    for chunk in _chunks(ids):
+        with_summons.update(Summons.objects.filter(case_id__in=chunk).values_list("case_id", flat=True))
+    return [pk for pk in ids if pk not in with_summons]
+
+
+def _count_other_unit_cases(analysis: Analysis):
+    from apps.calls.models import CallAttempt
+
+    ids = _other_unit_ids(analysis)
+    removable = _removable(ids)
+    analysis.remove_count = len(removable)
+    analysis.remove_calls = sum(CallAttempt.objects.filter(case_id__in=chunk).count() for chunk in _chunks(removable))
+    analysis.kept_with_summons = len(ids) - len(removable)
+
+
+def _remove_other_unit_cases(analysis: Analysis) -> int:
+    ids = _removable(_other_unit_ids(analysis))
+    for chunk in _chunks(ids):
+        Case.objects.filter(pk__in=chunk).delete()
+    return len(ids)
 
 
 def _chunks(items, size=CHUNK):
@@ -419,6 +469,12 @@ def summary_dict(analysis: Analysis) -> dict:
         "new_units": analysis.new_units,
         "manual_status_kept": len(analysis.manual_status_kept),
         "per_sheet": dict(analysis.per_sheet),
+        "own_unit": settings.OWN_UNIT,
+        "other_units": dict(analysis.other_units),
+        "other_unit_rows": sum(analysis.other_units.values()),
+        "remove_count": analysis.remove_count,
+        "remove_calls": analysis.remove_calls,
+        "kept_with_summons": analysis.kept_with_summons,
     }
 
 
@@ -543,9 +599,12 @@ def commit(batch: ImportBatch, progress=None) -> Analysis:
             _apply_complainants(batch, analysis)
         else:
             _apply_register(batch, analysis)
+            batch_removed = _remove_other_unit_cases(analysis)
         linked = relink_cases()
         store_analysis(batch, analysis)
         batch.summary["linked"] = linked
+        if batch.kind == ImportKind.REGISTER:
+            batch.summary["removed"] = batch_removed
         batch.status = BatchStatus.DONE
         batch.committed_at = timezone.now()
         batch.progress = 100

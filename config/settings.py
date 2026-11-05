@@ -178,6 +178,8 @@ SOFFICE_BIN = env("SOFFICE_BIN", "")  # empty = auto-detect (PATH, then standard
 SOFFICE_TIMEOUT = env_int("SOFFICE_TIMEOUT", 600)
 EXPORT_ASYNC_THRESHOLD = env_int("EXPORT_ASYNC_THRESHOLD", 20)
 DEFAULT_RETENTION_DAYS = env_int("MEDIA_RETENTION_DAYS", 30)
+# This system is for one unit only: the register import keeps only its cases (คอลัมน์ "หน่วยที่รับผิดชอบ")
+OWN_UNIT = env("OWN_UNIT", "กก.1 บก.สอท.4")
 TEMPLATES_DOCX_DIR = BASE_DIR / "templates_docx"
 
 LOGGING = {
