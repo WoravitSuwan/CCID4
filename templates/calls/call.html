@@ -17,7 +17,7 @@
         <span class="font-mono text-lg font-semibold">{{ case.receipt_no }}</span>
         {% if assignment.is_done %}<span class="badge badge-green">ติดต่อเสร็จแล้ว</span>{% endif %}
       </div>
-      <div class="mt-1 text-xl font-semibold text-slate-900">{{ case.victim_name|default:case.complainant.full_name|default:"-" }}</div>
+      <div class="mt-1 text-xl font-semibold text-slate-900">{% if case.victim_name %}{{ case.victim_name }}{% elif case.complainant %}{{ case.complainant.full_name|default:"-" }}{% else %}-{% endif %}</div>
       <div class="mt-4 space-y-2">
         {% for p in phones %}
         <div class="flex items-center gap-2">

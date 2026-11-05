@@ -523,6 +523,10 @@ class Case(models.Model):
     def issue_blockers(self) -> list[str]:
         """Reasons this case cannot get a summons yet (empty list = OK)."""
         blockers = []
+        if self.status and self.status.is_final:
+            blockers.append(f"คดีสิ้นสุดแล้ว (สถานะ: {self.status.name})")
+        elif self.is_final:
+            blockers.append("ผู้เสียหายไม่ประสงค์ดำเนินคดี (นับเป็นคดีสิ้นสุด)")
         override = self.get_override()
         if not self.complainant and not override:
             blockers.append("จับคู่กับไฟล์ผู้แจ้งไม่ได้ (กรอกที่อยู่เองในหน้ารายละเอียดคดีได้)")

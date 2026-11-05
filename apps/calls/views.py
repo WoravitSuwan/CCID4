@@ -75,17 +75,6 @@ OPEN_CASE, NO_SYSTEM_CALL, FILE_LOG, FILE_REACHED = (funnel.OPEN_CASE, funnel.NO
 FILE_DONE = NO_SYSTEM_CALL & FILE_REACHED  # reached before this system: nothing left to do
 
 
-SCOPES = [("open", "ยังไม่สิ้นสุด"), ("final", "สิ้นสุดแล้ว"), ("all", "ทั้งหมด")]
-
-
-def _apply_scope(qs, scope):
-    if scope == "open":
-        return qs.filter(OPEN_CASE)
-    if scope == "final":
-        return qs.exclude(OPEN_CASE)
-    return qs
-
-
 def _apply_tab(qs, tab):
     if tab == "todo":  # for "next case": open, not finished, call-back due, not reached before this system
         now = timezone.now()
@@ -121,16 +110,8 @@ def queue(request):
     if tab not in funnel.STAGES:
         tab = "all"
     filtered = _apply_filters(request, base)
-    scope = request.GET.get("scope", "open")
-    if scope not in dict(SCOPES):
-        scope = "open"
-    scoped = _apply_scope(filtered, scope)
-    counts = funnel.counts(scoped)
-    # the diagram is the overview of every case (ไม่ประสงค์ดำเนินคดี counts as สิ้นสุด, so a view of the open
-    # cases alone would never show it); the tabs below follow the chosen scope
-    overview = funnel.counts(filtered) if scope != "all" else counts
-    scope_counts = {key: _apply_scope(filtered, key).count() for key, _ in SCOPES}
-    qs = _apply_tab(scoped, tab)
+    counts = funnel.counts(filtered)  # one set of numbers for the tiles, the diagram and the tabs
+    qs = _apply_tab(filtered, tab)
     today = timezone.localdate()
     today_calls = CallAttempt.objects.filter(called_at__date=today)
     if perms.is_outsource(request.user):
@@ -151,8 +132,8 @@ def queue(request):
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
         "tab_label": funnel.STAGES[tab][0], "tab_in_nav": tab in funnel.TAB_KEYS,
-        "sankey": funnel.sankey(overview),
-        "scope": scope, "scopes": SCOPES, "scope_counts": scope_counts,
+        "sankey": funnel.sankey(counts), "unknown_parts": [(k, funnel.STAGES[k][0]) for k in funnel.UNKNOWN_PARTS],
+        "filtered": bool(request.GET.get("q") or request.GET.get("result")),
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
         "lock_minutes": OPEN_LOCK_MINUTES,
@@ -163,7 +144,7 @@ def queue(request):
 
 @require_POST
 def issue_filtered(request):
-    """"ติดต่อไม่ได้ · รอออกหมาย" with the current scope/search: send every case of it to the issue page."""
+    """"ประสงค์ · รอออกหมายเรียก" (with the current search/filter): send every case of it to the issue page."""
     from django.http import QueryDict
 
     from apps.documents.views import SESSION_CASES, SESSION_EXCLUDED, SESSION_OPTS
@@ -171,12 +152,10 @@ def issue_filtered(request):
     if not perms.can_issue_any(request.user):
         raise PermissionDenied
     request.GET = QueryDict(request.POST.get("query", ""))
-    scope = request.GET.get("scope", "open")
-    qs = _apply_tab(_apply_scope(_apply_filters(request, _queue(request)), scope if scope in dict(SCOPES)
-                                 else "open"), "to_issue")
+    qs = _apply_tab(_apply_filters(request, _queue(request)), "want_todo")
     ids = list(qs.order_by("case__receipt_no").values_list("case_id", flat=True)[:MAX_ISSUE_AT_ONCE])
     if not ids:
-        messages.info(request, "ไม่มีคดีที่ติดต่อไม่ได้และรอออกหมาย")
+        messages.info(request, "ไม่มีคดีที่ประสงค์ดำเนินคดีและรอออกหมายเรียก")
         return redirect(f"{reverse('calls_queue')}?{request.GET.urlencode()}")
     request.session[SESSION_CASES] = ids
     for key in (SESSION_OPTS, SESSION_EXCLUDED):
@@ -216,7 +195,7 @@ class CallForm(StyledForm):
 def _next_case(request, current_pk):
     """Next case to call - skipping ones another staff member has open right now."""
     busy = Q(opened_at__gte=timezone.now() - dt.timedelta(minutes=OPEN_LOCK_MINUTES)) & ~Q(opened_by=request.user)
-    qs = _ordered(_apply_tab(_apply_scope(_queue(request), "open"), "todo")).exclude(case_id=current_pk).exclude(busy)
+    qs = _ordered(_apply_tab(_queue(request), "todo")).exclude(case_id=current_pk).exclude(busy)
     nxt = qs.first()
     return nxt.case_id if nxt else None
 

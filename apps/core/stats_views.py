@@ -174,7 +174,6 @@ def _collect(start, end):
     from apps.calls.models import REACHED, CallAssignment, CallAttempt, CallOutcome
     from apps.calls.services import ensure_call_pool
     from apps.documents.models import Summons
-    from apps.registry.models import Case
 
     ensure_call_pool()
     calls = CallAttempt.objects.filter(called_at__date__gte=start, called_at__date__lte=end)
@@ -192,8 +191,9 @@ def _collect(start, end):
     stages = funnel.counts(funnel.with_summons_flag(CallAssignment.objects.all()))
     all_summons = Summons.objects.all()
     overall = {
-        "cases": Case.objects.count(), "open": Case.objects.not_final().count(),
-        "final": Case.objects.final().count(), "stages": stages, "sankey": funnel.sankey(stages),
+        # every figure from the same partition as the call list, so the pages agree
+        "cases": stages["all"], "open": stages["open"], "final": stages["final"],
+        "stages": stages, "sankey": funnel.sankey(stages),
         "summonses": all_summons.count(), "ems_sent": all_summons.exclude(ems_number="").count(),
         "ems_waiting": all_summons.filter(ems_number="").count(),
     }

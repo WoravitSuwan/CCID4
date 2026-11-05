@@ -17,9 +17,10 @@
 <style>
   .viz-root { --series-1: #2a78d6; --series-2: #eb6834; --muted-node: #94a3b8; --text-muted: #64748b; }
 </style>
+{% include "calls/_summary_tiles.html" with n=counts link=True %}
 <div class="viz-root card mb-5">
-  <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ภาพรวมการโทร → ออกหมาย</h2>
-    <span class="text-sm text-slate-500">ทุกคดี รวมที่สิ้นสุดแล้ว · กดที่กล่องหรือแถบเพื่อดูรายการ</span>
+  <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ภาพรวมคดี → ออกหมายเรียก</h2>
+    <span class="text-sm text-slate-500">กดที่กล่องหรือแถบเพื่อดูรายการ</span>
     <span class="ml-auto text-sm text-slate-600">โทรวันนี้ <b class="tabular-nums">{{ stats.today|intcomma }}</b> (ติดต่อได้ {{ stats.today_reached }}){% if perm_settings and stats.today %} · <a href="{% url 'settings_wipe' %}?scope=calls_today" class="text-slate-400 underline hover:text-red-600">รีเซ็ต</a>{% endif %}</span>
   </div>
   {% include "calls/_sankey.html" %}
@@ -42,34 +43,34 @@
 
 <div class="card mb-4 space-y-3 p-3 sm:p-4">
   <div class="flex flex-wrap items-center gap-3">
-    <div class="inline-flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="สถานะคดี">
-      {% for key, label in scopes %}
-      <a href="?{% query_replace scope=key page="" %}" class="rounded-lg px-4 py-2 text-sm font-semibold {% if scope == key %}bg-white text-slate-900 shadow-sm ring-1 ring-slate-200{% else %}text-slate-500 hover:text-slate-800{% endif %}">{{ label }} <span class="ml-1 tabular-nums {% if scope == key %}text-indigo-600{% else %}text-slate-400{% endif %}">{{ scope_counts|get_item:key|intcomma }}</span></a>
+    <nav class="flex flex-wrap gap-1" aria-label="กลุ่มคดี">
+      {% for key, label in tabs %}
+      <a href="?{% query_replace tab=key page="" %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if tab == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="tabular-nums {% if tab == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ counts|get_item:key|intcomma }}</span></a>
       {% endfor %}
-    </div>
-    <form method="get" class="ml-auto flex w-full flex-wrap gap-2 sm:w-auto">
-      <input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="scope" value="{{ scope }}">
-      <select name="result" class="input w-full py-2 sm:w-52" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
-        {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
-        {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-      <div class="relative w-full sm:w-64"><span class="pointer-events-none absolute left-3 top-2.5 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
-        <input class="input w-full py-2 pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ / เบอร์"></div>
-    </form>
+    </nav>
   </div>
-  <nav class="flex flex-wrap gap-1 border-t border-slate-100 pt-3" aria-label="การโทร">
-    {% for key, label in tabs %}
-    <a href="?{% query_replace tab=key page="" %}" class="rounded-lg px-3 py-1.5 text-sm font-medium {% if tab == key %}bg-indigo-600 text-white hover:text-white{% else %}text-slate-600 hover:bg-slate-100 hover:text-slate-900{% endif %}">{{ label }} <span class="tabular-nums {% if tab == key %}text-indigo-100{% else %}text-slate-400{% endif %}">{{ counts|get_item:key|intcomma }}</span></a>
-    {% endfor %}
-  </nav>
+  {% if tab == "unknown" or tab == "never" or tab == "not_reached" or tab == "undecided" %}
+  <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-sm"><span class="text-slate-500">ยังไม่ทราบความประสงค์:</span>
+    {% for key, label in unknown_parts %}<a href="?{% query_replace tab=key page="" %}" class="rounded-full px-3 py-1 ring-1 {% if tab == key %}bg-slate-800 text-white ring-slate-800 hover:text-white{% else %}text-slate-600 ring-slate-200 hover:bg-slate-50{% endif %}">{{ label }} <span class="tabular-nums opacity-70">{{ counts|get_item:key|intcomma }}</span></a>{% endfor %}
+  </div>
+  {% endif %}
+  <form method="get" class="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="relative w-full sm:w-72"><span class="pointer-events-none absolute left-3 top-2.5 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
+      <input class="input w-full py-2 pl-9" name="q" value="{{ request.GET.q }}" placeholder="เลขรับแจ้ง / ชื่อ / เบอร์"></div>
+    <select name="result" class="input w-full py-2 sm:w-52" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
+      {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+      {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+    {% if filtered %}<a class="btn py-2" href="?tab={{ tab }}">ล้างตัวกรอง</a><span class="self-center text-xs text-amber-700">ตัวเลขทั้งหน้านับเฉพาะคดีที่ตรงกับคำค้น/ตัวกรอง</span>{% endif %}
+  </form>
 </div>
 
-{% if can_issue and tab == "not_reached" or can_issue and tab == "to_issue" %}
-<div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-orange-50 p-3 ring-1 ring-orange-200">
-  <div class="text-sm text-orange-900">ติดต่อไม่ได้ <b class="tabular-nums">{{ counts.not_reached|intcomma }}</b> คดี · รอออกหมายเรียก <b class="tabular-nums">{{ counts.to_issue|intcomma }}</b> คดี
-    <span class="text-orange-700">— ส่งหมายเรียกทางไปรษณีย์แทนการโทร</span></div>
+{% if can_issue and tab == "want" or can_issue and tab == "want_todo" %}
+<div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-indigo-50 p-3 ring-1 ring-indigo-200">
+  <div class="text-sm text-indigo-950">ประสงค์ดำเนินคดี <b class="tabular-nums">{{ counts.want|intcomma }}</b> คดี · ออกหมายเรียกแล้ว <b class="tabular-nums">{{ counts.want_issued|intcomma }}</b> · รอออกหมายเรียก <b class="tabular-nums">{{ counts.want_todo|intcomma }}</b></div>
   <form method="post" action="{% url 'calls_issue_filtered' %}" class="ml-auto">{% csrf_token %}
     <input type="hidden" name="query" value="{{ request.GET.urlencode }}">
-    <button class="btn btn-primary" {% if not counts.to_issue %}disabled{% endif %}>{% icon "document" "h-4 w-4" %} ออกหมายเรียกทุกคดีที่รอออกหมาย ({{ counts.to_issue|intcomma }})</button>
+    <button class="btn btn-primary" {% if not counts.want_todo %}disabled{% endif %}>{% icon "document" "h-4 w-4" %} ออกหมายเรียกทุกคดีที่รอออกหมาย ({{ counts.want_todo|intcomma }})</button>
   </form>
 </div>
 {% endif %}
@@ -95,10 +96,10 @@
         {% if can_issue %}<td><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
         <td class="whitespace-nowrap"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div>
           {% with other=a|opened_by_other:user %}{% if other %}<span class="badge badge-amber mt-1" title="{{ other.display_name }} เปิดคดีนี้อยู่">{% icon "phone" "h-3 w-3" %} {{ other.first_name|default:other.username }} กำลังเปิดอยู่</span>{% endif %}{% endwith %}</td>
-        <td class="min-w-[9rem] font-medium">{{ a.case.victim_name|default:a.case.complainant.full_name }}</td>
-        <td class="whitespace-nowrap font-mono">{{ a.case.victim_phone|default:a.case.complainant.phone|default:"-" }}</td>
+        <td class="min-w-[9rem] font-medium">{% if a.case.victim_name %}{{ a.case.victim_name }}{% elif a.case.complainant %}{{ a.case.complainant.full_name }}{% else %}-{% endif %}</td>
+        <td class="whitespace-nowrap font-mono">{% if a.case.victim_phone %}{{ a.case.victim_phone }}{% elif a.case.complainant.phone %}{{ a.case.complainant.phone }}{% else %}-{% endif %}</td>
         <td class="max-w-[11rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
-        <td class="whitespace-nowrap">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}</td>
+        <td class="whitespace-nowrap">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}{% if a.case.not_want %}<div class="mt-1"><span class="badge badge-gray" title="ผู้เสียหายไม่ประสงค์ดำเนินคดี จึงนับเป็นคดีสิ้นสุด">สิ้นสุด · ไม่ประสงค์</span></div>{% endif %}</td>
         <td class="text-center tabular-nums">{% if a.attempt_count %}{{ a.attempt_count }}{% elif a.case.contact_log %}<span class="badge badge-gray" title="โทรแล้วตามบันทึกการติดต่อในไฟล์ทะเบียน">ในไฟล์</span>{% elif a.case.status.is_final %}<span class="text-slate-300">–</span>{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
         <td class="max-w-[16rem] text-sm">
           {% if a.last_outcome %}<span class="badge {% if a.last_reached %}badge-green{% else %}badge-amber{% endif %}">{{ a.get_last_outcome_display }}</span>

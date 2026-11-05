@@ -1,0 +1,26 @@
+{% load humanize thai ui %}{# params: n = funnel.counts(...), link = True on the call list (keeps the search), else links open the call list #}
+{% with all=n.all %}
+<div class="mb-2 grid grid-cols-2 gap-3 lg:grid-cols-4">
+  <a class="stat block" href="{% if link %}?{% query_replace tab='all' page='' %}{% else %}{% url 'calls_queue' %}?tab=all{% endif %}">
+    <div class="stat-label">คดีทั้งหมด</div>
+    <div class="stat-value">{{ n.all|intcomma }}</div>
+    <div class="text-xs text-slate-400">เลขรับแจ้งไม่ซ้ำกัน</div>
+  </a>
+  <a class="stat block" href="{% if link %}?{% query_replace tab='final' page='' %}{% else %}{% url 'calls_queue' %}?tab=final{% endif %}">
+    <div class="stat-label">สิ้นสุดแล้ว</div>
+    <div class="stat-value">{{ n.final|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.final|percent:all }}%</span></div>
+    <div class="text-xs text-slate-500">สถานะสิ้นสุด {{ n.final_status|intcomma }} + ไม่ประสงค์ดำเนินคดี {{ n.not_want|intcomma }}</div>
+  </a>
+  <a class="stat block ring-2 ring-indigo-200" href="{% if link %}?{% query_replace tab='want' page='' %}{% else %}{% url 'calls_queue' %}?tab=want{% endif %}">
+    <div class="stat-label">ประสงค์ดำเนินคดี · ออกหมายเรียกได้</div>
+    <div class="stat-value text-indigo-700">{{ n.want|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.want|percent:all }}%</span></div>
+    <div class="text-xs text-slate-500">รอออกหมาย {{ n.want_todo|intcomma }} + ออกหมายแล้ว {{ n.want_issued|intcomma }}</div>
+  </a>
+  <a class="stat block" href="{% if link %}?{% query_replace tab='unknown' page='' %}{% else %}{% url 'calls_queue' %}?tab=unknown{% endif %}">
+    <div class="stat-label">ยังไม่ทราบความประสงค์</div>
+    <div class="stat-value">{{ n.unknown|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.unknown|percent:all }}%</span></div>
+    <div class="text-xs text-slate-500">ยังไม่ได้โทร {{ n.never|intcomma }} + ติดต่อไม่ได้ {{ n.not_reached|intcomma }} + ติดต่อได้ยังไม่ระบุ {{ n.undecided|intcomma }}</div>
+  </a>
+</div>
+<p class="mb-5 text-xs text-slate-500">ทั้งหมด {{ n.all|intcomma }} = สิ้นสุดแล้ว {{ n.final|intcomma }} + ประสงค์ดำเนินคดี {{ n.want|intcomma }} + ยังไม่ทราบความประสงค์ {{ n.unknown|intcomma }} · สิ้นสุด = สถานะคดีสิ้นสุด หรือผู้เสียหายไม่ประสงค์ดำเนินคดี</p>
+{% endwith %}

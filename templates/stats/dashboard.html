@@ -25,25 +25,15 @@
   </form>
 </div>
 
+<h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">ขณะนี้</h2>
+{% include "calls/_summary_tiles.html" with n=overall.stages %}
 {% with p=progress %}
 <div class="card mb-6">
   <div class="card-header flex-wrap"><h2 id="t-progress">ความคืบหน้า: คดีสิ้นสุด / ยังไม่สิ้นสุด</h2>
     <span class="text-xs text-slate-500 sm:ml-auto">สิ้นสุด = สถานะคดีสิ้นสุด หรือ ไม่ประสงค์ดำเนินคดี</span></div>
   <div class="grid gap-6 lg:grid-cols-[19rem_1fr]">
     <div class="space-y-4">
-      <div class="text-sm text-slate-500">ยอดคดีทั้งหมด <b class="tabular-nums text-slate-800">{{ p.total|intcomma }}</b> คดี</div>
-      <div class="grid grid-cols-2 gap-3">
-        <div class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-          <div class="text-xs font-medium text-slate-500">ยังไม่สิ้นสุด</div>
-          <div class="text-3xl font-semibold tabular-nums text-slate-900">{{ p.open|intcomma }}</div>
-          <div class="text-xs text-slate-500">{{ p.open_pct }}%</div>
-        </div>
-        <div class="rounded-xl p-3 ring-1 ring-slate-200" style="background: color-mix(in srgb, var(--series-1) 8%, white)">
-          <div class="text-xs font-medium text-slate-500">สิ้นสุดแล้ว</div>
-          <div class="text-3xl font-semibold tabular-nums" style="color: var(--series-1)">{{ p.final|intcomma }}</div>
-          <div class="text-xs text-slate-500">{{ p.final_pct }}%</div>
-        </div>
-      </div>
+      <div class="text-sm text-slate-600">สิ้นสุดแล้ว <b class="tabular-nums" style="color: var(--series-1)">{{ p.final|intcomma }}</b> จาก {{ p.total|intcomma }} คดี ({{ p.final_pct }}%) · ยังไม่สิ้นสุด <b class="tabular-nums text-slate-900">{{ p.open|intcomma }}</b></div>
       <div>
         <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label="สิ้นสุดแล้ว {{ p.final_pct }}%"><div class="h-3 rounded-full" style="width: {{ p.final_pct }}%; background: var(--series-1)"></div></div>
         <div class="mt-1.5 text-xs text-slate-500">สิ้นสุดแล้ว: สถานะสิ้นสุด {{ p.final_status|intcomma }} · ไม่ประสงค์ดำเนินคดี {{ p.final_not_want|intcomma }}</div>
@@ -122,7 +112,7 @@
 
 <div class="card mb-6">
   <div class="card-header"><h2>ภาพรวมทั้งหมด (ขณะนี้)</h2>
-    <span class="ml-auto text-sm text-slate-500">คดีทั้งหมด {{ overall.cases|intcomma }} · ยังไม่สิ้นสุด {{ overall.open|intcomma }} · สิ้นสุด {{ overall.final|intcomma }} · หมายเรียก {{ overall.summonses|intcomma }} (ส่งแล้ว {{ overall.ems_sent|intcomma }} · ยังไม่ส่ง {{ overall.ems_waiting|intcomma }})</span></div>
+    <span class="ml-auto text-sm text-slate-500">หมายเรียก {{ overall.summonses|intcomma }} ฉบับ (ส่งแล้ว {{ overall.ems_sent|intcomma }} · ยังไม่ส่ง {{ overall.ems_waiting|intcomma }})</span></div>
   {% include "calls/_sankey.html" with sankey=overall.sankey link_to_calls=True %}
 </div>
 

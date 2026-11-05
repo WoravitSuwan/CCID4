@@ -6,6 +6,7 @@ from django.utils import timezone
 from openpyxl import load_workbook
 
 from apps.accounts.models import Role, User
+from apps.calls import funnel
 from apps.calls.models import CallAssignment, CallAttempt, CallOutcome
 from apps.calls.services import contact_log_with_calls, parse_receipt_list, record_call
 from apps.core.models import AuditLog
@@ -51,12 +52,12 @@ def test_outsource_sees_every_open_case_without_assignment(client, imported, cal
     mine = Case.objects.not_final().first()
     CallAssignment.objects.create(case=mine, assignee=caller, assigned_by=clerk)
     client.force_login(caller)
-    page = client.get("/calls/?tab=all&scope=all")
+    page = client.get("/calls/?tab=all")
     open_cases = Case.objects.not_final().count()
     assert page.context["page"].paginator.count == Case.objects.count()  # every case, no assigning needed
-    assert client.get("/calls/").context["counts"]["all"] == open_cases  # default: open cases
+    assert client.get("/calls/").context["counts"]["open"] == open_cases
     final = Case.objects.final().first()
-    never = client.get("/calls/?tab=never&scope=all").context["page"].paginator.object_list
+    never = client.get("/calls/?tab=never").context["page"].paginator.object_list
     assert final.pk not in [a.case_id for a in never]  # closed cases count as called
     mine_only = client.get("/calls/?tab=all&assignee=me").context["page"]
     assert [a.case_id for a in mine_only] == [mine.pk]
@@ -181,45 +182,46 @@ def test_queue_tabs_and_status_filter(client, imported, caller):
     Case.objects.filter(pk=c4.pk).update(contact_log="ครั้งที่ 1 ไม่สามารถติดต่อได้ (ปิดเครื่อง)")  # called, not reached
     Case.objects.filter(pk=c5.pk).update(contact_log="ประสงค์ดำเนินคดี")
     total, open_cases = Case.objects.count(), Case.objects.not_final().count()
-    page = client.get("/calls/")  # default: open cases, tab "ทั้งหมด"
-    counts, scopes = page.context["counts"], page.context["scope_counts"]
-    assert scopes == {"open": open_cases, "final": total - open_cases, "all": total}  # same on every tab
-    # c3 said "ไม่ประสงค์ดำเนินคดี": that counts as สิ้นสุด, so it leaves the open cases
-    assert Case.objects.final().filter(pk=c3.pk).exists() and Case.objects.get(pk=c3.pk).is_final
-    assert counts["all"] == open_cases and counts["never"] == open_cases - 4
-    assert (counts["reached"], counts["not_reached"]) == (2, 2)  # c2 c5 / c1 c4
-    assert (counts["want"], counts["not_want"], counts["undecided"]) == (2, 0, 0)  # c2 (info given) c5
-    assert (counts["to_issue"], counts["issued_nr"]) == (2, 0)
-    assert [k for k, _ in page.context["tabs"]] == ["all", "reached", "want", "not_want", "not_reached", "to_issue",
-                                                    "issued_nr"]
+    final_status = Case.objects.filter(status__is_final=True).count()
+    page = client.get("/calls/")  # every case, tab "ทั้งหมด"
+    n = page.context["counts"]
+    # one partition: ทั้งหมด = สิ้นสุด (สถานะสิ้นสุด + ไม่ประสงค์) + ประสงค์ + ยังไม่ทราบความประสงค์
+    assert n["all"] == total and n["final_status"] == final_status
+    assert n["not_want"] == 1 and Case.objects.get(pk=c3.pk).is_final  # c3 said ไม่ประสงค์: สิ้นสุด
+    assert n["final"] == final_status + 1 == Case.objects.final().count() and n["open"] == open_cases
+    assert (n["want"], n["want_todo"], n["want_issued"]) == (2, 2, 0)  # c2 (info given) c5
+    assert n["unknown"] == open_cases - 2 and (n["not_reached"], n["undecided"]) == (2, 0)  # c1 c4
+    assert n["never"] == open_cases - 4
+    assert funnel.adds_up(n)
+    assert [k for k, _ in page.context["tabs"]] == ["all", "final", "not_want", "open", "want", "want_todo",
+                                                    "want_issued", "unknown"]
+    html = page.content.decode()
+    assert f"ทั้งหมด {total} = สิ้นสุดแล้ว {n['final']} + ประสงค์ดำเนินคดี 2 + ยังไม่ทราบความประสงค์ {n['unknown']}" in html
+    # every number opens a list of exactly that many cases
+    for key in ("final", "final_status", "not_want", "open", "want", "want_todo", "unknown", "never", "not_reached"):
+        assert client.get(f"/calls/?tab={key}").context["page"].paginator.count == n[key], key
     sk = page.context["sankey"]
-    nodes = {n["key"]: n for n in sk["nodes"]}
-    # the diagram covers every case: ไม่ประสงค์ is shown there; closed cases are never "waiting for a summons"
-    assert nodes["want"]["n"] == 2 and nodes["not_want"]["n"] >= 1 and nodes["never"]["n"] == open_cases - 4
-    assert nodes["to_issue"]["n"] == 2 and "scope=all" in page.content.decode()
+    nodes = {x["key"]: x["n"] for x in sk["nodes"]}
+    assert {k: nodes.get(k, 0) for k in ("final", "open", "final_status", "not_want", "want", "unknown")} == {
+        k: n[k] for k in ("final", "open", "final_status", "not_want", "want", "unknown")}
     assert len(sk["links"]) == len(sk["nodes"]) - 1
-    labels = sorted((n["ly"], n["x"]) for n in sk["nodes"])
+    labels = sorted((x["ly"], x["x"]) for x in sk["nodes"])
     for col in {x for _, x in labels}:  # labels in one column never overlap
         ys = [y for y, x in labels if x == col]
         assert all(b - a >= 38 for a, b in zip(ys, ys[1:]))
     want_ids = {a.case_id for a in client.get("/calls/?tab=want").context["page"].paginator.object_list}
     assert want_ids == {c2.pk, c5.pk}
-    unreached = client.get("/calls/?tab=not_reached")
-    assert {a.case_id for a in unreached.context["page"]} == {c1.pk, c4.pk}
-    assert "ออกหมายเรียกทุกคดีที่รอออกหมาย (2)" in unreached.content.decode()
-    undecided = client.get("/calls/?tab=undecided").content.decode()  # a diagram-only stage
-    assert "กำลังดู:" in undecided and "ติดต่อได้ ยังไม่ระบุ" in undecided
-    html = page.content.decode()
-    assert "ยังไม่สิ้นสุด" in html and "สิ้นสุดแล้ว" in html and 'name="assignee"' not in html
-    all_page = client.get("/calls/?tab=all&scope=all")
-    assert all_page.context["page"].paginator.count == total
-    assert all_page.context["scope_counts"] == {"open": open_cases, "final": total - open_cases, "all": total}
-    final_page = client.get("/calls/?tab=all&scope=final")
-    assert final_page.context["page"].paginator.count == total - open_cases
-    assert final_page.context["counts"]["never"] == 0  # closed cases count as called
+    want_page = client.get("/calls/?tab=want").content.decode()
+    assert "ออกหมายเรียกทุกคดีที่รอออกหมาย (2)" in want_page
+    not_want = client.get("/calls/?tab=not_want").context["page"]
+    assert [a.case_id for a in not_want] == [c3.pk]
+    unknown = client.get("/calls/?tab=unknown").content.decode()
+    assert "ยังไม่ได้โทร" in unknown and "โทรแล้ว ติดต่อไม่ได้" in unknown
+    assert 'name="assignee"' not in html and 'name="scope"' not in html
     # latest result filter, kept across tabs
     reached = client.get("/calls/?tab=all&result=reached").context["page"]
-    assert {a.case_id for a in reached} == {c2.pk, c5.pk}
+    assert {a.case_id for a in reached} == {c2.pk, c3.pk, c5.pk}
+    assert client.get("/calls/?tab=all&result=reached").context["filtered"]
     not_reached = client.get("/calls/?tab=all&result=not_reached").context["page"]
     assert {a.case_id for a in not_reached} == {c1.pk, c4.pk}
     html = client.get("/calls/?tab=all").content.decode()
@@ -229,20 +231,32 @@ def test_queue_tabs_and_status_filter(client, imported, caller):
     assert "result=off" in client.get("/calls/?tab=all&result=off").content.decode()
 
 
-def test_issue_every_unreached_case(client, imported, caller):
-    """"ติดต่อไม่ได้" → one button sends every case still waiting for a summons to the issue page."""
+def test_issue_every_case_that_wants_to_proceed(client, imported, caller):
+    """"ประสงค์ดำเนินคดี" → one button sends every case of it still without a summons to the issue page."""
     client.force_login(caller)
     Case.objects.update(contact_log="")
     c1, c2, c3 = Case.objects.not_final().order_by("receipt_no")[:3]
-    record_call(c1, caller, outcome=CallOutcome.OFF)
-    record_call(c2, caller, outcome=CallOutcome.NO_ANSWER)
-    record_call(c3, caller, outcome=CallOutcome.APPOINTED)  # reached: not included
-    resp = client.post("/calls/issue-unreached/", {"query": "tab=to_issue&scope=open"})
+    record_call(c1, caller, outcome=CallOutcome.APPOINTED)
+    record_call(c2, caller, outcome=CallOutcome.INFO)
+    record_call(c3, caller, outcome=CallOutcome.NOT_PROCEED)  # does not want to: สิ้นสุด, never summoned
+    resp = client.post("/calls/issue-all/", {"query": "tab=want"})
     assert resp.status_code == 302 and resp["Location"] == "/summons/issue/"
     assert sorted(client.session["issue_case_ids"]) == sorted([c1.pk, c2.pk])
-    # a search narrows it down
-    client.post("/calls/issue-unreached/", {"query": f"tab=to_issue&q={c2.receipt_no}"})
+    client.post("/calls/issue-all/", {"query": f"tab=want&q={c2.receipt_no}"})  # a search narrows it down
     assert client.session["issue_case_ids"] == [c2.pk]
-    # nothing left: back to the list with a message
-    resp = client.post("/calls/issue-unreached/", {"query": "q=ไม่มีแน่นอน"})
+    resp = client.post("/calls/issue-all/", {"query": "q=ไม่มีแน่นอน"})
     assert resp.status_code == 302 and resp["Location"].startswith("/calls/")
+    # a case that is สิ้นสุด cannot get a summons even if picked by hand
+    assert any("ไม่ประสงค์" in b for b in Case.objects.get(pk=c3.pk).issue_blockers())
+    closed = Case.objects.filter(status__is_final=True).first()
+    assert any("คดีสิ้นสุดแล้ว" in b for b in closed.issue_blockers())
+
+
+def test_call_pages_work_for_a_case_without_complainant_record(client, imported, caller):
+    """Cases the complainant file could not be matched to (no name/phone there) must not break the pages."""
+    case = Case.objects.not_final().order_by("receipt_no").first()
+    Case.objects.filter(pk=case.pk).update(complainant=None, victim_name="", victim_phone="")
+    client.force_login(caller)
+    page = client.get(f"/calls/?q={case.receipt_no}")
+    assert page.status_code == 200 and case.receipt_no in page.content.decode()
+    assert client.get(f"/calls/{case.pk}/").status_code == 200
