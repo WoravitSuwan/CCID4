@@ -184,20 +184,24 @@ def test_queue_tabs_and_status_filter(client, imported, caller):
     page = client.get("/calls/")  # default: open cases, tab "ทั้งหมด"
     counts, scopes = page.context["counts"], page.context["scope_counts"]
     assert scopes == {"open": open_cases, "final": total - open_cases, "all": total}  # same on every tab
-    assert counts["all"] == open_cases and counts["never"] == open_cases - 5
-    assert (counts["reached"], counts["not_reached"]) == (3, 2)  # c2 c3 c5 / c1 c4
-    assert (counts["want"], counts["not_want"], counts["undecided"]) == (2, 1, 0)  # c2 (info given) c5 / c3
+    # c3 said "ไม่ประสงค์ดำเนินคดี": that counts as สิ้นสุด, so it leaves the open cases
+    assert Case.objects.final().filter(pk=c3.pk).exists() and Case.objects.get(pk=c3.pk).is_final
+    assert counts["all"] == open_cases and counts["never"] == open_cases - 4
+    assert (counts["reached"], counts["not_reached"]) == (2, 2)  # c2 c5 / c1 c4
+    assert (counts["want"], counts["not_want"], counts["undecided"]) == (2, 0, 0)  # c2 (info given) c5
     assert (counts["to_issue"], counts["issued_nr"]) == (2, 0)
     assert [k for k, _ in page.context["tabs"]] == ["all", "reached", "want", "not_want", "not_reached", "to_issue",
                                                     "issued_nr"]
     sk = page.context["sankey"]
     nodes = {n["key"]: n for n in sk["nodes"]}
-    assert nodes["want"]["n"] == 2 and nodes["never"]["n"] == open_cases - 5
+    # the diagram covers every case: ไม่ประสงค์ is shown there; closed cases are never "waiting for a summons"
+    assert nodes["want"]["n"] == 2 and nodes["not_want"]["n"] >= 1 and nodes["never"]["n"] == open_cases - 4
+    assert nodes["to_issue"]["n"] == 2 and "scope=all" in page.content.decode()
     assert len(sk["links"]) == len(sk["nodes"]) - 1
     labels = sorted((n["ly"], n["x"]) for n in sk["nodes"])
     for col in {x for _, x in labels}:  # labels in one column never overlap
         ys = [y for y, x in labels if x == col]
-        assert all(b - a >= 30 for a, b in zip(ys, ys[1:]))
+        assert all(b - a >= 38 for a, b in zip(ys, ys[1:]))
     want_ids = {a.case_id for a in client.get("/calls/?tab=want").context["page"].paginator.object_list}
     assert want_ids == {c2.pk, c5.pk}
     unreached = client.get("/calls/?tab=not_reached")
@@ -215,7 +219,7 @@ def test_queue_tabs_and_status_filter(client, imported, caller):
     assert final_page.context["counts"]["never"] == 0  # closed cases count as called
     # latest result filter, kept across tabs
     reached = client.get("/calls/?tab=all&result=reached").context["page"]
-    assert {a.case_id for a in reached} == {c2.pk, c3.pk, c5.pk}
+    assert {a.case_id for a in reached} == {c2.pk, c5.pk}
     not_reached = client.get("/calls/?tab=all&result=not_reached").context["page"]
     assert {a.case_id for a in not_reached} == {c1.pk, c4.pk}
     html = client.get("/calls/?tab=all").content.decode()

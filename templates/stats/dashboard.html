@@ -27,52 +27,52 @@
 
 {% with p=progress %}
 <div class="card mb-6">
-  <div class="card-header flex-wrap"><h2 id="t-progress">ความคืบหน้า: ยอดคดีทั้งหมดลดลงไปเท่าไหร่</h2>
-    <span class="text-xs text-slate-500 sm:ml-auto">นับว่าดำเนินการแล้วเมื่อ ติดต่อได้และระบุประสงค์/ไม่ประสงค์ · ออกหมายเรียกแล้ว · คดีสิ้นสุด</span></div>
+  <div class="card-header flex-wrap"><h2 id="t-progress">ความคืบหน้า: คดีสิ้นสุด / ยังไม่สิ้นสุด</h2>
+    <span class="text-xs text-slate-500 sm:ml-auto">สิ้นสุด = สถานะคดีสิ้นสุด หรือ ไม่ประสงค์ดำเนินคดี</span></div>
   <div class="grid gap-6 lg:grid-cols-[19rem_1fr]">
     <div class="space-y-4">
+      <div class="text-sm text-slate-500">ยอดคดีทั้งหมด <b class="tabular-nums text-slate-800">{{ p.total|intcomma }}</b> คดี</div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+          <div class="text-xs font-medium text-slate-500">ยังไม่สิ้นสุด</div>
+          <div class="text-3xl font-semibold tabular-nums text-slate-900">{{ p.open|intcomma }}</div>
+          <div class="text-xs text-slate-500">{{ p.open_pct }}%</div>
+        </div>
+        <div class="rounded-xl p-3 ring-1 ring-slate-200" style="background: color-mix(in srgb, var(--series-1) 8%, white)">
+          <div class="text-xs font-medium text-slate-500">สิ้นสุดแล้ว</div>
+          <div class="text-3xl font-semibold tabular-nums" style="color: var(--series-1)">{{ p.final|intcomma }}</div>
+          <div class="text-xs text-slate-500">{{ p.final_pct }}%</div>
+        </div>
+      </div>
       <div>
-        <div class="text-sm text-slate-500">คงเหลือที่ต้องดำเนินการ</div>
-        <div class="flex items-baseline gap-2"><span class="text-4xl font-semibold tabular-nums text-slate-900">{{ p.left|intcomma }}</span><span class="text-sm text-slate-500">จาก {{ p.total|intcomma }} คดี</span></div>
-        <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-100" role="img" aria-label="ดำเนินการแล้ว {{ p.done_pct }}%"><div class="h-3 rounded-full" style="width: {{ p.done_pct }}%; background: var(--series-1)"></div></div>
-        <div class="mt-1.5 flex justify-between text-xs text-slate-500"><span>ดำเนินการแล้ว <b class="tabular-nums text-slate-800">{{ p.done|intcomma }}</b> คดี ({{ p.done_pct }}%)</span><span>ยอดทั้งหมด {{ p.total|intcomma }}</span></div>
+        <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label="สิ้นสุดแล้ว {{ p.final_pct }}%"><div class="h-3 rounded-full" style="width: {{ p.final_pct }}%; background: var(--series-1)"></div></div>
+        <div class="mt-1.5 text-xs text-slate-500">สิ้นสุดแล้ว: สถานะสิ้นสุด {{ p.final_status|intcomma }} · ไม่ประสงค์ดำเนินคดี {{ p.final_not_want|intcomma }}</div>
       </div>
-      {% if p.reduced %}
+      {% if p.closed %}
       <div class="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">
-        <div class="text-sm font-semibold text-emerald-800">▼ ช่วงที่เลือกลดลง {{ p.reduced|intcomma }} คดี</div>
-        <div class="mt-0.5 text-xs text-emerald-900/80">จาก {{ p.left_at_start|intcomma }} เหลือ {{ p.left_at_end|intcomma }} · เฉลี่ย {{ p.per_day|floatformat:1 }} คดี/วัน</div>
-        <div class="mt-1 text-xs text-emerald-900/80">{% if p.trend > 0 %}▲ เร็วกว่าช่วง {{ n_days }} วันก่อนหน้า{% elif p.trend < 0 %}ช้ากว่าช่วง {{ n_days }} วันก่อนหน้า{% else %}เท่ากับช่วง {{ n_days }} วันก่อนหน้า{% endif %} (ช่วงนั้นลดลง {{ p.prev_reduced|intcomma }} คดี)</div>
-        {% if p.eta_days %}<div class="mt-1 text-xs text-emerald-900/80">ถ้าเร็วเท่านี้ อีกประมาณ <b>{{ p.eta_days|intcomma }}</b> วันจะครบ</div>{% endif %}
+        <div class="text-sm font-semibold text-emerald-800">▼ ช่วงที่เลือกสิ้นสุดเพิ่ม {{ p.closed|intcomma }} คดี</div>
+        <div class="mt-0.5 text-xs text-emerald-900/80">ยังไม่สิ้นสุดจาก {{ p.open_at_start|intcomma }} เหลือ {{ p.open_at_end|intcomma }} · เฉลี่ย {{ p.per_day|floatformat:1 }} คดี/วัน</div>
+        <div class="mt-1 text-xs text-emerald-900/80">{% if p.trend > 0 %}▲ เร็วกว่าช่วง {{ n_days }} วันก่อนหน้า{% elif p.trend < 0 %}ช้ากว่าช่วง {{ n_days }} วันก่อนหน้า{% else %}เท่ากับช่วง {{ n_days }} วันก่อนหน้า{% endif %} (ช่วงนั้นสิ้นสุด {{ p.prev_closed|intcomma }} คดี)</div>
+        {% if p.eta_days %}<div class="mt-1 text-xs text-emerald-900/80">ถ้าเร็วเท่านี้ อีกประมาณ <b>{{ p.eta_days|intcomma }}</b> วันจะสิ้นสุดครบ</div>{% endif %}
       </div>
-      {% elif p.left %}
+      {% elif p.open %}
       <div class="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
-        <div class="text-sm font-semibold text-amber-900">ช่วงที่เลือกยังไม่ลดลง</div>
-        <div class="mt-0.5 text-xs text-amber-900/80">ยังไม่มีคดีที่ติดต่อได้แล้วระบุประสงค์/ไม่ประสงค์ หรือออกหมายเรียกเพิ่มในช่วงนี้{% if p.prev_reduced %} ({{ n_days }} วันก่อนหน้าลดลง {{ p.prev_reduced|intcomma }} คดี){% endif %}</div>
+        <div class="text-sm font-semibold text-amber-900">ช่วงที่เลือกยังไม่มีคดีสิ้นสุดเพิ่ม</div>
+        {% if p.prev_closed %}<div class="mt-0.5 text-xs text-amber-900/80">ช่วง {{ n_days }} วันก่อนหน้าสิ้นสุด {{ p.prev_closed|intcomma }} คดี</div>{% endif %}
       </div>
       {% else %}
-      <div class="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ ดำเนินการครบทุกคดีแล้ว</div>
+      <div class="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ สิ้นสุดครบทุกคดีแล้ว</div>
       {% endif %}
     </div>
     <div class="min-w-0">
       <div class="mb-1 flex flex-wrap items-center gap-4 text-xs text-slate-600">
-        <span class="font-medium text-slate-700">คงเหลือรายวัน (คดี)</span>
+        <span class="font-medium text-slate-700">คดียังไม่สิ้นสุด รายวัน</span>
         <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 border-t-2 border-dashed" style="border-color:var(--text-muted)"></span>ยอดคดีทั้งหมด</span>
-        <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4" style="background:var(--series-1)"></span>คงเหลือ</span>
-        <span class="text-slate-400">ช่องว่างระหว่างสองเส้น = ดำเนินการแล้ว</span>
+        <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4" style="background:var(--series-1)"></span>ยังไม่สิ้นสุด</span>
+        <span class="text-slate-400">ช่องว่างระหว่างสองเส้น = สิ้นสุดแล้ว</span>
       </div>
       {% include "stats/_line_chart.html" with chart=progress_chart title_id="t-progress" %}
     </div>
-  </div>
-  <div class="mt-5 grid gap-5 border-t border-slate-100 pt-4 md:grid-cols-2">
-    {% for title, parts, color in progress_groups %}
-    <div>
-      <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ title }}</div>
-      <ul class="space-y-2 text-sm">{% for part in parts %}
-        <li><div class="flex justify-between gap-2"><span class="text-slate-700">{{ part.label }}</span><span class="tabular-nums text-slate-900">{{ part.n|intcomma }} <span class="text-xs text-slate-400">({{ part.pct }}%)</span></span></div>
-          <div class="mt-1 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full" style="width: {{ part.pct }}%; background: {{ color }}"></div></div></li>
-      {% endfor %}</ul>
-    </div>
-    {% endfor %}
   </div>
 </div>
 {% endwith %}
@@ -141,13 +141,13 @@
 <div class="table-wrap">
   <div class="flex items-center gap-2 px-5 py-4">{% icon "calendar" "h-5 w-5 text-slate-400" %}<h2>ข้อมูลรายวันย้อนหลัง</h2><span class="text-sm text-slate-400">(แสดงเฉพาะวันที่มีงาน)</span></div>
   <table class="table">
-    <thead><tr><th>วันที่</th><th class="text-right">โทร</th><th class="text-right">ติดต่อได้</th><th class="text-right">ติดต่อไม่ได้</th><th class="text-right">นัดเข้าพบ</th><th class="text-right">ออกหมาย</th><th class="text-right">EMS</th><th class="text-right">ลดลง</th><th class="text-right">คงเหลือ</th></tr></thead>
+    <thead><tr><th>วันที่</th><th class="text-right">โทร</th><th class="text-right">ติดต่อได้</th><th class="text-right">ติดต่อไม่ได้</th><th class="text-right">นัดเข้าพบ</th><th class="text-right">ออกหมาย</th><th class="text-right">EMS</th><th class="text-right">สิ้นสุดเพิ่ม</th><th class="text-right">ยังไม่สิ้นสุด</th></tr></thead>
     <tbody>{% for d in daily %}
       <tr><td class="whitespace-nowrap">{{ d.date|thai_date:"full" }}</td><td class="text-right tabular-nums">{{ d.calls|intcomma }}</td><td class="text-right tabular-nums">{{ d.reached|intcomma }}</td>
         <td class="text-right tabular-nums">{{ d.not_reached|intcomma }}</td><td class="text-right tabular-nums">{{ d.appointed|intcomma }}</td><td class="text-right tabular-nums">{{ d.summonses|intcomma }}</td><td class="text-right tabular-nums">{{ d.ems|intcomma }}</td>
-        <td class="text-right tabular-nums">{{ d.done|intcomma }}</td><td class="text-right tabular-nums text-slate-500">{{ d.left|intcomma }}</td></tr>
+        <td class="text-right tabular-nums">{{ d.closed|intcomma }}</td><td class="text-right tabular-nums text-slate-500">{{ d.open|intcomma }}</td></tr>
     {% empty %}<tr><td colspan="9" class="py-8 text-center text-slate-400">ไม่มีงานในช่วงนี้</td></tr>{% endfor %}
-      {% if daily %}<tr class="bg-slate-50 font-semibold"><td>รวม</td><td class="text-right tabular-nums">{{ period.calls|intcomma }}</td><td class="text-right tabular-nums">{{ period.reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.not_reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.appointed|intcomma }}</td><td class="text-right tabular-nums">{{ period.summonses|intcomma }}</td><td class="text-right tabular-nums">{{ period.ems|intcomma }}</td><td class="text-right tabular-nums">{{ progress.reduced|intcomma }}</td><td class="text-right tabular-nums text-slate-500">{{ progress.left_at_end|intcomma }}</td></tr>{% endif %}
+      {% if daily %}<tr class="bg-slate-50 font-semibold"><td>รวม</td><td class="text-right tabular-nums">{{ period.calls|intcomma }}</td><td class="text-right tabular-nums">{{ period.reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.not_reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.appointed|intcomma }}</td><td class="text-right tabular-nums">{{ period.summonses|intcomma }}</td><td class="text-right tabular-nums">{{ period.ems|intcomma }}</td><td class="text-right tabular-nums">{{ progress.closed|intcomma }}</td><td class="text-right tabular-nums text-slate-500">{{ progress.open_at_end|intcomma }}</td></tr>{% endif %}
     </tbody>
   </table>
 </div>

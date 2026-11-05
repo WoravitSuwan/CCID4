@@ -19,7 +19,7 @@
 </style>
 <div class="viz-root card mb-5">
   <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ภาพรวมการโทร → ออกหมาย</h2>
-    <span class="text-sm text-slate-500">กดที่กล่องหรือแถบเพื่อดูรายการ</span>
+    <span class="text-sm text-slate-500">ทุกคดี รวมที่สิ้นสุดแล้ว · กดที่กล่องหรือแถบเพื่อดูรายการ</span>
     <span class="ml-auto text-sm text-slate-600">โทรวันนี้ <b class="tabular-nums">{{ stats.today|intcomma }}</b> (ติดต่อได้ {{ stats.today_reached }}){% if perm_settings and stats.today %} · <a href="{% url 'settings_wipe' %}?scope=calls_today" class="text-slate-400 underline hover:text-red-600">รีเซ็ต</a>{% endif %}</span>
   </div>
   {% include "calls/_sankey.html" %}

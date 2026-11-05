@@ -15,12 +15,12 @@
 <div class="overflow-x-auto">
 <svg viewBox="-2 -2 {{ sankey.w|add:'4' }} {{ sankey.h|add:'4' }}" class="sankey block h-auto w-full min-w-[680px]" role="img" aria-label="ภาพรวมการโทรและการออกหมาย แบบ Sankey">
   {% for l in sankey.links %}
-  <a href="{% if link_to_calls %}{% url 'calls_queue' %}?scope=all&tab={{ l.key }}{% else %}?{% query_replace tab=l.key page='' %}{% endif %}">
+  <a href="{% if link_to_calls %}{% url 'calls_queue' %}?scope=all&tab={{ l.key }}{% else %}?{% query_replace tab=l.key scope='all' page='' %}{% endif %}">
     <path d="{{ l.d }}" fill="{{ l.color }}" class="sankey-link"><title>{{ l.label }}: {{ l.n|intcomma }} คดี</title></path>
   </a>
   {% endfor %}
   {% for n in sankey.nodes %}
-  <a href="{% if link_to_calls %}{% url 'calls_queue' %}?scope=all&tab={{ n.key }}{% else %}?{% query_replace tab=n.key page='' %}{% endif %}" class="sankey-node{% if n.key == tab %} is-active{% endif %}">
+  <a href="{% if link_to_calls %}{% url 'calls_queue' %}?scope=all&tab={{ n.key }}{% else %}?{% query_replace tab=n.key scope='all' page='' %}{% endif %}" class="sankey-node{% if n.key == tab %} is-active{% endif %}">
     <title>{{ n.full_label }}: {{ n.n|intcomma }} คดี ({{ n.pct }}% ของทั้งหมด) — กดเพื่อดูรายการ</title>
     <rect x="{{ n.x }}" y="{{ n.y }}" width="{{ n.w }}" height="{{ n.h }}" rx="3" fill="{{ n.color }}"/>
     <text x="{{ n.lx }}" y="{{ n.ly }}" class="sankey-label"><tspan class="sankey-name">{{ n.label }}</tspan><tspan x="{{ n.lx }}" dy="17" class="sankey-num">{{ n.n|intcomma }} คดี</tspan>{% if n.key != "all" %}<tspan class="sankey-pct"> · {{ n.pct }}%</tspan>{% endif %}</text>

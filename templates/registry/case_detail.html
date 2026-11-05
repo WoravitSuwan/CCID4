@@ -10,7 +10,7 @@
       <div class="flex flex-wrap items-center gap-2">
         <h1 class="font-mono">{{ case.receipt_no }}</h1>
         {% if case.status %}<span class="badge {{ case.status|status_class }}"><span class="dot"></span>{{ case.status.name }}</span>{% endif %}
-        {% if case.status.is_final %}<span class="badge badge-gray">สิ้นสุด</span>{% endif %}
+        {% if case.status.is_final %}<span class="badge badge-gray">สิ้นสุด</span>{% elif case.not_want %}<span class="badge badge-gray" title="ผู้เสียหายไม่ประสงค์ดำเนินคดี จึงนับเป็นสิ้นสุด">สิ้นสุด · ไม่ประสงค์ดำเนินคดี</span>{% endif %}
       </div>
       <div class="mt-1 text-lg font-medium text-slate-800">{{ case.recipient_name|default:"-" }}</div>
       <div class="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-500">

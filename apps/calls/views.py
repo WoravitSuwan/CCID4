@@ -126,6 +126,9 @@ def queue(request):
         scope = "open"
     scoped = _apply_scope(filtered, scope)
     counts = funnel.counts(scoped)
+    # the diagram is the overview of every case (ไม่ประสงค์ดำเนินคดี counts as สิ้นสุด, so a view of the open
+    # cases alone would never show it); the tabs below follow the chosen scope
+    overview = funnel.counts(filtered) if scope != "all" else counts
     scope_counts = {key: _apply_scope(filtered, key).count() for key, _ in SCOPES}
     qs = _apply_tab(scoped, tab)
     today = timezone.localdate()
@@ -148,7 +151,7 @@ def queue(request):
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
         "tab_label": funnel.STAGES[tab][0], "tab_in_nav": tab in funnel.TAB_KEYS,
-        "sankey": funnel.sankey(counts),
+        "sankey": funnel.sankey(overview),
         "scope": scope, "scopes": SCOPES, "scope_counts": scope_counts,
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),

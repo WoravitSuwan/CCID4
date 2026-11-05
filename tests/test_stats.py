@@ -55,34 +55,33 @@ def test_stats_excel(client, calls):
     assert list(wb["รายเจ้าหน้าที่"].values)[1][:3] == ("สถิติ", 3, 1)
 
 
-def test_progress_against_the_total(client, calls, setup_signers):
-    """Total cases as the base: how many are done, how many are left, and how much it came down."""
+def test_progress_final_and_open(client, calls):
+    """Total cases as the base, split into สิ้นสุด / ยังไม่สิ้นสุด; ไม่ประสงค์ดำเนินคดี counts as สิ้นสุด."""
+    from apps.registry.models import Status
+
     client.force_login(calls)
     page = client.get("/stats/")
     p = page.context["progress"]
-    assert p["total"] == Case.objects.count()
-    assert sum(x["n"] for x in p["parts_done"] + p["parts_left"]) == p["total"]  # every case counted once
-    assert p["done"] + p["left"] == p["total"]
-    # last 30 days: c1 was reached and asked for an appointment today; c3's call (60 days ago) is older
-    assert p["reduced"] == 1 and p["left_at_start"] - p["left_at_end"] == 1 and p["left_at_end"] == p["left"]
+    assert p["total"] == Case.objects.count() and p["final"] + p["open"] == p["total"]
+    assert p["final"] == p["final_status"] + p["final_not_want"] == Case.objects.final().count()
+    assert p["open"] == Case.objects.not_final().count() and p["closed"] == 0
+    assert "ยังไม่มีคดีสิ้นสุดเพิ่ม" in page.content.decode()
     chart = page.context["progress_chart"]
-    assert [ln["key"] for ln in chart["lines"]] == ["total", "left"] and chart["lines"][0]["dashed"]
-    html = page.content.decode()
-    assert "ความคืบหน้า" in html and "ช่วงที่เลือกลดลง 1 คดี" in html and 'stroke-dasharray="6 4"' in html
-    longer = client.get("/stats/?range=90").context["progress"]
-    assert longer["reduced"] == 2 and longer["left"] == p["left"]
-    # an unreached case gets a summons: one less to do
-    from apps.documents.models import Summons, TemplateKind
-    from apps.documents.services import get_template
-    from apps.registry.models import Investigator
-
-    c2 = Case.objects.not_final().order_by("receipt_no")[1]
-    before = p["left"]
-    Summons.objects.create(case=c2, number=1, issue_date=timezone.localdate(), appointment_at=timezone.now(),
-                           issuer=Investigator.objects.first(), template=get_template(TemplateKind.SUMMONS),
-                           template_version=1, created_by=calls)
-    after = client.get("/stats/").context["progress"]
-    assert after["left"] == before - 1 and after["reduced"] == 2
+    assert [ln["key"] for ln in chart["lines"]] == ["total", "open"] and chart["lines"][0]["dashed"]
+    # the person says they do not want to go on: สิ้นสุด today
+    c1, c2 = Case.objects.not_final().order_by("receipt_no")[:2]
+    record_call(c2, calls, outcome=CallOutcome.NOT_PROCEED)
+    assert Case.objects.final().filter(pk=c2.pk).exists()
+    # a status changed to สิ้นสุด in the system 40 days ago
+    Case.objects.filter(pk=c1.pk).update(status=Status.objects.filter(is_final=True).first(),
+                                         status_manual_at=timezone.now() - dt.timedelta(days=40))
+    page = client.get("/stats/")
+    after = page.context["progress"]
+    assert after["final"] == p["final"] + 2 and after["open"] == p["open"] - 2
+    assert after["final_not_want"] == p["final_not_want"] + 1 and after["closed"] == 1
+    assert after["open_at_start"] - after["open_at_end"] == 1 and after["open_at_end"] == after["open"]
+    assert "ช่วงที่เลือกสิ้นสุดเพิ่ม 1 คดี" in page.content.decode()
+    assert client.get("/stats/?range=90").context["progress"]["closed"] == 2
     xlsx = load_workbook(BytesIO(client.get("/stats/?format=xlsx").content))
     rows = list(xlsx["ความคืบหน้า"].values)
-    assert rows[1] == ("ยอดคดีทั้งหมด", p["total"], 100)
+    assert rows[1][:2] == ("ยอดคดีทั้งหมด", after["total"]) and rows[2][:2] == ("สิ้นสุด", after["final"])

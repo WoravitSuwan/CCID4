@@ -3,6 +3,8 @@
 
 Until someone records a call in this system, the register's "บันทึกการติดต่อ" column decides (calls made
 before the system). Closed cases count as called.
+
+"สิ้นสุด" = status final, or ไม่ประสงค์ดำเนินคดี (same rule as Case.objects.final()).
 """
 from __future__ import annotations
 
@@ -10,7 +12,7 @@ from django.db.models import Exists, OuterRef, Q
 
 from .models import REACHED, CallOutcome
 
-OPEN_CASE = Q(case__status__isnull=True) | Q(case__status__is_final=False)
+STATUS_OPEN = Q(case__status__isnull=True) | Q(case__status__is_final=False)
 NO_SYSTEM_CALL = Q(attempt_count=0)
 SYSTEM_CALL = ~NO_SYSTEM_CALL
 FILE_LOG = ~Q(case__contact_log="")
@@ -21,7 +23,7 @@ FILE_NOT_REACHED = Q(case__contact_log__contains="ไม่สามารถต
 FILE_NOT_WANT = Q(case__contact_log__contains="ไม่ประสง")
 FILE_WANT = Q(case__contact_log__contains="ประสง") & ~FILE_NOT_WANT
 
-CALLED = SYSTEM_CALL | FILE_LOG | ~OPEN_CASE
+CALLED = SYSTEM_CALL | FILE_LOG | ~STATUS_OPEN
 NEVER = ~CALLED
 REACHED_Q = (SYSTEM_CALL & Q(last_outcome__in=REACHED)) | (FILE_ONLY & FILE_REACHED)
 NOT_REACHED_Q = (SYSTEM_CALL & ~Q(last_outcome__in=REACHED)) | (FILE_ONLY & FILE_NOT_REACHED)
@@ -30,6 +32,7 @@ WANT_Q = ((SYSTEM_CALL & Q(last_outcome__in=[CallOutcome.APPOINTED, CallOutcome.
           | (FILE_ONLY & FILE_WANT))
 NOT_WANT_Q = (SYSTEM_CALL & Q(last_outcome=CallOutcome.NOT_PROCEED)) | (FILE_ONLY & FILE_NOT_WANT)
 UNDECIDED_Q = REACHED_Q & ~WANT_Q & ~NOT_WANT_Q
+OPEN_CASE = STATUS_OPEN & ~NOT_WANT_Q  # ยังไม่สิ้นสุด
 ISSUED = Q(has_summons=True)
 
 # The users' view: of all cases, how many were reached - wanting to proceed or not - and how many could
@@ -46,18 +49,21 @@ STAGES = {
     "not_want": ("ไม่ประสงค์ดำเนินคดี", NOT_WANT_Q),
     "undecided": ("ติดต่อได้ ยังไม่ระบุ", UNDECIDED_Q),
     "not_reached": ("ติดต่อไม่ได้", NOT_REACHED_ALL),
-    "to_issue": ("ติดต่อไม่ได้ · รอออกหมาย", NOT_REACHED_ALL & ~ISSUED),
+    "to_issue": ("ติดต่อไม่ได้ · รอออกหมาย", NOT_REACHED_ALL & ~ISSUED & OPEN_CASE),
     "issued_nr": ("ติดต่อไม่ได้ · ออกหมายแล้ว", NOT_REACHED_ALL & ISSUED),
+    "closed_nr": ("ติดต่อไม่ได้ · คดีสิ้นสุดแล้ว", NOT_REACHED_ALL & ~ISSUED & ~OPEN_CASE),  # no summons needed
     "never": ("ยังไม่ได้โทร", NEVER),
 }
 TAB_KEYS = ["all", "reached", "want", "not_want", "not_reached", "to_issue", "issued_nr"]
 
 # the diagram: columns of nodes and each node's parent
-COLUMNS = [["all"], ["reached", "not_reached", "never"], ["want", "not_want", "undecided", "to_issue", "issued_nr"]]
+COLUMNS = [["all"], ["reached", "not_reached", "never"],
+           ["want", "not_want", "undecided", "to_issue", "issued_nr", "closed_nr"]]
 PARENT = {"reached": "all", "not_reached": "all", "never": "all", "want": "reached", "not_want": "reached",
-          "undecided": "reached", "to_issue": "not_reached", "issued_nr": "not_reached"}
+          "undecided": "reached", "to_issue": "not_reached", "issued_nr": "not_reached",
+          "closed_nr": "not_reached"}
 TONE = {"all": "neutral", "reached": "good", "want": "good", "not_want": "plain", "undecided": "muted",
-        "not_reached": "drop", "to_issue": "drop", "issued_nr": "done", "never": "muted"}
+        "not_reached": "drop", "to_issue": "drop", "issued_nr": "done", "closed_nr": "muted", "never": "muted"}
 COLORS = {"good": "var(--series-1)", "drop": "var(--series-2)", "done": "var(--series-3)",
           "plain": "var(--plain-node)", "muted": "var(--muted-node)", "neutral": "var(--text-muted)"}
 
@@ -77,10 +83,11 @@ def counts(qs) -> dict:
 
 
 # shorter names inside the diagram (the column already says "ประสงค์ดำเนินคดี")
-DIAGRAM_LABEL = {"to_issue": "รอออกหมายเรียก", "issued_nr": "ออกหมายเรียกแล้ว", "undecided": "ยังไม่ระบุ"}
+DIAGRAM_LABEL = {"to_issue": "รอออกหมายเรียก", "issued_nr": "ออกหมายเรียกแล้ว", "undecided": "ยังไม่ระบุ",
+                 "closed_nr": "คดีสิ้นสุดแล้ว"}
 
 
-def sankey(n: dict, width=1040, height=320, node_w=16, gap=22, label_w=230, label_gap=34) -> dict:
+def sankey(n: dict, width=1040, height=320, node_w=16, gap=22, label_w=230, label_gap=40) -> dict:
     """Node rectangles and link bands for the funnel (all in SVG units)."""
     total = n.get("all", 0)
     if not total:

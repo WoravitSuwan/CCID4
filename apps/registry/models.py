@@ -347,6 +347,14 @@ def complainant_address_snapshot(complainant: Complainant | None) -> dict:
     return complainant.address().as_dict()
 
 
+# A case is "สิ้นสุด" when its status says so, or when the person said they do not want to go on
+# (ไม่ประสงค์ดำเนินคดี): the last call in this system, or - before any call here - the register's contact log.
+NOT_WANT_CASE = (Q(call_assignment__attempt_count__gt=0, call_assignment__last_outcome="not_proceed")
+                 | ((Q(call_assignment__isnull=True) | Q(call_assignment__attempt_count=0))
+                    & Q(contact_log__contains="ไม่ประสง")))
+STATUS_OPEN_CASE = Q(status__isnull=True) | Q(status__is_final=False)
+
+
 class CaseQuerySet(models.QuerySet):
     def with_flags(self):
         override = AddressOverride.objects.filter(receipt_no=OuterRef("receipt_no"))
@@ -356,10 +364,10 @@ class CaseQuerySet(models.QuerySet):
         )
 
     def not_final(self):
-        return self.filter(Q(status__isnull=True) | Q(status__is_final=False))
+        return self.filter(STATUS_OPEN_CASE).exclude(NOT_WANT_CASE)
 
     def final(self):
-        return self.filter(status__is_final=True)
+        return self.filter(Q(status__is_final=True) | NOT_WANT_CASE)
 
     def unmatched(self):
         return self.filter(complainant__isnull=True)
@@ -457,7 +465,17 @@ class Case(models.Model):
 
     @property
     def is_final(self) -> bool:
-        return bool(self.status and self.status.is_final)
+        """Status final, or ไม่ประสงค์ดำเนินคดี (see NOT_WANT_CASE)."""
+        if self.status and self.status.is_final:
+            return True
+        a = getattr(self, "call_assignment", None)
+        if a is not None and a.attempt_count:
+            return a.last_outcome == "not_proceed"
+        return "ไม่ประสง" in (self.contact_log or "")
+
+    @property
+    def not_want(self) -> bool:
+        return self.is_final and not (self.status and self.status.is_final)
 
     def get_override(self) -> AddressOverride | None:
         if not hasattr(self, "_override_cache"):
