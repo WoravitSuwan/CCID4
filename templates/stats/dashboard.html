@@ -2,7 +2,7 @@
 {% block title %}สถิติ{% endblock %}
 {% block content %}
 <style>
-  .viz-root { --series-1: #2a78d6; --series-2: #eb6834; --grid: #e2e8f0; --text-muted: #64748b; --muted-node: #94a3b8; }
+  .viz-root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --grid: #e2e8f0; --text-muted: #64748b; --muted-node: #94a3b8; }
   .viz-line .viz-x { opacity: 0; }
   .viz-line .viz-day:hover .viz-x { opacity: 1; }
 </style>
@@ -24,6 +24,58 @@
     <button class="btn py-2 {% if preset == 'custom' %}btn-primary{% endif %}">ดูช่วงนี้</button>
   </form>
 </div>
+
+{% with p=progress %}
+<div class="card mb-6">
+  <div class="card-header flex-wrap"><h2 id="t-progress">ความคืบหน้า: ยอดคดีทั้งหมดลดลงไปเท่าไหร่</h2>
+    <span class="text-xs text-slate-500 sm:ml-auto">นับว่าดำเนินการแล้วเมื่อ ติดต่อได้และระบุประสงค์/ไม่ประสงค์ · ออกหมายเรียกแล้ว · คดีสิ้นสุด</span></div>
+  <div class="grid gap-6 lg:grid-cols-[19rem_1fr]">
+    <div class="space-y-4">
+      <div>
+        <div class="text-sm text-slate-500">คงเหลือที่ต้องดำเนินการ</div>
+        <div class="flex items-baseline gap-2"><span class="text-4xl font-semibold tabular-nums text-slate-900">{{ p.left|intcomma }}</span><span class="text-sm text-slate-500">จาก {{ p.total|intcomma }} คดี</span></div>
+        <div class="mt-3 h-3 overflow-hidden rounded-full bg-slate-100" role="img" aria-label="ดำเนินการแล้ว {{ p.done_pct }}%"><div class="h-3 rounded-full" style="width: {{ p.done_pct }}%; background: var(--series-1)"></div></div>
+        <div class="mt-1.5 flex justify-between text-xs text-slate-500"><span>ดำเนินการแล้ว <b class="tabular-nums text-slate-800">{{ p.done|intcomma }}</b> คดี ({{ p.done_pct }}%)</span><span>ยอดทั้งหมด {{ p.total|intcomma }}</span></div>
+      </div>
+      {% if p.reduced %}
+      <div class="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">
+        <div class="text-sm font-semibold text-emerald-800">▼ ช่วงที่เลือกลดลง {{ p.reduced|intcomma }} คดี</div>
+        <div class="mt-0.5 text-xs text-emerald-900/80">จาก {{ p.left_at_start|intcomma }} เหลือ {{ p.left_at_end|intcomma }} · เฉลี่ย {{ p.per_day|floatformat:1 }} คดี/วัน</div>
+        <div class="mt-1 text-xs text-emerald-900/80">{% if p.trend > 0 %}▲ เร็วกว่าช่วง {{ n_days }} วันก่อนหน้า{% elif p.trend < 0 %}ช้ากว่าช่วง {{ n_days }} วันก่อนหน้า{% else %}เท่ากับช่วง {{ n_days }} วันก่อนหน้า{% endif %} (ช่วงนั้นลดลง {{ p.prev_reduced|intcomma }} คดี)</div>
+        {% if p.eta_days %}<div class="mt-1 text-xs text-emerald-900/80">ถ้าเร็วเท่านี้ อีกประมาณ <b>{{ p.eta_days|intcomma }}</b> วันจะครบ</div>{% endif %}
+      </div>
+      {% elif p.left %}
+      <div class="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+        <div class="text-sm font-semibold text-amber-900">ช่วงที่เลือกยังไม่ลดลง</div>
+        <div class="mt-0.5 text-xs text-amber-900/80">ยังไม่มีคดีที่ติดต่อได้แล้วระบุประสงค์/ไม่ประสงค์ หรือออกหมายเรียกเพิ่มในช่วงนี้{% if p.prev_reduced %} ({{ n_days }} วันก่อนหน้าลดลง {{ p.prev_reduced|intcomma }} คดี){% endif %}</div>
+      </div>
+      {% else %}
+      <div class="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">✓ ดำเนินการครบทุกคดีแล้ว</div>
+      {% endif %}
+    </div>
+    <div class="min-w-0">
+      <div class="mb-1 flex flex-wrap items-center gap-4 text-xs text-slate-600">
+        <span class="font-medium text-slate-700">คงเหลือรายวัน (คดี)</span>
+        <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 border-t-2 border-dashed" style="border-color:var(--text-muted)"></span>ยอดคดีทั้งหมด</span>
+        <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4" style="background:var(--series-1)"></span>คงเหลือ</span>
+        <span class="text-slate-400">ช่องว่างระหว่างสองเส้น = ดำเนินการแล้ว</span>
+      </div>
+      {% include "stats/_line_chart.html" with chart=progress_chart title_id="t-progress" %}
+    </div>
+  </div>
+  <div class="mt-5 grid gap-5 border-t border-slate-100 pt-4 md:grid-cols-2">
+    {% for title, parts, color in progress_groups %}
+    <div>
+      <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ title }}</div>
+      <ul class="space-y-2 text-sm">{% for part in parts %}
+        <li><div class="flex justify-between gap-2"><span class="text-slate-700">{{ part.label }}</span><span class="tabular-nums text-slate-900">{{ part.n|intcomma }} <span class="text-xs text-slate-400">({{ part.pct }}%)</span></span></div>
+          <div class="mt-1 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full" style="width: {{ part.pct }}%; background: {{ color }}"></div></div></li>
+      {% endfor %}</ul>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endwith %}
 
 <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">ในช่วงที่เลือก</h2>
 <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
@@ -89,12 +141,13 @@
 <div class="table-wrap">
   <div class="flex items-center gap-2 px-5 py-4">{% icon "calendar" "h-5 w-5 text-slate-400" %}<h2>ข้อมูลรายวันย้อนหลัง</h2><span class="text-sm text-slate-400">(แสดงเฉพาะวันที่มีงาน)</span></div>
   <table class="table">
-    <thead><tr><th>วันที่</th><th class="text-right">โทร</th><th class="text-right">ติดต่อได้</th><th class="text-right">ติดต่อไม่ได้</th><th class="text-right">นัดเข้าพบ</th><th class="text-right">ออกหมาย</th><th class="text-right">EMS</th></tr></thead>
+    <thead><tr><th>วันที่</th><th class="text-right">โทร</th><th class="text-right">ติดต่อได้</th><th class="text-right">ติดต่อไม่ได้</th><th class="text-right">นัดเข้าพบ</th><th class="text-right">ออกหมาย</th><th class="text-right">EMS</th><th class="text-right">ลดลง</th><th class="text-right">คงเหลือ</th></tr></thead>
     <tbody>{% for d in daily %}
       <tr><td class="whitespace-nowrap">{{ d.date|thai_date:"full" }}</td><td class="text-right tabular-nums">{{ d.calls|intcomma }}</td><td class="text-right tabular-nums">{{ d.reached|intcomma }}</td>
-        <td class="text-right tabular-nums">{{ d.not_reached|intcomma }}</td><td class="text-right tabular-nums">{{ d.appointed|intcomma }}</td><td class="text-right tabular-nums">{{ d.summonses|intcomma }}</td><td class="text-right tabular-nums">{{ d.ems|intcomma }}</td></tr>
-    {% empty %}<tr><td colspan="7" class="py-8 text-center text-slate-400">ไม่มีงานในช่วงนี้</td></tr>{% endfor %}
-      {% if daily %}<tr class="bg-slate-50 font-semibold"><td>รวม</td><td class="text-right tabular-nums">{{ period.calls|intcomma }}</td><td class="text-right tabular-nums">{{ period.reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.not_reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.appointed|intcomma }}</td><td class="text-right tabular-nums">{{ period.summonses|intcomma }}</td><td class="text-right tabular-nums">{{ period.ems|intcomma }}</td></tr>{% endif %}
+        <td class="text-right tabular-nums">{{ d.not_reached|intcomma }}</td><td class="text-right tabular-nums">{{ d.appointed|intcomma }}</td><td class="text-right tabular-nums">{{ d.summonses|intcomma }}</td><td class="text-right tabular-nums">{{ d.ems|intcomma }}</td>
+        <td class="text-right tabular-nums">{{ d.done|intcomma }}</td><td class="text-right tabular-nums text-slate-500">{{ d.left|intcomma }}</td></tr>
+    {% empty %}<tr><td colspan="9" class="py-8 text-center text-slate-400">ไม่มีงานในช่วงนี้</td></tr>{% endfor %}
+      {% if daily %}<tr class="bg-slate-50 font-semibold"><td>รวม</td><td class="text-right tabular-nums">{{ period.calls|intcomma }}</td><td class="text-right tabular-nums">{{ period.reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.not_reached|intcomma }}</td><td class="text-right tabular-nums">{{ period.appointed|intcomma }}</td><td class="text-right tabular-nums">{{ period.summonses|intcomma }}</td><td class="text-right tabular-nums">{{ period.ems|intcomma }}</td><td class="text-right tabular-nums">{{ progress.reduced|intcomma }}</td><td class="text-right tabular-nums text-slate-500">{{ progress.left_at_end|intcomma }}</td></tr>{% endif %}
     </tbody>
   </table>
 </div>
@@ -107,7 +160,7 @@ document.querySelectorAll(".viz-root svg").forEach((svg) => {
     g.addEventListener("mouseenter", () => {
       const rows = g.dataset.values.split(";").map((v) => v.split("|"));
       tip.innerHTML = `<div class="mb-1 font-semibold text-slate-800">${g.dataset.date}</div>` + rows.map(([label, color, n]) =>
-        `<div class="flex items-center justify-between gap-3"><span class="inline-flex items-center gap-1.5 text-slate-600"><span class="h-2 w-2 rounded-sm" style="background:${color}"></span>${label}</span><span class="tabular-nums text-slate-900">${n}</span></div>`).join("");
+        `<div class="flex items-center justify-between gap-3"><span class="inline-flex items-center gap-1.5 text-slate-600"><span class="h-2 w-2 rounded-sm" style="background:${color}"></span>${label}</span><span class="tabular-nums text-slate-900">${Number(n).toLocaleString()}</span></div>`).join("");
       tip.classList.remove("hidden");
     });
     g.addEventListener("mousemove", (e) => {
