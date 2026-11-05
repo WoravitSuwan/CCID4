@@ -120,9 +120,11 @@ def _progress(start, end, days):
     from apps.calls.models import CallAssignment
 
     qs = CallAssignment.objects.all()
-    status_final, not_want = ~funnel.STATUS_OPEN, funnel.STATUS_OPEN & funnel.NOT_WANT_Q
+    status_final = ~funnel.STATUS_OPEN
     total = qs.count()
-    n_status, n_not_want = qs.filter(status_final).count(), qs.filter(not_want).count()
+    # สิ้นสุด = ไม่ประสงค์ดำเนินคดี (same number as on the call list) + other cases whose status is final
+    n_not_want = qs.filter(funnel.NOT_WANT_Q).count()
+    n_status = qs.filter(status_final & ~funnel.NOT_WANT_Q).count()
 
     before_system = object()
     when: dict = {}  # case id -> date it became สิ้นสุด, or before_system
@@ -189,10 +191,11 @@ def _collect(start, end):
         "summonses": summonses.count(), "ems": ems.count(),
     }
     stages = funnel.counts(funnel.with_summons_flag(CallAssignment.objects.all()))
+    open_cases = CallAssignment.objects.filter(funnel.OPEN_CASE).count()
     all_summons = Summons.objects.all()
     overall = {
         # every figure from the same partition as the call list, so the pages agree
-        "cases": stages["all"], "open": stages["open"], "final": stages["final"],
+        "cases": stages["all"], "open": open_cases, "final": stages["all"] - open_cases,
         "stages": stages, "sankey": funnel.sankey(stages),
         "summonses": all_summons.count(), "ems_sent": all_summons.exclude(ems_number="").count(),
         "ems_waiting": all_summons.filter(ems_number="").count(),
@@ -301,8 +304,8 @@ def _excel(start, end, period, daily, people, progress):
     ws3.append(["รายการ", "จำนวนคดี", "%"])
     total = progress["total"]
     for label, n in [("ยอดคดีทั้งหมด", total), ("สิ้นสุด", progress["final"]),
-                     ("  - สถานะคดีสิ้นสุด", progress["final_status"]),
-                     ("  - ไม่ประสงค์ดำเนินคดี", progress["final_not_want"]), ("ยังไม่สิ้นสุด", progress["open"])]:
+                     ("  - ไม่ประสงค์ดำเนินคดี", progress["final_not_want"]),
+                     ("  - สถานะคดีสิ้นสุด (อื่นๆ)", progress["final_status"]), ("ยังไม่สิ้นสุด", progress["open"])]:
         ws3.append([label, n, round(n / total * 100, 1) if total else 0])
     ws3.append([f"สิ้นสุดเพิ่มในช่วง {start:%d/%m/%Y}-{end:%d/%m/%Y}", progress["closed"], None])
     for c in ws3[1]:

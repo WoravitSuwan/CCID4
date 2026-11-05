@@ -36,7 +36,7 @@
       <div class="text-sm text-slate-600">สิ้นสุดแล้ว <b class="tabular-nums" style="color: var(--series-1)">{{ p.final|intcomma }}</b> จาก {{ p.total|intcomma }} คดี ({{ p.final_pct }}%) · ยังไม่สิ้นสุด <b class="tabular-nums text-slate-900">{{ p.open|intcomma }}</b></div>
       <div>
         <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label="สิ้นสุดแล้ว {{ p.final_pct }}%"><div class="h-3 rounded-full" style="width: {{ p.final_pct }}%; background: var(--series-1)"></div></div>
-        <div class="mt-1.5 text-xs text-slate-500">สิ้นสุดแล้ว: สถานะสิ้นสุด {{ p.final_status|intcomma }} · ไม่ประสงค์ดำเนินคดี {{ p.final_not_want|intcomma }}</div>
+        <div class="mt-1.5 text-xs text-slate-500">สิ้นสุดแล้ว {{ p.final|intcomma }} = ไม่ประสงค์ดำเนินคดี {{ p.final_not_want|intcomma }} + สถานะคดีสิ้นสุด (อื่นๆ) {{ p.final_status|intcomma }}</div>
       </div>
       {% if p.closed %}
       <div class="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">

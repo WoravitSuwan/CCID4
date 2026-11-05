@@ -132,7 +132,7 @@ def queue(request):
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
         "tab_label": funnel.STAGES[tab][0], "tab_in_nav": tab in funnel.TAB_KEYS,
-        "sankey": funnel.sankey(counts), "unknown_parts": [(k, funnel.STAGES[k][0]) for k in funnel.UNKNOWN_PARTS],
+        "sankey": funnel.sankey(counts),
         "filtered": bool(request.GET.get("q") or request.GET.get("result")),
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
@@ -144,7 +144,7 @@ def queue(request):
 
 @require_POST
 def issue_filtered(request):
-    """"ประสงค์ · รอออกหมายเรียก" (with the current search/filter): send every case of it to the issue page."""
+    """"ติดต่อไม่ได้ · รอออกหมายเรียก" (with the current search/filter): send every case of it to the issue page."""
     from django.http import QueryDict
 
     from apps.documents.views import SESSION_CASES, SESSION_EXCLUDED, SESSION_OPTS
@@ -152,10 +152,10 @@ def issue_filtered(request):
     if not perms.can_issue_any(request.user):
         raise PermissionDenied
     request.GET = QueryDict(request.POST.get("query", ""))
-    qs = _apply_tab(_apply_filters(request, _queue(request)), "want_todo")
+    qs = _apply_tab(_apply_filters(request, _queue(request)), "to_issue")
     ids = list(qs.order_by("case__receipt_no").values_list("case_id", flat=True)[:MAX_ISSUE_AT_ONCE])
     if not ids:
-        messages.info(request, "ไม่มีคดีที่ประสงค์ดำเนินคดีและรอออกหมายเรียก")
+        messages.info(request, "ไม่มีคดีที่ติดต่อไม่ได้และรอออกหมายเรียก")
         return redirect(f"{reverse('calls_queue')}?{request.GET.urlencode()}")
     request.session[SESSION_CASES] = ids
     for key in (SESSION_OPTS, SESSION_EXCLUDED):

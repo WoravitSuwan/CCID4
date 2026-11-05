@@ -49,11 +49,6 @@
       {% endfor %}
     </nav>
   </div>
-  {% if tab == "unknown" or tab == "never" or tab == "not_reached" or tab == "undecided" %}
-  <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-sm"><span class="text-slate-500">ยังไม่ทราบความประสงค์:</span>
-    {% for key, label in unknown_parts %}<a href="?{% query_replace tab=key page="" %}" class="rounded-full px-3 py-1 ring-1 {% if tab == key %}bg-slate-800 text-white ring-slate-800 hover:text-white{% else %}text-slate-600 ring-slate-200 hover:bg-slate-50{% endif %}">{{ label }} <span class="tabular-nums opacity-70">{{ counts|get_item:key|intcomma }}</span></a>{% endfor %}
-  </div>
-  {% endif %}
   <form method="get" class="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
     <input type="hidden" name="tab" value="{{ tab }}">
     <div class="relative w-full sm:w-72"><span class="pointer-events-none absolute left-3 top-2.5 text-slate-400">{% icon "search" "h-4 w-4" %}</span>
@@ -65,12 +60,12 @@
   </form>
 </div>
 
-{% if can_issue and tab == "want" or can_issue and tab == "want_todo" %}
-<div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-indigo-50 p-3 ring-1 ring-indigo-200">
-  <div class="text-sm text-indigo-950">ประสงค์ดำเนินคดี <b class="tabular-nums">{{ counts.want|intcomma }}</b> คดี · ออกหมายเรียกแล้ว <b class="tabular-nums">{{ counts.want_issued|intcomma }}</b> · รอออกหมายเรียก <b class="tabular-nums">{{ counts.want_todo|intcomma }}</b></div>
+{% if can_issue and tab == "not_reached" or can_issue and tab == "to_issue" %}
+<div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-orange-50 p-3 ring-1 ring-orange-200">
+  <div class="text-sm text-orange-950">ติดต่อไม่ได้ <b class="tabular-nums">{{ counts.not_reached|intcomma }}</b> คดี = รอออกหมายเรียก <b class="tabular-nums">{{ counts.to_issue|intcomma }}</b> + ออกหมายเรียกแล้ว <b class="tabular-nums">{{ counts.issued|intcomma }}</b>{% if counts.closed_nr %} + คดีสิ้นสุดแล้ว (ไม่ต้องออกหมาย) <b class="tabular-nums">{{ counts.closed_nr|intcomma }}</b>{% endif %}</div>
   <form method="post" action="{% url 'calls_issue_filtered' %}" class="ml-auto">{% csrf_token %}
     <input type="hidden" name="query" value="{{ request.GET.urlencode }}">
-    <button class="btn btn-primary" {% if not counts.want_todo %}disabled{% endif %}>{% icon "document" "h-4 w-4" %} ออกหมายเรียกทุกคดีที่รอออกหมาย ({{ counts.want_todo|intcomma }})</button>
+    <button class="btn btn-primary" {% if not counts.to_issue %}disabled{% endif %}>{% icon "document" "h-4 w-4" %} ออกหมายเรียกทุกคดีที่รอออกหมาย ({{ counts.to_issue|intcomma }})</button>
   </form>
 </div>
 {% endif %}

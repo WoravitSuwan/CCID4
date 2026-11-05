@@ -1,9 +1,9 @@
-"""Where every case stands: ทั้งหมด → สิ้นสุด (สถานะสิ้นสุด / ไม่ประสงค์ดำเนินคดี) / ยังไม่สิ้นสุด (ประสงค์ดำเนินคดี
-→ ออกหมายเรียก / ยังไม่ทราบความประสงค์). Used for the call-list tabs, the Sankey diagram and the statistics page,
-so every page shows the same numbers.
+"""Where every case stands, from the calls only: ทั้งหมด → โทรเสร็จสิ้น / ยังไม่ได้โทร; โทรเสร็จสิ้น → ติดต่อได้
+(ประสงค์ / ไม่ประสงค์ดำเนินคดี) / ติดต่อไม่ได้ (→ ออกหมายเรียก). Used for the call-list tabs, the Sankey diagram
+and the statistics page, so every page shows the same numbers.
 
 Until someone records a call in this system, the register's "บันทึกการติดต่อ" column decides (calls made
-before the system). Closed cases count as called.
+before the system). The case status does not decide whether a case was called.
 
 "สิ้นสุด" = status final, or ไม่ประสงค์ดำเนินคดี (same rule as Case.objects.final()).
 """
@@ -28,7 +28,7 @@ FILE_NOT_REACHED = Q(case__contact_log__contains="ไม่สามารถต
 FILE_NOT_WANT = Q(case__contact_log__contains="ไม่ประสง")
 FILE_WANT = Q(case__contact_log__contains="ประสง") & ~FILE_NOT_WANT
 
-CALLED = SYSTEM_CALL | FILE_LOG | ~STATUS_OPEN
+CALLED = SYSTEM_CALL | FILE_LOG  # โทรเสร็จสิ้น: a call in this system or the register's contact log
 NEVER = ~CALLED
 REACHED_Q = (SYSTEM_CALL & Q(last_outcome__in=REACHED)) | (FILE_ONLY & FILE_REACHED)
 NOT_REACHED_Q = (SYSTEM_CALL & ~Q(last_outcome__in=REACHED)) | (FILE_ONLY & FILE_NOT_REACHED)
@@ -40,41 +40,38 @@ UNDECIDED_Q = REACHED_Q & ~WANT_Q & ~NOT_WANT_Q
 OPEN_CASE = STATUS_OPEN & ~NOT_WANT_Q  # ยังไม่สิ้นสุด
 ISSUED = Q(has_summons=True)
 
-# The users' view, one partition of every case (each case is in exactly one of the last four; every
-# number shown is the size of the list it opens):
-#   ทั้งหมด = สิ้นสุด (สถานะสิ้นสุด + ไม่ประสงค์ดำเนินคดี) + ยังไม่สิ้นสุด (ประสงค์ดำเนินคดี + ยังไม่ทราบความประสงค์)
-# A case whose status is final stays under "สถานะสิ้นสุด" whatever the calls say.
-FINAL_STATUS = ~STATUS_OPEN
-NOT_WANT_OPEN = STATUS_OPEN & NOT_WANT_Q
-WANT_OPEN = OPEN_CASE & WANT_Q
-UNKNOWN_OPEN = OPEN_CASE & ~WANT_Q
-NOT_REACHED_ALL = CALLED & ~REACHED_Q  # for the result filter: called but not reached
+# The users' view. Each split adds up exactly, and every number shown is the size of the list it opens:
+#   ทั้งหมด = โทรเสร็จสิ้น + ยังไม่ได้โทร
+#   โทรเสร็จสิ้น = ติดต่อได้ + ติดต่อไม่ได้ ("ติดต่อไม่ได้" includes calls whose result was never written down)
+#   ติดต่อได้ = ประสงค์ + ไม่ประสงค์ + ยังไม่ระบุ
+#   ติดต่อไม่ได้ = รอออกหมายเรียก + ออกหมายเรียกแล้ว + คดีสิ้นสุดแล้ว (status final: no summons)
+NOT_REACHED_ALL = CALLED & ~REACHED_Q
 
 # key -> (label, filter); the order is the order of the tabs / nodes
 STAGES = {
     "all": ("ทั้งหมด", Q()),
-    "final": ("สิ้นสุด", ~OPEN_CASE),
-    "final_status": ("สถานะคดีสิ้นสุด", FINAL_STATUS),
-    "not_want": ("ไม่ประสงค์ดำเนินคดี", NOT_WANT_OPEN),
-    "open": ("ยังไม่สิ้นสุด", OPEN_CASE),
-    "want": ("ประสงค์ดำเนินคดี", WANT_OPEN),
-    "want_todo": ("ประสงค์ · รอออกหมายเรียก", WANT_OPEN & ~ISSUED),
-    "want_issued": ("ประสงค์ · ออกหมายเรียกแล้ว", WANT_OPEN & ISSUED),
-    "unknown": ("ยังไม่ทราบความประสงค์", UNKNOWN_OPEN),
-    # inside "ยังไม่ทราบความประสงค์" (filters on the call list, not in the diagram)
-    "never": ("ยังไม่ได้โทร", UNKNOWN_OPEN & NEVER),
-    "not_reached": ("โทรแล้ว ติดต่อไม่ได้", UNKNOWN_OPEN & NOT_REACHED_ALL),
-    "undecided": ("ติดต่อได้ ยังไม่ระบุ", UNKNOWN_OPEN & REACHED_Q),
+    "called": ("โทรเสร็จสิ้น", CALLED),
+    "reached": ("ติดต่อได้", REACHED_Q),
+    "want": ("ประสงค์ดำเนินคดี", WANT_Q),
+    "not_want": ("ไม่ประสงค์ดำเนินคดี", NOT_WANT_Q),
+    "undecided": ("ติดต่อได้ · ยังไม่ระบุ", UNDECIDED_Q),
+    "not_reached": ("ติดต่อไม่ได้", NOT_REACHED_ALL),
+    "to_issue": ("รอออกหมายเรียก", NOT_REACHED_ALL & ~ISSUED & STATUS_OPEN),
+    "issued": ("ออกหมายเรียกแล้ว", NOT_REACHED_ALL & ISSUED),
+    "closed_nr": ("ติดต่อไม่ได้ · คดีสิ้นสุดแล้ว", NOT_REACHED_ALL & ~ISSUED & ~STATUS_OPEN),
+    "never": ("ยังไม่ได้โทร", NEVER),
 }
-TAB_KEYS = ["all", "final", "not_want", "open", "want", "want_todo", "want_issued", "unknown"]
-UNKNOWN_PARTS = ["never", "not_reached", "undecided"]
+TAB_KEYS = ["all", "called", "reached", "want", "not_want", "not_reached", "to_issue", "issued", "never"]
 
 # the diagram: columns of nodes and each node's parent
-COLUMNS = [["all"], ["final", "open"], ["final_status", "not_want", "want", "unknown"], ["want_todo", "want_issued"]]
-PARENT = {"final": "all", "open": "all", "final_status": "final", "not_want": "final", "want": "open",
-          "unknown": "open", "want_todo": "want", "want_issued": "want"}
-TONE = {"all": "neutral", "final": "plain", "final_status": "plain", "not_want": "plain", "open": "good",
-        "want": "good", "want_todo": "drop", "want_issued": "done", "unknown": "muted"}
+COLUMNS = [["all"], ["called", "never"], ["reached", "not_reached"],
+           ["want", "not_want", "undecided", "to_issue", "issued", "closed_nr"]]
+PARENT = {"called": "all", "never": "all", "reached": "called", "not_reached": "called", "want": "reached",
+          "not_want": "reached", "undecided": "reached", "to_issue": "not_reached", "issued": "not_reached",
+          "closed_nr": "not_reached"}
+TONE = {"all": "neutral", "called": "neutral", "never": "muted", "reached": "good", "want": "good",
+        "not_want": "plain", "undecided": "muted", "not_reached": "drop", "to_issue": "drop", "issued": "done",
+        "closed_nr": "muted"}
 COLORS = {"good": "var(--series-1)", "drop": "var(--series-2)", "done": "var(--series-3)",
           "plain": "var(--plain-node)", "muted": "var(--muted-node)", "neutral": "var(--text-muted)"}
 
@@ -97,14 +94,13 @@ def counts(qs) -> dict:
 
 
 def adds_up(n: dict) -> bool:
-    return (n["final_status"] + n["not_want"] + n["want"] + n["unknown"] == n["all"]
-            and n["final"] == n["final_status"] + n["not_want"] and n["open"] == n["want"] + n["unknown"]
-            and n["want"] == n["want_todo"] + n["want_issued"]
-            and n["unknown"] == sum(n[k] for k in UNKNOWN_PARTS))
+    return (n["all"] == n["called"] + n["never"] and n["called"] == n["reached"] + n["not_reached"]
+            and n["reached"] == n["want"] + n["not_want"] + n["undecided"]
+            and n["not_reached"] == n["to_issue"] + n["issued"] + n["closed_nr"])
 
 
 # shorter names inside the diagram (the column already says "ประสงค์ดำเนินคดี")
-DIAGRAM_LABEL = {"want_todo": "รอออกหมายเรียก", "want_issued": "ออกหมายเรียกแล้ว"}
+DIAGRAM_LABEL = {"undecided": "ยังไม่ระบุ", "closed_nr": "คดีสิ้นสุดแล้ว"}
 
 
 def sankey(n: dict, width=1040, height=320, node_w=16, gap=22, label_w=230, label_gap=40) -> dict:

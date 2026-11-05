@@ -4,23 +4,23 @@
   <a class="stat block" href="{% if link %}?{% query_replace tab='all' page='' %}{% else %}{% url 'calls_queue' %}?tab=all{% endif %}">
     <div class="stat-label">คดีทั้งหมด</div>
     <div class="stat-value">{{ n.all|intcomma }}</div>
-    <div class="text-xs text-slate-400">เลขรับแจ้งไม่ซ้ำกัน</div>
+    <div class="text-xs text-slate-500">โทรเสร็จสิ้น {{ n.called|intcomma }} + ยังไม่ได้โทร {{ n.never|intcomma }}</div>
   </a>
-  <a class="stat block" href="{% if link %}?{% query_replace tab='final' page='' %}{% else %}{% url 'calls_queue' %}?tab=final{% endif %}">
-    <div class="stat-label">สิ้นสุดแล้ว</div>
-    <div class="stat-value">{{ n.final|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.final|percent:all }}%</span></div>
-    <div class="text-xs text-slate-500">สถานะสิ้นสุด {{ n.final_status|intcomma }} + ไม่ประสงค์ดำเนินคดี {{ n.not_want|intcomma }}</div>
+  <a class="stat block" href="{% if link %}?{% query_replace tab='called' page='' %}{% else %}{% url 'calls_queue' %}?tab=called{% endif %}">
+    <div class="stat-label">โทรเสร็จสิ้น</div>
+    <div class="stat-value">{{ n.called|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.called|percent:all }}%</span></div>
+    <div class="text-xs text-slate-500">ติดต่อได้ {{ n.reached|intcomma }} + ติดต่อไม่ได้ {{ n.not_reached|intcomma }}</div>
   </a>
-  <a class="stat block ring-2 ring-indigo-200" href="{% if link %}?{% query_replace tab='want' page='' %}{% else %}{% url 'calls_queue' %}?tab=want{% endif %}">
-    <div class="stat-label">ประสงค์ดำเนินคดี · ออกหมายเรียกได้</div>
-    <div class="stat-value text-indigo-700">{{ n.want|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.want|percent:all }}%</span></div>
-    <div class="text-xs text-slate-500">รอออกหมาย {{ n.want_todo|intcomma }} + ออกหมายแล้ว {{ n.want_issued|intcomma }}</div>
+  <a class="stat block" href="{% if link %}?{% query_replace tab='reached' page='' %}{% else %}{% url 'calls_queue' %}?tab=reached{% endif %}">
+    <div class="stat-label">ติดต่อได้</div>
+    <div class="stat-value" style="color: var(--series-1, #2a78d6)">{{ n.reached|intcomma }}</div>
+    <div class="text-xs text-slate-500">ประสงค์ {{ n.want|intcomma }} + ไม่ประสงค์ {{ n.not_want|intcomma }}{% if n.undecided %} + ยังไม่ระบุ {{ n.undecided|intcomma }}{% endif %}</div>
   </a>
-  <a class="stat block" href="{% if link %}?{% query_replace tab='unknown' page='' %}{% else %}{% url 'calls_queue' %}?tab=unknown{% endif %}">
-    <div class="stat-label">ยังไม่ทราบความประสงค์</div>
-    <div class="stat-value">{{ n.unknown|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.unknown|percent:all }}%</span></div>
-    <div class="text-xs text-slate-500">ยังไม่ได้โทร {{ n.never|intcomma }} + ติดต่อไม่ได้ {{ n.not_reached|intcomma }} + ติดต่อได้ยังไม่ระบุ {{ n.undecided|intcomma }}</div>
+  <a class="stat block ring-2 ring-orange-200" href="{% if link %}?{% query_replace tab='not_reached' page='' %}{% else %}{% url 'calls_queue' %}?tab=not_reached{% endif %}">
+    <div class="stat-label">ติดต่อไม่ได้ → ออกหมายเรียก</div>
+    <div class="stat-value" style="color: var(--series-2, #eb6834)">{{ n.not_reached|intcomma }}</div>
+    <div class="text-xs text-slate-500">รอออกหมาย {{ n.to_issue|intcomma }} + ออกหมายแล้ว {{ n.issued|intcomma }}{% if n.closed_nr %} + คดีสิ้นสุดแล้ว {{ n.closed_nr|intcomma }}{% endif %}</div>
   </a>
 </div>
-<p class="mb-5 text-xs text-slate-500">ทั้งหมด {{ n.all|intcomma }} = สิ้นสุดแล้ว {{ n.final|intcomma }} + ประสงค์ดำเนินคดี {{ n.want|intcomma }} + ยังไม่ทราบความประสงค์ {{ n.unknown|intcomma }} · สิ้นสุด = สถานะคดีสิ้นสุด หรือผู้เสียหายไม่ประสงค์ดำเนินคดี</p>
+<p class="mb-5 text-xs text-slate-500">โทรเสร็จสิ้น = มีการโทรในระบบ หรือมีบันทึกการติดต่อในไฟล์ทะเบียน · ไม่ประสงค์ดำเนินคดีไม่ต้องออกหมายเรียก · ติดต่อไม่ได้ (รวมที่ไม่ได้จดผล) รอออกหมายเรียก ยกเว้นคดีที่สถานะสิ้นสุดแล้ว</p>
 {% endwith %}
