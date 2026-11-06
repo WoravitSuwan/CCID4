@@ -40,7 +40,7 @@ PAGE_SIZE = 50
 # --------------------------------------------------------------------------- dashboard
 def dashboard(request):
     now = timezone.now()
-    cases = Case.objects.all()
+    cases = Case.objects.real()
     open_cases = cases.not_final()
     latest_issued = Summons.objects.filter(result=SummonsResult.ISSUED)
     stats = {
@@ -78,10 +78,11 @@ def dashboard(request):
     per_inv.sort(key=lambda r: -r["open"])
     from apps.calls.models import REACHED, CallAssignment, CallAttempt
 
-    today_calls = CallAttempt.objects.filter(called_at__date=timezone.localdate())
+    today_calls = CallAttempt.objects.exclude(case__is_test=True).filter(called_at__date=timezone.localdate())
+    pool = CallAssignment.objects.exclude(case__is_test=True)
     call_stats = {
-        "assigned": CallAssignment.objects.count(),
-        "done": CallAssignment.objects.filter(is_done=True).count(),
+        "assigned": pool.count(),
+        "done": pool.filter(is_done=True).count(),
         "today": today_calls.count(),
         "today_reached": today_calls.filter(outcome__in=REACHED).count(),
     }
@@ -108,7 +109,7 @@ def filtered_cases(request):
     case_types = list(Case.objects.exclude(case_type="").values_list("case_type", flat=True)
                       .distinct().order_by("case_type"))
     form = CaseFilterForm(request.GET or None, years=years, case_types=case_types)
-    qs = Case.objects.select_related("status", "unit", "complainant", "investigator_alias__investigator")
+    qs = Case.objects.real().select_related("status", "unit", "complainant", "investigator_alias__investigator")
     if form.is_valid():
         d = form.cleaned_data
         if d["q"]:

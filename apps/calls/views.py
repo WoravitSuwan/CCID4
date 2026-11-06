@@ -58,8 +58,8 @@ def _queue(request):
     if not (perms.is_outsource(request.user) or perms.can_manage_calls(request.user)):
         raise PermissionDenied
     ensure_call_pool()
-    qs = funnel.with_summons_flag(CallAssignment.objects.select_related(
-        "case", "case__complainant", "case__status", "assignee", "opened_by"))
+    qs = funnel.with_summons_flag(CallAssignment.objects.exclude(case__is_test=True).select_related(
+        "case", "case__complainant", "case__status", "assignee", "opened_by"))  # ข้อมูลทดลอง: shown apart
     who = request.GET.get("assignee", "")
     if who == "me":
         qs = qs.filter(assignee=request.user)
@@ -113,7 +113,7 @@ def queue(request):
     counts = funnel.counts(filtered)  # one set of numbers for the tiles, the diagram and the tabs
     qs = _apply_tab(filtered, tab)
     today = timezone.localdate()
-    today_calls = CallAttempt.objects.filter(called_at__date=today)
+    today_calls = CallAttempt.objects.exclude(case__is_test=True).filter(called_at__date=today)
     if perms.is_outsource(request.user):
         today_calls = today_calls.filter(created_by=request.user)
     stats = {
@@ -402,7 +402,8 @@ def reopen(request, pk):
 # --------------------------------------------------------------------------- export
 @perms.require(perms.can_manage_calls)
 def export_calls(request):
-    qs = CallAttempt.objects.select_related("case", "created_by", "case__call_assignment__assignee").order_by(
+    qs = CallAttempt.objects.exclude(case__is_test=True).select_related(
+        "case", "created_by", "case__call_assignment__assignee").order_by(
         "called_at")
     from apps.core.params import date_param
 
@@ -443,3 +444,41 @@ def export_calls(request):
                         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp["Content-Disposition"] = content_disposition(f"ผลการติดต่อผู้เสียหาย_{timezone.localdate():%Y%m%d}.xlsx")
     return resp
+
+
+# --------------------------------------------------------------------------- ข้อมูลทดลอง
+def _back(request, default="calls_queue"):
+    nxt = request.POST.get("next", "")
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
+    return redirect(default)
+
+
+@require_POST
+def trial_add(request):
+    """Add a made-up case to try calling (name + phone). It is never counted anywhere."""
+    from .trial import add_trial, clean_phone
+
+    name, phone = request.POST.get("name", "").strip(), request.POST.get("phone", "")
+    if not name or len(clean_phone(phone)) < 9:
+        messages.error(request, "กรอกชื่อและเบอร์โทร (อย่างน้อย 9 หลัก) ของข้อมูลทดลอง")
+        return _back(request)
+    case = add_trial(name, phone)
+    log(request, AuditAction.EDIT, case, f"เพิ่มข้อมูลทดลอง {case.receipt_no} {name}")
+    messages.success(request, f"เพิ่มข้อมูลทดลอง {name} แล้ว กด \"โทร\" เพื่อลองบันทึกผลได้เลย")
+    return _back(request)
+
+
+@require_POST
+def trial_delete(request, pk):
+    from .trial import delete_trial
+
+    case = get_object_or_404(Case, pk=pk, is_test=True)  # a register case can never be deleted here
+    label = f"{case.receipt_no} {case.victim_name}"
+    delete_trial(case)
+    log(request, AuditAction.EDIT, None, f"ลบข้อมูลทดลอง {label}")
+    messages.success(request, f"ลบข้อมูลทดลอง {case.victim_name} แล้ว")
+    nxt = request.POST.get("next", "")
+    if f"/calls/{pk}/" in nxt:  # deleted from its own call page
+        return redirect("calls_queue")
+    return _back(request)

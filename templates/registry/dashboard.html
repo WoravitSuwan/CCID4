@@ -11,6 +11,7 @@
     {% if perm_issue_any %}<a class="btn btn-primary" href="{% url 'case_list' %}?open=on&never=on">{% icon "document" "h-4 w-4" %} ออกหมายเรียก</a>{% endif %}
   </div>
 </div>
+{% trial_box %}
 
 {% if admin_alerts.new_statuses or admin_alerts.unlinked_aliases or admin_alerts.other_unit_cases %}
 <div class="alert alert-warning mb-5">

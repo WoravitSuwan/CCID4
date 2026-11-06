@@ -119,7 +119,7 @@ def _progress(start, end, days):
     from apps.calls import funnel
     from apps.calls.models import CallAssignment
 
-    qs = CallAssignment.objects.all()
+    qs = CallAssignment.objects.exclude(case__is_test=True)
     status_final = ~funnel.STATUS_OPEN
     total = qs.count()
     # สิ้นสุด = ไม่ประสงค์ดำเนินคดี (same number as on the call list) + other cases whose status is final
@@ -178,10 +178,11 @@ def _collect(start, end):
     from apps.documents.models import Summons
 
     ensure_call_pool()
-    calls = CallAttempt.objects.filter(called_at__date__gte=start, called_at__date__lte=end)
+    calls = CallAttempt.objects.exclude(case__is_test=True).filter(called_at__date__gte=start, called_at__date__lte=end)
     reached = calls.filter(outcome__in=REACHED)
-    summonses = Summons.objects.filter(created_at__date__gte=start, created_at__date__lte=end)
-    ems = Summons.objects.filter(ems_at__date__gte=start, ems_at__date__lte=end)
+    real_summonses = Summons.objects.exclude(case__is_test=True)
+    summonses = real_summonses.filter(created_at__date__gte=start, created_at__date__lte=end)
+    ems = real_summonses.filter(ems_at__date__gte=start, ems_at__date__lte=end)
     n_calls, n_reached = calls.count(), reached.count()
     period = {
         "calls": n_calls, "reached": n_reached, "not_reached": n_calls - n_reached,
@@ -190,9 +191,10 @@ def _collect(start, end):
         "appointed": calls.filter(outcome=CallOutcome.APPOINTED).count(),
         "summonses": summonses.count(), "ems": ems.count(),
     }
-    stages = funnel.counts(funnel.with_summons_flag(CallAssignment.objects.all()))
-    open_cases = CallAssignment.objects.filter(funnel.OPEN_CASE).count()
-    all_summons = Summons.objects.all()
+    pool = CallAssignment.objects.exclude(case__is_test=True)
+    stages = funnel.counts(funnel.with_summons_flag(pool))
+    open_cases = pool.filter(funnel.OPEN_CASE).count()
+    all_summons = real_summonses
     overall = {
         # every figure from the same partition as the call list, so the pages agree
         "cases": stages["all"], "open": open_cases, "final": stages["all"] - open_cases,
