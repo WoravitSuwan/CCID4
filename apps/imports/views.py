@@ -37,6 +37,16 @@ def _batch(pk):
     return get_object_or_404(ImportBatch, pk=pk)
 
 
+def _unusable(request, batch):
+    """An unreadable or cancelled upload (e.g. reached again with the Back button): back to the import page."""
+    if batch.status in (BatchStatus.FAILED, BatchStatus.CANCELLED) or not batch.file:
+        messages.error(request, f"ใช้ไฟล์นี้ต่อไม่ได้{': ' + batch.error if batch.error else ''} — กรุณาอัปโหลดใหม่")
+        return redirect("import_home")
+    if batch.status in (BatchStatus.COMMITTING, BatchStatus.DONE):
+        return redirect("import_preview", pk=batch.pk)  # already imported: the column choice is fixed
+    return None
+
+
 @perms.require(perms.can_import)
 def import_home(request):
     form = UploadForm(request.POST or None, request.FILES or None)
@@ -60,6 +70,8 @@ def import_home(request):
 @perms.require(perms.can_import)
 def import_sheets(request, pk):
     batch = _batch(pk)
+    if stop := _unusable(request, batch):
+        return stop
     if request.method == "POST":
         chosen = [s for s in request.POST.getlist("sheets") if s in batch.available_sheets]
         if not chosen:
@@ -74,6 +86,8 @@ def import_sheets(request, pk):
 @perms.require(perms.can_import)
 def import_mapping(request, pk):
     batch = _batch(pk)
+    if stop := _unusable(request, batch):
+        return stop
     info = {s["name"]: s["headers"] for s in workbook_info(batch.file.path)}
     headers = []
     for sheet in batch.sheets:

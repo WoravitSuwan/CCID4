@@ -289,10 +289,11 @@ def summons_list(request):
     q = request.GET.get("q", "").strip()
     if q:
         qs = qs.filter(case__receipt_no__icontains=q.replace(" ", "")) | qs.filter(recipient_name__icontains=q)
-    date_from = request.GET.get("from")
+    from apps.core.params import date_param
+
+    date_from, date_to = date_param(request, "from"), date_param(request, "to")
     if date_from:
         qs = qs.filter(issue_date__gte=date_from)
-    date_to = request.GET.get("to")
     if date_to:
         qs = qs.filter(issue_date__lte=date_to)
     ems_counts = {"all": qs.count(), "no": qs.filter(ems_number="").count()}

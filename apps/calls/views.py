@@ -404,7 +404,9 @@ def reopen(request, pk):
 def export_calls(request):
     qs = CallAttempt.objects.select_related("case", "created_by", "case__call_assignment__assignee").order_by(
         "called_at")
-    date_from, date_to = request.GET.get("from"), request.GET.get("to")
+    from apps.core.params import date_param
+
+    date_from, date_to = date_param(request, "from"), date_param(request, "to")
     if date_from:
         qs = qs.filter(called_at__date__gte=date_from)
     if date_to:
