@@ -76,3 +76,24 @@ def test_several_trials_get_their_own_numbers(client, imported, caller):
     one = Case.objects.get(receipt_no="TEST0002")
     client.post(f"/calls/trial/{one.pk}/delete/")
     assert sorted(Case.objects.filter(is_test=True).values_list("victim_name", flat=True)) == ["ทดลอง 0", "ทดลอง 2"]
+
+
+def test_command_adds_lists_and_deletes(imported):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    out = StringIO()
+    call_command("add_trial", NAME, PHONE, stdout=out)
+    call_command("add_trial", NAME, PHONE, stdout=out)  # running it again does not add a second one
+    assert Case.objects.filter(is_test=True).count() == 1 and "มีอยู่แล้ว" in out.getvalue()
+    trial = Case.objects.get(is_test=True)
+    assert CallAssignment.objects.filter(case=trial).exists()
+    call_command("add_trial", delete=trial.receipt_no, stdout=out)
+    assert not Case.objects.filter(is_test=True).exists()
+
+
+def test_add_button_is_visible_when_there_is_no_trial(client, imported, caller):
+    client.force_login(caller)
+    html = client.get("/calls/").content.decode()
+    assert "trial-add-btn" in html and "เพิ่มข้อมูลทดลองสำหรับลองโทร" in html
