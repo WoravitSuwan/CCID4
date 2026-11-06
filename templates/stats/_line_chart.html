@@ -8,7 +8,7 @@
     {% endfor %}
     {% for t in chart.ticks %}<text x="{{ t.x }}" y="{{ chart.h|add:'-8' }}" text-anchor="middle" font-size="11" fill="var(--text-muted)">{{ t.label }}</text>{% endfor %}
     {% for ln in chart.lines %}
-    <polyline points="{{ ln.points }}" fill="none" stroke="{{ ln.color }}" stroke-width="{% if ln.dashed %}1.5{% else %}2{% endif %}" stroke-linejoin="round" stroke-linecap="round" {% if ln.dashed %}stroke-dasharray="6 4"{% endif %}/>
+    <polyline {% if not ln.dashed %}pathLength="1" {% endif %}points="{{ ln.points }}" fill="none" stroke="{{ ln.color }}" stroke-width="{% if ln.dashed %}1.5{% else %}2{% endif %}" stroke-linejoin="round" stroke-linecap="round" {% if ln.dashed %}stroke-dasharray="6 4"{% endif %}/>
     {% if not ln.dashed %}{% for x, y in ln.markers %}<circle cx="{{ x }}" cy="{{ y }}" r="2.5" fill="{{ ln.color }}"/>{% endfor %}{% endif %}
     {% endfor %}
     {% for h in chart.hover %}

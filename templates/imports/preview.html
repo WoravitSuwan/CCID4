@@ -23,11 +23,11 @@
   </div>
   {% endif %}
   <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
-    <div class="card"><div class="stat-label">จำนวนแถว</div><div class="stat-value">{{ s.total_rows|intcomma }}</div><div class="text-xs text-slate-500">ข้ามแถวว่าง {{ s.skipped_blank|intcomma }}</div></div>
-    <div class="card"><div class="stat-label">เพิ่มใหม่</div><div class="stat-value text-green-700">{{ s.new|intcomma }}</div></div>
-    <div class="card"><div class="stat-label">อัปเดต</div><div class="stat-value text-blue-700">{{ s.updated|intcomma }}</div><div class="text-xs text-slate-500">ไม่เปลี่ยน {{ s.unchanged|intcomma }}</div></div>
-    <div class="card"><div class="stat-label">มีปัญหา (ยังนำเข้าได้)</div><div class="stat-value text-amber-700">{{ s.issue_rows|intcomma }}</div></div>
-    <div class="card"><div class="stat-label">{% if batch.kind == 'register' %}จับคู่กับไฟล์ผู้แจ้งไม่ได้{% else %}ผู้แจ้งที่ไม่อยู่ในทะเบียน{% endif %}</div><div class="stat-value">{{ s.unmatched|intcomma }}</div></div>
+    <div class="card"><div class="stat-label">จำนวนแถว</div><div class="stat-value"><span data-countup>{{ s.total_rows|intcomma }}</span></div><div class="text-xs text-slate-500">ข้ามแถวว่าง {{ s.skipped_blank|intcomma }}</div></div>
+    <div class="card"><div class="stat-label">เพิ่มใหม่</div><div class="stat-value text-green-700"><span data-countup>{{ s.new|intcomma }}</span></div></div>
+    <div class="card"><div class="stat-label">อัปเดต</div><div class="stat-value text-blue-700"><span data-countup>{{ s.updated|intcomma }}</span></div><div class="text-xs text-slate-500">ไม่เปลี่ยน {{ s.unchanged|intcomma }}</div></div>
+    <div class="card"><div class="stat-label">มีปัญหา (ยังนำเข้าได้)</div><div class="stat-value text-amber-700"><span data-countup>{{ s.issue_rows|intcomma }}</span></div></div>
+    <div class="card"><div class="stat-label">{% if batch.kind == 'register' %}จับคู่กับไฟล์ผู้แจ้งไม่ได้{% else %}ผู้แจ้งที่ไม่อยู่ในทะเบียน{% endif %}</div><div class="stat-value"><span data-countup>{{ s.unmatched|intcomma }}</span></div></div>
   </div>
   <div class="mt-4 grid gap-4 lg:grid-cols-2">
     <div class="card text-sm">

@@ -34,7 +34,7 @@
     <tbody>{% for r in per_staff %}
       <tr><td><a href="?assignee={{ r.assignee }}&tab=all" class="font-medium">{{ r.assignee__first_name|default:r.assignee__username }} {{ r.assignee__last_name }}</a></td>
         <td class="text-right tabular-nums">{{ r.total|intcomma }}</td>
-        <td class="min-w-[160px]"><div class="flex items-center gap-2"><div class="h-1.5 flex-1 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-emerald-500" style="width: {{ r.done|percent:r.total }}%"></div></div><span class="w-14 text-right tabular-nums">{{ r.done }} ({{ r.done|percent:r.total }}%)</span></div></td>
+        <td class="min-w-[160px]"><div class="flex items-center gap-2"><div class="h-1.5 flex-1 rounded-full bg-slate-100"><div class="h-1.5 rounded-full grow-x bg-emerald-500" style="width: {{ r.done|percent:r.total }}%"></div></div><span class="w-14 text-right tabular-nums">{{ r.done }} ({{ r.done|percent:r.total }}%)</span></div></td>
         <td class="text-right tabular-nums">{{ r.never|intcomma }}</td></tr>
     {% endfor %}</tbody>
   </table>
@@ -83,20 +83,20 @@
 </div>
 {% endif %}
 <div class="table-wrap">
-  <table class="table">
-    <thead><tr>{% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="queue-all" aria-label="เลือกทั้งหมด"></th>{% endif %}<th class="whitespace-nowrap">เลขรับแจ้ง</th><th class="whitespace-nowrap">ผู้เสียหาย</th><th class="whitespace-nowrap">เบอร์โทร</th><th class="whitespace-nowrap">ประเภทคดี</th><th class="whitespace-nowrap">สถานะคดี</th><th class="whitespace-nowrap text-center">โทร (ครั้ง)</th><th class="whitespace-nowrap">ผลการโทรล่าสุด</th><th></th></tr></thead>
+  <table class="table table-cards">
+    <thead><tr>{% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="queue-all" aria-label="เลือกทั้งหมด"></th>{% endif %}<th class="whitespace-nowrap">เลขรับแจ้ง</th><th class="whitespace-nowrap">ผู้เสียหาย</th><th class="whitespace-nowrap">เบอร์โทร</th><th class="hidden whitespace-nowrap 2xl:table-cell">ประเภทคดี</th><th class="whitespace-nowrap">สถานะคดี</th><th class="whitespace-nowrap text-center">โทร (ครั้ง)</th><th class="whitespace-nowrap">ผลการโทรล่าสุด</th><th></th></tr></thead>
     <tbody>
     {% for a in page %}
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
-        {% if can_issue %}<td><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
-        <td class="whitespace-nowrap"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div>
+        {% if can_issue %}<td data-label="เลือก"><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
+        <td class="whitespace-nowrap" data-label="เลขรับแจ้ง"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div>
           {% with other=a|opened_by_other:user %}{% if other %}<span class="badge badge-amber mt-1" title="{{ other.display_name }} เปิดคดีนี้อยู่">{% icon "phone" "h-3 w-3" %} {{ other.first_name|default:other.username }} กำลังเปิดอยู่</span>{% endif %}{% endwith %}</td>
-        <td class="min-w-[9rem] font-medium">{% if a.case.victim_name %}{{ a.case.victim_name }}{% elif a.case.complainant %}{{ a.case.complainant.full_name }}{% else %}-{% endif %}</td>
-        <td class="whitespace-nowrap font-mono">{% if a.case.victim_phone %}{{ a.case.victim_phone }}{% elif a.case.complainant.phone %}{{ a.case.complainant.phone }}{% else %}-{% endif %}</td>
-        <td class="max-w-[11rem]"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
-        <td class="whitespace-nowrap">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}{% if a.case.not_want %}<div class="mt-1"><span class="badge badge-gray" title="ผู้เสียหายไม่ประสงค์ดำเนินคดี จึงนับเป็นคดีสิ้นสุด">สิ้นสุด · ไม่ประสงค์</span></div>{% endif %}</td>
-        <td class="text-center tabular-nums">{% if a.attempt_count %}{{ a.attempt_count }}{% elif a.case.contact_log %}<span class="badge badge-gray" title="โทรแล้วตามบันทึกการติดต่อในไฟล์ทะเบียน">ในไฟล์</span>{% elif a.case.status.is_final %}<span class="text-slate-300">–</span>{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
-        <td class="max-w-[16rem] text-sm">
+        <td class="min-w-[9rem] max-w-[15rem]" data-label="ผู้เสียหาย"><div class="font-medium">{% if a.case.victim_name %}{{ a.case.victim_name }}{% elif a.case.complainant %}{{ a.case.complainant.full_name }}{% else %}-{% endif %}</div>{% if a.case.case_type %}<div class="truncate text-xs text-slate-400 2xl:hidden" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div>{% endif %}</td>
+        <td class="whitespace-nowrap font-mono" data-label="เบอร์โทร">{% if a.case.victim_phone %}{{ a.case.victim_phone }}{% elif a.case.complainant.phone %}{{ a.case.complainant.phone }}{% else %}-{% endif %}</td>
+        <td class="hidden max-w-[11rem] 2xl:table-cell"><div class="truncate" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div></td>
+        <td class="whitespace-nowrap" data-label="สถานะคดี">{% if a.case.status %}<span class="badge {{ a.case.status|status_class }}"><span class="dot"></span>{{ a.case.status.name }}</span>{% endif %}{% if a.case.not_want %}<div class="mt-1"><span class="badge badge-gray" title="ผู้เสียหายไม่ประสงค์ดำเนินคดี จึงนับเป็นคดีสิ้นสุด">สิ้นสุด · ไม่ประสงค์</span></div>{% endif %}</td>
+        <td class="text-center tabular-nums" data-label="โทร (ครั้ง)">{% if a.attempt_count %}{{ a.attempt_count }}{% elif a.case.contact_log %}<span class="badge badge-gray" title="โทรแล้วตามบันทึกการติดต่อในไฟล์ทะเบียน">ในไฟล์</span>{% elif a.case.status.is_final %}<span class="text-slate-300">–</span>{% else %}<span class="badge badge-blue">ใหม่</span>{% endif %}</td>
+        <td class="max-w-[14rem] text-sm" data-label="ผลการโทรล่าสุด">
           {% if a.last_outcome %}<span class="badge {% if a.last_reached %}badge-green{% else %}badge-amber{% endif %}">{{ a.get_last_outcome_display }}</span>
           <div class="text-xs text-slate-400">{{ a.last_call_at|thai_date:"datetime" }}</div>
           {% elif a.case.contact_log %}<span class="badge {% if a.file_reached %}badge-green{% else %}badge-amber{% endif %}">{% if a.file_reached %}ติดต่อได้ (ไฟล์){% else %}โทรแล้ว (ไฟล์){% endif %}</span>
@@ -106,7 +106,7 @@
           {% if a.assignee %}<div class="text-xs text-slate-400">ผู้รับผิดชอบ {{ a.assignee.first_name|default:a.assignee.username }}</div>{% endif %}
           {% if a.callback_at and not a.is_done %}<div class="text-xs {% if a.callback_due %}font-semibold text-amber-700{% else %}text-slate-500{% endif %}">โทรกลับ {{ a.callback_at|thai_date:"datetime" }}</div>{% endif %}
         </td>
-        <td class="text-right">{% if a.is_done or not a.attempt_count and a.file_reached %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% elif a.case.status.is_final %}<a class="btn btn-sm" href="{% url 'call_case' a.case_id %}">ดู</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
+        <td class="text-right" data-label="">{% if a.is_done or not a.attempt_count and a.file_reached %}<span class="badge badge-green">{% icon "check" "h-3.5 w-3.5" %} เสร็จ</span>{% elif a.case.status.is_final %}<a class="btn btn-sm" href="{% url 'call_case' a.case_id %}">ดู</a>{% else %}<a class="btn btn-sm btn-primary" href="{% url 'call_case' a.case_id %}">โทร</a>{% endif %}</td>
       </tr>
     {% empty %}
       <tr><td colspan="9" class="py-16 text-center">

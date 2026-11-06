@@ -98,3 +98,21 @@ def signer_datalists():
 def opened_by_other(assignment, user):
     """Who else has this call-list case open right now (None if nobody / me)."""
     return assignment.opened_by_other(user) if assignment is not None else None
+
+
+@register.filter
+def page_window(page, around=1):
+    """Page numbers to show: 1 … 4 5 6 … 20 (None marks a gap)."""
+    total, current = page.paginator.num_pages, page.number
+    keep = {1, total} | {n for n in range(current - around, current + around + 1) if 1 <= n <= total}
+    if current <= 3:
+        keep |= {2, 3, 4} & set(range(1, total + 1))
+    if current >= total - 2:
+        keep |= {total - 1, total - 2, total - 3} & set(range(1, total + 1))
+    out, last = [], 0
+    for n in sorted(keep):
+        if n - last > 1:
+            out.append(n - 1 if n - last == 2 else None)  # a gap of one page shows the page itself
+        out.append(n)
+        last = n
+    return out

@@ -26,37 +26,37 @@
 <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
   <a class="stat" href="{% url 'case_list' %}">
     <div class="stat-icon bg-slate-100 text-slate-600">{% icon "cases" "h-6 w-6" %}</div>
-    <div><div class="stat-label">คดีทั้งหมด</div><div class="stat-value">{{ stats.total|intcomma }}</div></div>
+    <div><div class="stat-label">คดีทั้งหมด</div><div class="stat-value"><span data-countup>{{ stats.total|intcomma }}</span></div></div>
   </a>
   <a class="stat" href="{% url 'case_list' %}?open=on">
     <div class="stat-icon bg-indigo-50 text-indigo-600">{% icon "refresh" "h-6 w-6" %}</div>
-    <div class="flex-1"><div class="stat-label">ยังไม่สิ้นสุด</div><div class="stat-value">{{ stats.open|intcomma }}</div>
-      <div class="mt-2 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ stats.open|percent:stats.total }}%"></div></div>
+    <div class="flex-1"><div class="stat-label">ยังไม่สิ้นสุด</div><div class="stat-value"><span data-countup>{{ stats.open|intcomma }}</span></div>
+      <div class="mt-2 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full grow-x bg-indigo-500" style="width: {{ stats.open|percent:stats.total }}%"></div></div>
       <div class="mt-1 text-xs text-slate-400">{{ stats.open|percent:stats.total }}% ของคดีทั้งหมด</div></div>
   </a>
   <a class="stat" href="{% url 'case_list' %}?open=on&never=on">
     <div class="stat-icon bg-sky-50 text-sky-600">{% icon "document" "h-6 w-6" %}</div>
-    <div><div class="stat-label">ยังไม่เคยออกหมาย</div><div class="stat-value">{{ stats.never|intcomma }}</div><div class="text-xs text-slate-400">เฉพาะคดียังไม่สิ้นสุด</div></div>
+    <div><div class="stat-label">ยังไม่เคยออกหมาย</div><div class="stat-value"><span data-countup>{{ stats.never|intcomma }}</span></div><div class="text-xs text-slate-400">เฉพาะคดียังไม่สิ้นสุด</div></div>
   </a>
   <a class="stat" href="{% url 'summons_list' %}?result=issued">
     <div class="stat-icon bg-emerald-50 text-emerald-600">{% icon "calendar" "h-6 w-6" %}</div>
-    <div><div class="stat-label">รอมาตามนัด</div><div class="stat-value">{{ stats.waiting|intcomma }}</div></div>
+    <div><div class="stat-label">รอมาตามนัด</div><div class="stat-value"><span data-countup>{{ stats.waiting|intcomma }}</span></div></div>
   </a>
   <a class="stat" href="{% url 'case_list' %}?open=on&incomplete=on">
     <div class="stat-icon bg-amber-50 text-amber-600">{% icon "map-pin" "h-6 w-6" %}</div>
-    <div><div class="stat-label">ที่อยู่ไม่ครบ</div><div class="stat-value {% if stats.incomplete %}text-amber-700{% endif %}">{{ stats.incomplete|intcomma }}</div><div class="text-xs text-slate-400">ต้องแก้ก่อนออกหมาย</div></div>
+    <div><div class="stat-label">ที่อยู่ไม่ครบ</div><div class="stat-value {% if stats.incomplete %}text-amber-700{% endif %}"><span data-countup>{{ stats.incomplete|intcomma }}</span></div><div class="text-xs text-slate-400">ต้องแก้ก่อนออกหมาย</div></div>
   </a>
   <a class="stat" href="{% url 'case_list' %}?open=on&unmatched=on">
     <div class="stat-icon bg-orange-50 text-orange-600">{% icon "alert" "h-6 w-6" %}</div>
-    <div><div class="stat-label">จับคู่ไฟล์ผู้แจ้งไม่ได้</div><div class="stat-value {% if stats.unmatched %}text-orange-700{% endif %}">{{ stats.unmatched|intcomma }}</div></div>
+    <div><div class="stat-label">จับคู่ไฟล์ผู้แจ้งไม่ได้</div><div class="stat-value {% if stats.unmatched %}text-orange-700{% endif %}"><span data-countup>{{ stats.unmatched|intcomma }}</span></div></div>
   </a>
   <a class="stat" href="{% url 'summons_list' %}?result=issued">
     <div class="stat-icon bg-violet-50 text-violet-600">{% icon "clock" "h-6 w-6" %}</div>
-    <div><div class="stat-label">เลยวันนัด · ยังไม่บันทึกผล</div><div class="stat-value">{{ stats.overdue|intcomma }}</div></div>
+    <div><div class="stat-label">เลยวันนัด · ยังไม่บันทึกผล</div><div class="stat-value"><span data-countup>{{ stats.overdue|intcomma }}</span></div></div>
   </a>
   <a class="stat" href="{% url 'summons_list' %}?result=absent">
     <div class="stat-icon bg-rose-50 text-rose-600">{% icon "x" "h-6 w-6" %}</div>
-    <div><div class="stat-label">ไม่มาตามนัด</div><div class="stat-value {% if stats.absent %}text-rose-700{% endif %}">{{ stats.absent|intcomma }}</div></div>
+    <div><div class="stat-label">ไม่มาตามนัด</div><div class="stat-value {% if stats.absent %}text-rose-700{% endif %}"><span data-countup>{{ stats.absent|intcomma }}</span></div></div>
   </a>
 </div>
 
@@ -70,7 +70,7 @@
         <tr>
           <td>{% if r.inv %}<a class="font-medium" href="{% url 'case_list' %}?investigator={{ r.inv.pk }}&open=on">{{ r.inv.sign_name }}</a><div class="text-xs text-slate-400">{{ r.inv.rank_full }}</div>{% else %}<a href="{% url 'case_list' %}?investigator=none&open=on" class="font-medium text-amber-700">ยังไม่ได้ผูกผู้ลงนาม</a>{% endif %}</td>
           <td class="text-right tabular-nums">{{ r.total|intcomma }}</td>
-          <td class="min-w-[140px]"><div class="flex items-center gap-2"><div class="h-1.5 flex-1 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ r.open|percent:r.total }}%"></div></div><span class="w-8 text-right tabular-nums">{{ r.open|intcomma }}</span></div></td>
+          <td class="min-w-[140px]"><div class="flex items-center gap-2"><div class="h-1.5 flex-1 rounded-full bg-slate-100"><div class="h-1.5 rounded-full grow-x bg-indigo-500" style="width: {{ r.open|percent:r.total }}%"></div></div><span class="w-8 text-right tabular-nums">{{ r.open|intcomma }}</span></div></td>
           <td class="text-right tabular-nums">{{ r.never|intcomma }}</td>
           <td class="text-right tabular-nums">{{ r.waiting|intcomma }}</td>
           <td class="text-right tabular-nums {% if r.absent %}font-semibold text-rose-700{% endif %}">{{ r.absent|intcomma }}</td>
@@ -97,7 +97,7 @@
         <div><div class="text-xl font-bold text-emerald-700">{{ call_stats.done }}</div><div class="text-xs text-slate-500">เสร็จแล้ว</div></div>
         <div><div class="text-xl font-bold text-indigo-700">{{ call_stats.today }}</div><div class="text-xs text-slate-500">โทรวันนี้</div></div>
       </div>
-      <div class="mt-3 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full bg-emerald-500" style="width: {{ call_stats.done|percent:call_stats.assigned }}%"></div></div>
+      <div class="mt-3 h-1.5 rounded-full bg-slate-100"><div class="h-1.5 rounded-full grow-x bg-emerald-500" style="width: {{ call_stats.done|percent:call_stats.assigned }}%"></div></div>
     </a>
     {% endif %}
     <div class="card text-sm text-slate-600">

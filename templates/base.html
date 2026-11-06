@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   {% if logo_version %}<link rel="icon" href="{% url 'branding_logo' %}?v={{ logo_version }}">{% endif %}
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
+  <script src="{% static 'js/ui.js' %}" defer></script>
 </head>
 <body class="h-full" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 {% if user.is_authenticated %}
@@ -72,13 +73,14 @@
   </div>
   {% endif %}
 
-  <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+  <main class="page-enter mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
     {% if messages %}
     <div class="mb-5 space-y-2">
       {% for m in messages %}
-      <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% elif m.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">
+      <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% elif m.tags == 'success' %}alert-success{% else %}alert-info{% endif %}" role="{% if m.tags == 'error' %}alert{% else %}status{% endif %}" data-alert="{% if m.tags == 'success' %}auto{% else %}stay{% endif %}">
         {% if m.tags == 'success' %}{% icon "check" "h-5 w-5 shrink-0" %}{% elif m.tags == 'error' or m.tags == 'warning' %}{% icon "alert" "h-5 w-5 shrink-0" %}{% else %}{% icon "info" "h-5 w-5 shrink-0" %}{% endif %}
         <div>{{ m }}</div>
+        <button type="button" class="alert-close" aria-label="ปิดข้อความ">{% icon "x" "h-4 w-4" %}</button>
       </div>
       {% endfor %}
     </div>

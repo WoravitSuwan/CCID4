@@ -3,22 +3,22 @@
 <div class="mb-2 grid grid-cols-2 gap-3 lg:grid-cols-4">
   <a class="stat block" href="{% if link %}?{% query_replace tab='all' page='' %}{% else %}{% url 'calls_queue' %}?tab=all{% endif %}">
     <div class="stat-label">คดีทั้งหมด</div>
-    <div class="stat-value">{{ n.all|intcomma }}</div>
+    <div class="stat-value"><span data-countup>{{ n.all|intcomma }}</span></div>
     <div class="text-xs text-slate-500">โทรเสร็จสิ้น {{ n.called|intcomma }} + ยังไม่ได้โทร {{ n.never|intcomma }}</div>
   </a>
   <a class="stat block" href="{% if link %}?{% query_replace tab='called' page='' %}{% else %}{% url 'calls_queue' %}?tab=called{% endif %}">
     <div class="stat-label">โทรเสร็จสิ้น</div>
-    <div class="stat-value">{{ n.called|intcomma }} <span class="text-sm font-normal text-slate-400">{{ n.called|percent:all }}%</span></div>
+    <div class="stat-value"><span data-countup>{{ n.called|intcomma }}</span> <span class="text-sm font-normal text-slate-400">{{ n.called|percent:all }}%</span></div>
     <div class="text-xs text-slate-500">ติดต่อได้ {{ n.reached|intcomma }} + ติดต่อไม่ได้ {{ n.not_reached|intcomma }}</div>
   </a>
   <a class="stat block" href="{% if link %}?{% query_replace tab='reached' page='' %}{% else %}{% url 'calls_queue' %}?tab=reached{% endif %}">
     <div class="stat-label">ติดต่อได้</div>
-    <div class="stat-value" style="color: var(--series-1, #2a78d6)">{{ n.reached|intcomma }}</div>
+    <div class="stat-value" style="color: var(--series-1, #2a78d6)"><span data-countup>{{ n.reached|intcomma }}</span></div>
     <div class="text-xs text-slate-500">ประสงค์ {{ n.want|intcomma }} + ไม่ประสงค์ {{ n.not_want|intcomma }}{% if n.undecided %} + ยังไม่ระบุ {{ n.undecided|intcomma }}{% endif %}</div>
   </a>
   <a class="stat block ring-2 ring-orange-200" href="{% if link %}?{% query_replace tab='not_reached' page='' %}{% else %}{% url 'calls_queue' %}?tab=not_reached{% endif %}">
     <div class="stat-label">ติดต่อไม่ได้ → ออกหมายเรียก</div>
-    <div class="stat-value" style="color: var(--series-2, #eb6834)">{{ n.not_reached|intcomma }}</div>
+    <div class="stat-value" style="color: var(--series-2, #eb6834)"><span data-countup>{{ n.not_reached|intcomma }}</span></div>
     <div class="text-xs text-slate-500">รอออกหมาย {{ n.to_issue|intcomma }} + ออกหมายแล้ว {{ n.issued|intcomma }}{% if n.closed_nr %} + คดีสิ้นสุดแล้ว {{ n.closed_nr|intcomma }}{% endif %}</div>
   </a>
 </div>

@@ -35,7 +35,7 @@
     <div class="space-y-4">
       <div class="text-sm text-slate-600">สิ้นสุดแล้ว <b class="tabular-nums" style="color: var(--series-1)">{{ p.final|intcomma }}</b> จาก {{ p.total|intcomma }} คดี ({{ p.final_pct }}%) · ยังไม่สิ้นสุด <b class="tabular-nums text-slate-900">{{ p.open|intcomma }}</b></div>
       <div>
-        <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label="สิ้นสุดแล้ว {{ p.final_pct }}%"><div class="h-3 rounded-full" style="width: {{ p.final_pct }}%; background: var(--series-1)"></div></div>
+        <div class="h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label="สิ้นสุดแล้ว {{ p.final_pct }}%"><div class="h-3 rounded-full grow-x" style="width: {{ p.final_pct }}%; background: var(--series-1)"></div></div>
         <div class="mt-1.5 text-xs text-slate-500">สิ้นสุดแล้ว {{ p.final|intcomma }} = ไม่ประสงค์ดำเนินคดี {{ p.final_not_want|intcomma }} + สถานะคดีสิ้นสุด (อื่นๆ) {{ p.final_status|intcomma }}</div>
       </div>
       {% if p.closed %}
@@ -69,12 +69,12 @@
 
 <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">ในช่วงที่เลือก</h2>
 <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
-  <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value">{{ period.calls|intcomma }}</div><div class="text-xs text-slate-400">{{ period.cases_called|intcomma }} คดี</div></div>
-  <div class="stat block"><div class="stat-label">ติดต่อได้</div><div class="stat-value">{{ period.reached|intcomma }}</div><div class="text-xs text-slate-400">{{ period.reach_rate }}% ของการโทร</div></div>
-  <div class="stat block"><div class="stat-label">ติดต่อไม่ได้</div><div class="stat-value">{{ period.not_reached|intcomma }}</div></div>
-  <div class="stat block"><div class="stat-label">นัดเข้าพบ พงส.</div><div class="stat-value">{{ period.appointed|intcomma }}</div></div>
-  <div class="stat block"><div class="stat-label">ออกหมายเรียก</div><div class="stat-value">{{ period.summonses|intcomma }}</div></div>
-  <div class="stat block"><div class="stat-label">บันทึกเลข EMS</div><div class="stat-value">{{ period.ems|intcomma }}</div></div>
+  <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ period.calls|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.cases_called|intcomma }} คดี</div></div>
+  <div class="stat block"><div class="stat-label">ติดต่อได้</div><div class="stat-value"><span data-countup>{{ period.reached|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.reach_rate }}% ของการโทร</div></div>
+  <div class="stat block"><div class="stat-label">ติดต่อไม่ได้</div><div class="stat-value"><span data-countup>{{ period.not_reached|intcomma }}</span></div></div>
+  <div class="stat block"><div class="stat-label">นัดเข้าพบ พงส.</div><div class="stat-value"><span data-countup>{{ period.appointed|intcomma }}</span></div></div>
+  <div class="stat block"><div class="stat-label">ออกหมายเรียก</div><div class="stat-value"><span data-countup>{{ period.summonses|intcomma }}</span></div></div>
+  <div class="stat block"><div class="stat-label">บันทึกเลข EMS</div><div class="stat-value"><span data-countup>{{ period.ems|intcomma }}</span></div></div>
 </div>
 
 <div class="mb-6 grid gap-5 xl:grid-cols-3">
@@ -92,7 +92,7 @@
     <ul class="space-y-2.5 text-sm">
       {% for o in outcomes %}
       <li><div class="flex justify-between gap-2"><span class="truncate text-slate-700" title="{{ o.label }}">{{ o.label }}</span><span class="tabular-nums text-slate-900">{{ o.n|intcomma }}</span></div>
-        <div class="mt-1 h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full" style="width: {{ o.pct }}%; background: {% if o.reached %}var(--series-1){% else %}var(--series-2){% endif %}"></div></div></li>
+        <div class="mt-1 h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full grow-x" style="width: {{ o.pct }}%; background: {% if o.reached %}var(--series-1){% else %}var(--series-2){% endif %}"></div></div></li>
       {% endfor %}
     </ul>
     <div class="mt-3 flex gap-4 text-xs text-slate-500"><span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" style="background:var(--series-1)"></span>ติดต่อได้</span><span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" style="background:var(--series-2)"></span>ติดต่อไม่ได้</span></div>
