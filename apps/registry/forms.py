@@ -53,7 +53,8 @@ class CaseFilterForm(StyledForm):
         ("all", "ทั้งหมด"), ("open", "ยังไม่สิ้นสุด"), ("final", "สิ้นสุดแล้ว")])
     sort = forms.ChoiceField(label="เรียงตาม", required=False, choices=[
         ("-date", "วันที่รับแจ้ง ใหม่ → เก่า"), ("date", "วันที่รับแจ้ง เก่า → ใหม่"),
-        ("-updated", "แก้ไขล่าสุด ใหม่ → เก่า"), ("updated", "แก้ไขล่าสุด เก่า → ใหม่")])
+        ("-updated", "แก้ไขล่าสุด ใหม่ → เก่า"), ("updated", "แก้ไขล่าสุด เก่า → ใหม่"),
+        ("damage", "มูลค่าความเสียหาย น้อย → มาก"), ("-damage", "มูลค่าความเสียหาย มาก → น้อย")])
     open = forms.BooleanField(label="ยังไม่สิ้นสุด", required=False)
     incomplete = forms.BooleanField(label="ที่อยู่ไม่ครบ", required=False)
     unmatched = forms.BooleanField(label="จับคู่ไม่ได้", required=False)

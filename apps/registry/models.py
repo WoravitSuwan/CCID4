@@ -376,10 +376,6 @@ STATUS_OPEN_CASE = Q(status__isnull=True) | Q(status__is_final=False)
 
 
 class CaseQuerySet(models.QuerySet):
-    def real(self):
-        """Register cases only (ข้อมูลทดลอง left out of every list and number)."""
-        return self.filter(is_test=False)
-
     def with_flags(self):
         override = AddressOverride.objects.filter(receipt_no=OuterRef("receipt_no"))
         return self.annotate(
@@ -388,10 +384,10 @@ class CaseQuerySet(models.QuerySet):
         )
 
     def not_final(self):
-        return self.real().filter(STATUS_OPEN_CASE).exclude(NOT_WANT_CASE)
+        return self.filter(STATUS_OPEN_CASE).exclude(NOT_WANT_CASE)
 
     def final(self):
-        return self.real().filter(Q(status__is_final=True) | NOT_WANT_CASE)
+        return self.filter(Q(status__is_final=True) | NOT_WANT_CASE)
 
     def unmatched(self):
         return self.filter(complainant__isnull=True)
@@ -467,8 +463,6 @@ class Case(models.Model):
     daily_log_at = models.DateTimeField("ประจำวัน (วันเวลา)", null=True, blank=True)
     remark = models.TextField("หมายเหตุ", blank=True)
     source_sheet = models.TextField("ชีตต้นทาง", blank=True, db_index=True)
-    # A made-up case staff add to try the call page (ข้อมูลทดลอง): shown apart, never counted, deletable
-    is_test = models.BooleanField("ข้อมูลทดลอง", default=False, db_index=True)
 
     last_batch = models.ForeignKey("imports.ImportBatch", null=True, blank=True,
                                    on_delete=models.SET_NULL, related_name="+")

@@ -5,7 +5,7 @@ import io
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -40,7 +40,7 @@ PAGE_SIZE = 50
 # --------------------------------------------------------------------------- dashboard
 def dashboard(request):
     now = timezone.now()
-    cases = Case.objects.real()
+    cases = Case.objects.all()
     open_cases = cases.not_final()
     latest_issued = Summons.objects.filter(result=SummonsResult.ISSUED)
     stats = {
@@ -78,8 +78,8 @@ def dashboard(request):
     per_inv.sort(key=lambda r: -r["open"])
     from apps.calls.models import REACHED, CallAssignment, CallAttempt
 
-    today_calls = CallAttempt.objects.exclude(case__is_test=True).filter(called_at__date=timezone.localdate())
-    pool = CallAssignment.objects.exclude(case__is_test=True)
+    today_calls = CallAttempt.objects.filter(called_at__date=timezone.localdate())
+    pool = CallAssignment.objects.all()
     call_stats = {
         "assigned": pool.count(),
         "done": pool.filter(is_done=True).count(),
@@ -109,7 +109,7 @@ def filtered_cases(request):
     case_types = list(Case.objects.exclude(case_type="").values_list("case_type", flat=True)
                       .distinct().order_by("case_type"))
     form = CaseFilterForm(request.GET or None, years=years, case_types=case_types)
-    qs = Case.objects.real().select_related("status", "unit", "complainant", "investigator_alias__investigator")
+    qs = Case.objects.select_related("status", "unit", "complainant", "investigator_alias__investigator")
     if form.is_valid():
         d = form.cleaned_data
         if d["q"]:
@@ -159,6 +159,8 @@ def filtered_cases(request):
         "date": ["report_date", "updated_at", "receipt_no"],
         "-updated": ["-updated_at", "receipt_no"],
         "updated": ["updated_at", "receipt_no"],
+        "damage": [F("damage_amount").asc(nulls_last=True), "receipt_no"],  # no amount: last
+        "-damage": [F("damage_amount").desc(nulls_last=True), "receipt_no"],
     }[sort]
     return form, qs.order_by(*order)
 

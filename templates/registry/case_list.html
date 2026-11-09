@@ -77,7 +77,7 @@
           <div class="text-xs text-slate-500">{{ c.report_date|thai_date:"full" }}{% if c.criminal_case_no %} · คดีอาญา {{ c.criminal_case_no }}{% endif %}</div>
         </td>
         <td><div class="font-medium text-slate-800">{% if c.complainant %}{{ c.complainant.full_name }}{% else %}{{ c.victim_name }}{% endif %}</div><div class="text-xs text-slate-400">{{ c.unit_raw }}</div></td>
-        <td class="max-w-[16rem]"><div class="truncate" title="{{ c.case_type }}">{{ c.case_type }}</div></td>
+        <td class="max-w-[16rem]"><div class="truncate" title="{{ c.case_type }}">{{ c.case_type }}</div>{% if c.damage_amount is not None %}<div class="text-xs tabular-nums {% if form.current_sort == 'damage' or form.current_sort == '-damage' %}font-semibold text-indigo-700{% else %}text-slate-500{% endif %}">มูลค่า {{ c.damage_amount|money }} บาท</div>{% endif %}</td>
         <td class="whitespace-nowrap">{% if c.investigator %}{{ c.investigator.sign_name }}{% else %}<span class="inline-flex items-center gap-1 text-amber-700" title="ยังไม่ได้ผูกผู้ลงนาม">{% icon "alert" "h-3.5 w-3.5" %}{{ c.investigator_raw|default:"-" }}</span>{% endif %}</td>
         <td class="whitespace-nowrap">{% include "registry/_status_cell.html" with can_edit=can_bulk_status %}</td>
         <td class="text-center">{% if c.summons_count %}<span class="badge badge-green">{{ c.summons_count }}</span>{% else %}<span class="text-slate-300">–</span>{% endif %}</td>

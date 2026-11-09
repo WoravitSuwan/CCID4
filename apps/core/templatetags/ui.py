@@ -116,12 +116,3 @@ def page_window(page, around=1):
         out.append(n)
         last = n
     return out
-
-
-@register.inclusion_tag("calls/_trial_box.html", takes_context=True)
-def trial_box(context):
-    """ข้อมูลทดลอง on the first page: made-up cases to try calling, shown apart and never counted."""
-    from apps.calls.trial import trial_cases
-
-    request = context.get("request")
-    return {"trials": list(trial_cases()), "request": request, "csrf_token": context.get("csrf_token")}

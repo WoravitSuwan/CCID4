@@ -1,6 +1,0 @@
-<form method="post" action="{% url 'calls_trial_add' %}" class="mt-2 flex flex-wrap items-end gap-2 rounded-xl bg-white p-3 ring-1 ring-violet-200">
-  <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
-  <label class="text-xs text-slate-600">ชื่อ-นามสกุล<input class="input mt-0.5 block w-56 py-2" name="name" required placeholder="เช่น นางสาวทดลอง ใจดี"></label>
-  <label class="text-xs text-slate-600">เบอร์โทร<input class="input mt-0.5 block w-44 py-2 font-mono" name="phone" required inputmode="tel" placeholder="08xxxxxxxx"></label>
-  <button class="btn btn-primary py-2">เพิ่มข้อมูลทดลอง</button>
-</form>

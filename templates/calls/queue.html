@@ -17,7 +17,6 @@
 <style>
   .viz-root { --series-1: #2a78d6; --series-2: #eb6834; --muted-node: #94a3b8; --text-muted: #64748b; }
 </style>
-{% trial_box %}
 {% include "calls/_summary_tiles.html" with n=counts link=True %}
 <div class="viz-root card mb-5">
   <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ภาพรวมคดี → ออกหมายเรียก</h2>
@@ -57,6 +56,8 @@
     <select name="result" class="input w-full py-2 sm:w-52" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
       {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
       {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+    <select name="sort" class="input w-full py-2 sm:w-80" onchange="this.form.submit()" aria-label="เรียงตาม">
+      {% for v, l in sorts %}<option value="{{ v }}" {% if sort == v %}selected{% endif %}>เรียง: {{ l }}</option>{% endfor %}</select>
     {% if filtered %}<a class="btn py-2" href="?tab={{ tab }}">ล้างตัวกรอง</a><span class="self-center text-xs text-amber-700">ตัวเลขทั้งหน้านับเฉพาะคดีที่ตรงกับคำค้น/ตัวกรอง</span>{% endif %}
   </form>
 </div>
@@ -90,7 +91,7 @@
     {% for a in page %}
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
         {% if can_issue %}<td data-label="เลือก"><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
-        <td class="whitespace-nowrap" data-label="เลขรับแจ้ง"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div>
+        <td class="whitespace-nowrap" data-label="เลขรับแจ้ง"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a><div class="text-xs text-slate-400">รับแจ้ง {{ a.case.report_date|thai_date }}</div>{% if a.case.damage_amount is not None %}<div class="text-xs tabular-nums {% if sort == 'damage' or sort == '-damage' %}font-semibold text-indigo-700{% else %}text-slate-500{% endif %}">มูลค่า {{ a.case.damage_amount|money }} บาท</div>{% endif %}
           {% with other=a|opened_by_other:user %}{% if other %}<span class="badge badge-amber mt-1" title="{{ other.display_name }} เปิดคดีนี้อยู่">{% icon "phone" "h-3 w-3" %} {{ other.first_name|default:other.username }} กำลังเปิดอยู่</span>{% endif %}{% endwith %}</td>
         <td class="min-w-[9rem] max-w-[15rem]" data-label="ผู้เสียหาย"><div class="font-medium">{% if a.case.victim_name %}{{ a.case.victim_name }}{% elif a.case.complainant %}{{ a.case.complainant.full_name }}{% else %}-{% endif %}</div>{% if a.case.case_type %}<div class="truncate text-xs text-slate-400 2xl:hidden" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div>{% endif %}</td>
         <td class="whitespace-nowrap font-mono" data-label="เบอร์โทร">{% if a.case.victim_phone %}{{ a.case.victim_phone }}{% elif a.case.complainant.phone %}{{ a.case.complainant.phone }}{% else %}-{% endif %}</td>
