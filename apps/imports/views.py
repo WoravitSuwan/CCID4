@@ -144,6 +144,9 @@ def import_confirm(request, pk):
     if batch.status != BatchStatus.ANALYZED:
         messages.error(request, "ไฟล์นี้ยังไม่พร้อมนำเข้า")
         return redirect("import_preview", pk=pk)
+    if (batch.summary or {}).get("looks_like_update"):
+        messages.error(request, "ไฟล์นี้เป็นไฟล์จากระบบใหญ่ ให้อัปโหลดใหม่โดยเลือก \"อัปเดตจากระบบใหญ่ (ไฟล์รายสัปดาห์)\"")
+        return redirect("import_preview", pk=pk)
     batch.status = BatchStatus.COMMITTING
     batch.progress = 0
     batch.save(update_fields=["status", "progress"])

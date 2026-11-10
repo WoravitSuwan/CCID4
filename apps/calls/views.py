@@ -1,4 +1,5 @@
 import datetime as dt
+from collections import Counter
 import io
 from pathlib import Path
 
@@ -466,3 +467,45 @@ def export_calls(request):
                         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp["Content-Disposition"] = content_disposition(f"ผลการติดต่อผู้เสียหาย_{timezone.localdate():%Y%m%d}.xlsx")
     return resp
+
+
+# --------------------------------------------------------------------------- report for the big system
+def status_report(request):
+    """ตรวจสอบการอัปเดตสถานะสิ้นสุด: page, Excel (?format=xlsx) and PDF (?format=pdf)."""
+    import tempfile
+
+    from apps.core.downloads import content_disposition
+    from apps.documents.pdf import PdfConversionError, convert_many, soffice_available
+
+    from . import status_report as report
+
+    everything = report.rows()
+    skip = [s for s in request.GET.getlist("skip") if s]
+    data = [r for r in everything if r["status"] not in skip] if skip else everything
+    for i, r in enumerate(data, start=1):
+        r["no"] = i
+    today = timezone.localdate()
+    fmt = request.GET.get("format", "")
+    if fmt in ("xlsx", "pdf"):
+        with tempfile.TemporaryDirectory() as tmp:
+            xlsx = report.write_xlsx(data, Path(tmp) / f"{report.file_stem(today)}.xlsx", today)
+            if fmt == "pdf":
+                try:
+                    pdf = convert_many([xlsx], tmp, export_filter="calc_pdf_Export")[0]
+                except PdfConversionError as exc:
+                    messages.error(request, f"สร้าง PDF ไม่ได้: {exc} (ดาวน์โหลดเป็น Excel แทนได้)")
+                    return redirect("status_report")
+                body, ctype, name = pdf.read_bytes(), "application/pdf", pdf.name
+            else:
+                body = xlsx.read_bytes()
+                ctype, name = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx.name
+        log(request, AuditAction.EXPORT, None, f"ส่งออก{report.TITLE} {len(data):,} คดี ({fmt.upper()})")
+        resp = HttpResponse(body, content_type=ctype)
+        resp["Content-Disposition"] = content_disposition(name, inline=fmt == "pdf" and "inline" in request.GET)
+        return resp
+    return render(request, "calls/status_report.html", {
+        "rows": data, "title": report.TITLE, "today": today, "pdf_ok": soffice_available(),
+        "by_investigator": Counter(r["investigator"] for r in data).most_common(),
+        "statuses": [(name, n, name in skip) for name, n in Counter(r["status"] for r in everything).most_common()],
+        "skip": skip, "query": request.GET.urlencode(),
+    })

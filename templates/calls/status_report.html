@@ -1,0 +1,62 @@
+{% extends "base.html" %}{% load thai ui humanize %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="page-sub">คดีที่ผู้เสียหายแจ้งไม่ประสงค์ดำเนินคดี แต่สถานะในระบบใหญ่ (จากไฟล์ที่นำเข้าล่าสุด) ยังไม่เป็นสิ้นสุด · ข้อมูล ณ {{ today|thai_date:"full" }}</p>
+  </div>
+  <div class="ml-auto flex flex-wrap gap-2">
+    {% if pdf_ok %}<a class="btn btn-primary {% if not rows %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=pdf">{% icon "download" "h-4 w-4" %} ดาวน์โหลด PDF</a>{% endif %}
+    <a class="btn {% if not pdf_ok %}btn-primary{% endif %} {% if not rows %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=xlsx">{% icon "download" "h-4 w-4" %} Excel</a>
+  </div>
+</div>
+
+<div class="mb-5 grid gap-3 md:grid-cols-[16rem_1fr]">
+  <div class="stat block"><div class="stat-label">ต้องแก้เป็นสิ้นสุด</div><div class="stat-value"><span data-countup>{{ rows|length|intcomma }}</span> <span class="text-sm font-normal text-slate-400">คดี</span></div></div>
+  <div class="card text-sm text-slate-600">
+    <div class="font-medium text-slate-800">ขั้นตอนทุกสัปดาห์</div>
+    <ol class="mt-1 list-decimal space-y-0.5 pl-5">
+      <li>นำเข้าไฟล์จากระบบใหญ่ ที่ <a href="{% url 'import_home' %}">นำเข้าข้อมูล</a> → เลือก "อัปเดตจากระบบใหญ่ (ไฟล์รายสัปดาห์)" (ผู้ดูแลระบบ)</li>
+      <li>ดาวน์โหลด PDF หน้านี้ ส่งให้ผู้แก้สถานะในระบบใหญ่</li>
+      <li>สัปดาห์ถัดไปนำเข้าไฟล์ใหม่ คดีที่แก้แล้วเป็นสิ้นสุดจะหายจากรายการเอง</li>
+    </ol>
+    {% if not pdf_ok %}<p class="mt-2 text-amber-700">เครื่องนี้ไม่มี LibreOffice จึงสร้าง PDF ไม่ได้ ดาวน์โหลด Excel แล้วสั่งพิมพ์เป็น PDF แทนได้</p>{% endif %}
+  </div>
+</div>
+
+{% if statuses %}
+<form method="get" class="mb-3 flex flex-wrap items-center gap-2 text-sm" data-no-busy>
+  <span class="text-slate-500">สถานะปัจจุบันที่รวมในรายงาน:</span>
+  {% for name, n, skipped in statuses %}
+  <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 ring-1 {% if skipped %}text-slate-400 ring-slate-200 line-through{% else %}bg-indigo-50 text-indigo-800 ring-indigo-200{% endif %}">
+    <input type="checkbox" class="check" name="skip" value="{{ name }}" {% if skipped %}checked{% endif %} onchange="this.form.submit()" aria-label="ไม่รวม {{ name }}"> ไม่รวม {{ name }} ({{ n }})</label>
+  {% endfor %}
+</form>
+{% endif %}
+{% if by_investigator %}
+<div class="mb-3 flex flex-wrap gap-2 text-sm">{% for name, n in by_investigator %}<span class="badge badge-gray">{{ name }} · {{ n }}</span>{% endfor %}</div>
+{% endif %}
+
+<div class="table-wrap">
+  <table class="table table-cards">
+    <thead><tr><th>ลำดับ</th><th>พนักงานสอบสวน</th><th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th class="text-right">มูลค่าความเสียหาย (บาท)</th><th>สถานะในระบบปัจจุบัน</th><th>วันที่แจ้งไม่ประสงค์ฯ</th><th>ต้องแก้เป็น</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td data-label="ลำดับ" class="tabular-nums text-slate-500">{{ r.no }}</td>
+        <td data-label="พนักงานสอบสวน" class="whitespace-nowrap">{{ r.investigator }}</td>
+        <td data-label="เลขรับแจ้ง"><a class="font-mono" href="{% url 'call_case' r.case.pk %}">{{ r.receipt }}</a></td>
+        <td data-label="ผู้เสียหาย">{{ r.name|default:"-" }}</td>
+        <td data-label="มูลค่า (บาท)" class="text-right tabular-nums">{{ r.amount|money }}</td>
+        <td data-label="สถานะปัจจุบัน" class="whitespace-nowrap">{{ r.status }}</td>
+        <td data-label="แจ้งไม่ประสงค์" class="whitespace-nowrap">{{ r.date_text|default:"-" }}</td>
+        <td data-label="ต้องแก้เป็น"><span class="badge badge-gray">{{ r.target }}</span></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8" class="py-14 text-center text-slate-500">ไม่มีคดีที่ต้องแก้สถานะ · ทุกคดีที่ไม่ประสงค์ดำเนินคดีเป็นสิ้นสุดในระบบใหญ่แล้ว</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

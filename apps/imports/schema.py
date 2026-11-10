@@ -64,12 +64,39 @@ REGISTER_COLUMNS = [
     ("remark", "หมายเหตุ", False),
 ]
 
+# Weekly export of the big system (sheet "Grid", every unit of บก.สอท.4): one date column (วว/ดด/ปปปป), no
+# contact log. It only updates cases already here and adds new cases of our unit (see services.analyze).
+UPDATE_COLUMNS = [
+    ("receipt_no", "เลขรับแจ้ง", True),
+    ("criminal_case_no", "เลขคดีอาญา", False),
+    ("report_day", "วันที่รับแจ้ง", False),
+    ("victim_name", "ผู้เสียหาย", False),
+    ("gender", "เพศ", False),
+    ("age", "อายุ", False),
+    ("case_type", "ประเภทคดี", False),
+    ("case_type_l1", "ประเภทคดีระดับ 1", False),
+    ("case_type_l2", "ประเภทคดีระดับ 2", False),
+    ("case_type_l3", "ประเภทคดีระดับ 3", False),
+    ("case_group", "ประเภทกลุ่มคดี", False),
+    ("detail", "รายละเอียด", False),
+    ("damage_amount", "มูลค่าความเสียหาย", False),
+    ("bureau", "บช.", False),
+    ("division", "บก./ภ.จว.", False),
+    ("unit_raw", "หน่วยที่รับผิดชอบ", True),
+    ("investigator_raw", "พนักงานสอบสวน", False),
+    ("detective", "พนักงานสืบสวน", False),
+    ("status_name", "สถานะ", True),
+    ("victim_phone", "เบอร์โทรศัพท์ผู้เสียหาย", False),
+    ("bank_ref", "เลขอ้างอิงธนาคาร", False),
+]
+
 COLUMNS = {
     ImportKind.COMPLAINANTS: COMPLAINANT_COLUMNS,
     ImportKind.REGISTER: REGISTER_COLUMNS,
+    ImportKind.UPDATE: UPDATE_COLUMNS,
 }
 
-DEFAULT_SHEET = {ImportKind.COMPLAINANTS: "Grid"}
+DEFAULT_SHEET = {ImportKind.COMPLAINANTS: "Grid", ImportKind.UPDATE: "Grid"}
 
 
 def header_key(text) -> str:

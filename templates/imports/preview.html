@@ -10,7 +10,23 @@
 {% else %}
   {% with s=batch.summary %}
   {% if batch.status == 'done' %}<div class="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">นำเข้าสำเร็จ{% if s.linked %} · จับคู่คดีกับผู้แจ้งเพิ่ม {{ s.linked|intcomma }} คดี{% endif %}</div>{% endif %}
-  {% if s.other_unit_rows or s.remove_count or s.kept_with_summons %}
+  {% if batch.kind == 'update' %}
+  <div class="mb-4 rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950">
+    <b>อัปเดตจากระบบใหญ่</b> · อัปเดตคดีที่มีอยู่ {{ s.matched|intcomma }} คดี (เปลี่ยน {{ s.updated|intcomma }} · เหมือนเดิม {{ s.unchanged|intcomma }})
+    · เพิ่มคดีใหม่ของ {{ s.own_unit }} {{ s.new|intcomma }} คดี
+    {% if s.other_unit_rows %}· ไม่นำเข้า {{ s.other_unit_rows|intcomma }} แถว (คดีหน่วยอื่น หรือไม่ระบุหน่วยและไม่มีในระบบ){% endif %}
+    <div class="mt-1 text-indigo-900/80">ไม่ลบคดีใด ไม่แตะบันทึกการติดต่อและผลการโทร ช่องที่ไฟล์เว้นว่างไว้จะคงค่าเดิม</div>
+    {% if batch.status == 'done' %}<a class="btn btn-primary btn-sm mt-2" href="{% url 'status_report' %}">ดูคดีที่ต้องแก้เป็นสิ้นสุดในระบบใหญ่ →</a>{% endif %}
+    {% if s.status_changes %}<div class="mt-2 font-medium">สถานะที่เปลี่ยน{% if s.to_final %} (เป็นสิ้นสุด {{ s.to_final|intcomma }} คดี){% endif %}:</div>
+    <ul class="list-disc pl-5">{% for c in s.status_changes|slice:":12" %}<li>{{ c }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% elif s.looks_like_update %}
+  <div class="mb-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900" role="alert">
+    <b>ไฟล์นี้ดูเหมือนไฟล์จากระบบใหญ่ (ไม่มีบันทึกการติดต่อ และส่วนใหญ่ไม่ระบุหน่วย)</b> ถ้านำเข้าเป็น "ทะเบียนคดี" อาจเพิ่มคดีของหน่วยอื่นเข้ามาเป็นจำนวนมาก
+    · กรุณายกเลิก แล้วอัปโหลดใหม่โดยเลือกประเภท <b>"อัปเดตจากระบบใหญ่ (ไฟล์รายสัปดาห์)"</b>
+  </div>
+  {% endif %}
+  {% if batch.kind != 'update' and s.other_unit_rows or s.remove_count or s.kept_with_summons %}
   <div class="mb-4 rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950">
     <b>ระบบนี้ใช้เฉพาะ {{ s.own_unit }}</b>
     {% if s.other_unit_rows %}<div>ไม่นำเข้าคดีของหน่วยอื่น {{ s.other_unit_rows|intcomma }} แถว:{% for name, n in s.other_units.items %} {{ name }} {{ n|intcomma }}{% if not forloop.last %} ·{% endif %}{% endfor %}</div>{% endif %}
@@ -54,7 +70,7 @@
   {% endif %}
   {% if batch.status == 'analyzed' %}
   <div class="mt-4 flex gap-2">
-    <form method="post" action="{% url 'import_confirm' batch.pk %}">{% csrf_token %}<button class="btn btn-primary">ยืนยันนำเข้า</button></form>
+    <form method="post" action="{% url 'import_confirm' batch.pk %}">{% csrf_token %}<button class="btn btn-primary" {% if s.looks_like_update %}disabled title="เลือกประเภทไฟล์ผิด"{% endif %}>ยืนยันนำเข้า</button></form>
     <a class="btn" href="{% url 'import_mapping' batch.pk %}">ย้อนกลับ</a>
     <form method="post" action="{% url 'import_cancel' batch.pk %}">{% csrf_token %}<button class="btn">ยกเลิก</button></form>
   </div>

@@ -64,6 +64,7 @@ urlpatterns = [
     path("calls/", cv.queue, name="calls_queue"),
     path("calls/assign/", cv.assign_view, name="calls_assign"),
     path("calls/issue-all/", cv.issue_filtered, name="calls_issue_filtered"),
+    path("reports/status-final/", cv.status_report, name="status_report"),
     path("calls/assign/bulk/", cv.assign_bulk, name="calls_assign_bulk"),
     path("calls/export.xlsx", cv.export_calls, name="calls_export"),
     path("calls/<int:pk>/", cv.call_case, name="call_case"),

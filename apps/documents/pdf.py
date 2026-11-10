@@ -58,8 +58,9 @@ def soffice_available() -> bool:
     return soffice_path() is not None
 
 
-def convert_many(docx_paths, out_dir) -> list[Path]:
-    """Convert several .docx files in ONE LibreOffice run. Returns the PDF paths."""
+def convert_many(docx_paths, out_dir, export_filter="writer_pdf_Export") -> list[Path]:
+    """Convert several .docx files in ONE LibreOffice run. Returns the PDF paths.
+    A spreadsheet needs export_filter="calc_pdf_Export"."""
     docx_paths = [Path(p) for p in docx_paths]
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -72,7 +73,7 @@ def convert_many(docx_paths, out_dir) -> list[Path]:
     profile = Path(tempfile.gettempdir()) / f"lo_profile_{uuid.uuid4().hex}"
     cmd = [
         soffice, f"-env:UserInstallation={profile.as_uri()}", "--headless", "--norestore",
-        "--nolockcheck", "--convert-to", "pdf:writer_pdf_Export", "--outdir", str(out_dir),
+        "--nolockcheck", "--convert-to", f"pdf:{export_filter}", "--outdir", str(out_dir),
         *[str(p) for p in docx_paths],
     ]
     try:

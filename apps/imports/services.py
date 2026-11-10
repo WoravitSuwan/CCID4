@@ -18,7 +18,7 @@ from apps.core.thai_format import normalize_year_to_ce
 from apps.registry.address import clean_text
 from apps.registry.defaults import FINAL_BY_DEFAULT
 from apps.registry.models import (
-    Case, Complainant, InvestigatorAlias, Status, Unit, is_own_unit, link_register_names, other_unit_cases,
+    Case, Complainant, InvestigatorAlias, Status, Unit, is_own_unit, link_register_names, other_unit_cases, unit_key,
     normalize_person_key, normalize_receipt_no,
 )
 
@@ -177,6 +177,12 @@ class Analysis:
     per_sheet: Counter = field(default_factory=Counter)
     other_units: Counter = field(default_factory=Counter)  # register rows of another unit: not imported
     other_unit_keys: list = field(default_factory=list)
+    # weekly update from the big system
+    present: list = field(default_factory=list)  # fields the file has (others are never touched)
+    changes_by_key: dict = field(default_factory=dict)  # key -> {field: new value}
+    status_changes: Counter = field(default_factory=Counter)  # (old, new) -> n
+    looks_like_update: bool = False  # a big-system file picked as "ทะเบียนคดี"
+    ranks: dict = field(default_factory=dict)  # investigator key -> full rank written by the big system
     remove_count: int = 0  # cases of another unit already in the system, removed on import
     remove_calls: int = 0
     kept_with_summons: int = 0
@@ -225,14 +231,23 @@ def parse_register_row(raw: dict, mapping: dict, sheet: str, analysis: Analysis,
     year = parse_int(_get(raw, mapping, "report_year"))
     report_date = None
     raw_day = _get(raw, mapping, "report_day")
+    one_column = re.fullmatch(r"\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\s*", str(raw_day or ""))
     if isinstance(raw_day, dt.datetime):
         report_date = raw_day.date()
+    elif isinstance(raw_day, dt.date):
+        report_date = raw_day
+    elif one_column:  # the big system's export: 01/03/2022 (or a Buddhist-era year)
+        d, m, y = (int(x) for x in one_column.groups())
+        try:
+            report_date = dt.date(normalize_year_to_ce(y), m, d)
+        except ValueError:
+            report_date = None
     elif day and month and year:
         try:
             report_date = dt.date(normalize_year_to_ce(year), month, day)
         except ValueError:
             report_date = None
-    if report_date is None:
+    if report_date is None and analysis.kind != ImportKind.UPDATE:  # update: only checked for new cases
         analysis.add_issue(row, IssueType.BAD_DATE, f"วัน/เดือน/ปี = {day}/{month}/{year}")
     values["report_date"] = report_date
     amount, ok = parse_decimal(_get(raw, mapping, "damage_amount"))
@@ -261,6 +276,9 @@ def complainant_issues(analysis: Analysis, row: ParsedRow):
 def analyze(batch: ImportBatch, progress=None) -> Analysis:
     kind = batch.kind
     analysis = Analysis(kind=kind)
+    if kind == ImportKind.UPDATE:
+        analysis.present = [f for f, _h, _r in COLUMNS[kind] if batch.mapping.get(f)]
+        known = set(Case.objects.values_list("receipt_no", flat=True))
     sheets = batch.sheets or [DEFAULT_SHEET.get(kind)] or []
     path = batch.file.path
     for s_index, sheet in enumerate(sheets):
@@ -274,6 +292,20 @@ def analyze(batch: ImportBatch, progress=None) -> Analysis:
             prow = ParsedRow(sheet=sheet, row_number=row_number, key=key, values={})
             if kind == ImportKind.COMPLAINANTS:
                 prow.values = parse_complainant_row(raw, batch.mapping)
+            elif kind == ImportKind.UPDATE:
+                prow.values = parse_register_row(raw, batch.mapping, sheet, analysis, prow)
+                ranked = prow.values["investigator_raw"]
+                prow.values["investigator_raw"] = register_style_name(ranked)
+                rank = _rank_of(ranked)
+                if rank:
+                    analysis.ranks[normalize_person_key(prow.values["investigator_raw"])] = rank
+                unit = prow.values["unit_raw"]
+                # a case already here is ours whatever the export's unit column says (it is often empty);
+                # a case not here yet is added only when the file names our unit
+                if key not in known and not (unit.strip() and is_own_unit(unit)):
+                    analysis.total_rows -= 1
+                    analysis.other_units[unit.strip() or "(ไม่ระบุหน่วย)"] += 1
+                    continue
             else:
                 prow.values = parse_register_row(raw, batch.mapping, sheet, analysis, prow)
                 if not is_own_unit(prow.values["unit_raw"]):  # this system is for one unit only
@@ -298,7 +330,15 @@ def analyze(batch: ImportBatch, progress=None) -> Analysis:
             complainant_issues(analysis, prow)
     if kind == ImportKind.REGISTER:
         _count_other_unit_cases(analysis)
-    _diff(analysis)
+        # a big-system export picked as "ทะเบียนคดี": no contact log, one date column, mostly no unit
+        analysis.looks_like_update = (not batch.mapping.get("contact_log") and not batch.mapping.get("report_month")
+                                      and sum(analysis.other_units.values()) + len(analysis.rows) > 0
+                                      and sum(1 for p in analysis.rows.values() if not p.values["unit_raw"])
+                                      > len(analysis.rows) / 2)
+    if kind == ImportKind.UPDATE:
+        _diff_update(analysis)
+    else:
+        _diff(analysis)
     if progress:
         progress(100)
     return analysis
@@ -438,6 +478,94 @@ def _diff(analysis: Analysis):
             analysis.unchanged += 1
 
 
+UPDATE_TEXT_FIELDS = [f for f in CASE_TEXT_FIELDS if f not in ("seq", "contact_log", "daily_log", "remark")]
+
+
+def register_style_name(raw) -> str:
+    """The big system writes 'พ.ต.ท.หญิงนิติยา เอกวงษา'; the register writes the name only, with หญิง in front
+    for female officers. Same person, same signer."""
+    from apps.registry.signer_import import split_rank
+
+    rank, name = split_rank(clean_text(raw))
+    if not rank:
+        return clean_text(raw)
+    return ("หญิง" if rank.endswith("หญิง") else "") + name
+
+
+def _rank_of(raw) -> str:
+    from apps.registry.signer_import import split_rank
+
+    return split_rank(clean_text(raw))[0]
+
+
+def _same_person(a, b) -> bool:
+    from apps.registry.models import signer_name_from_register
+
+    return normalize_person_key(signer_name_from_register(a)) == normalize_person_key(signer_name_from_register(b))
+
+
+def _diff_update(analysis: Analysis):
+    """Weekly file: what changes for each case already here (only fields the file has, only non-empty values,
+    never the unit or the contact log), and which new cases of our unit are added."""
+    existing = _existing(Case, analysis.rows.keys(), select_related=("status",))
+    present = set(analysis.present)
+    labels = field_labels(ImportKind.REGISTER)
+    labels.update({"report_date": "วันที่รับแจ้ง", "status_name": "สถานะ"})
+    statuses = set(Status.objects.values_list("name", flat=True))
+    aliases = dict(InvestigatorAlias.objects.values_list("key", "investigator_id"))
+    seen_status, seen_alias = set(), set()
+    comp_keys = set()
+    for chunk in _chunks(list(analysis.rows)):
+        comp_keys.update(Complainant.objects.filter(receipt_no__in=chunk).values_list("receipt_no", flat=True))
+    for key, prow in analysis.rows.items():
+        v = prow.values
+        name = v["status_name"]
+        if name and name not in statuses and name not in seen_status:
+            seen_status.add(name)
+            analysis.new_statuses.append(name)
+            analysis.add_issue(prow, IssueType.NEW_STATUS, f"สถานะใหม่ '{name}' (ระบบจะสร้างเป็น 'ยังไม่สิ้นสุด')")
+        inv_key = normalize_person_key(v["investigator_raw"])
+        if inv_key and inv_key not in seen_alias:
+            seen_alias.add(inv_key)
+            if inv_key not in aliases:
+                analysis.new_aliases.append(v["investigator_raw"])
+        obj = existing.get(key)
+        if obj is None:  # a new case of our unit
+            analysis.new_keys.append(key)
+            if v["report_date"] is None:
+                analysis.add_issue(prow, IssueType.BAD_DATE, "ไม่มีวันที่รับแจ้ง")
+            if key not in comp_keys:
+                analysis.unmatched_keys.append(key)
+            continue
+        changes = {}
+        for f in UPDATE_TEXT_FIELDS:
+            if f in present and f != "unit_raw" and v[f] and _norm_cmp(v[f]) != _norm_cmp(getattr(obj, f)):
+                if f == "investigator_raw" and _same_person(v[f], obj.investigator_raw):
+                    continue  # only the rank differs
+                changes[f] = v[f]
+        if "report_day" in present and v["report_date"] and v["report_date"] != obj.report_date:
+            changes["report_date"] = v["report_date"]
+        if "damage_amount" in present and v["damage_amount"] is not None \
+                and _norm_cmp(v["damage_amount"]) != _norm_cmp(obj.damage_amount):
+            changes["damage_amount"] = v["damage_amount"]
+        current = obj.status.name if obj.status_id else ""
+        if name and obj.status_manual_at and name == obj.status_file_value:
+            analysis.manual_status_kept.add(key)  # staff changed it here; the big system still says the old one
+        elif name and (name != current or obj.status_manual_at):
+            changes["status_name"] = name
+            if obj.status_manual_at:
+                analysis.manual_status_released.add(key)
+            if name != current:
+                analysis.status_changes[(current or "-", name)] += 1
+        if changes:
+            analysis.updated_keys.append(key)
+            analysis.changes_by_key[key] = changes
+            for f in changes:
+                analysis.change_counts[labels.get(f, f)] += 1
+        else:
+            analysis.unchanged += 1
+
+
 def _norm_cmp(value):
     if value is None:
         return ""
@@ -475,6 +603,10 @@ def summary_dict(analysis: Analysis) -> dict:
         "remove_count": analysis.remove_count,
         "remove_calls": analysis.remove_calls,
         "kept_with_summons": analysis.kept_with_summons,
+        "looks_like_update": analysis.looks_like_update,
+        "matched": len(analysis.rows) - len(analysis.new_keys) if analysis.kind == ImportKind.UPDATE else None,
+        "status_changes": [f"{old} → {new}: {n:,} คดี" for (old, new), n in analysis.status_changes.most_common()],
+        "to_final": sum(n for (old, new), n in analysis.status_changes.items() if new in FINAL_BY_DEFAULT),
     }
 
 
@@ -577,6 +709,69 @@ def _apply_register(batch, analysis: Analysis):
     Case.objects.bulk_update(to_update, update_fields, batch_size=CHUNK)
 
 
+def _apply_update(batch, analysis: Analysis):
+    """Weekly file from the big system: update cases already here, add new cases of our unit, delete nothing."""
+    statuses = {s.name: s for s in Status.objects.all()}
+    for name in analysis.new_statuses:
+        final = name in FINAL_BY_DEFAULT
+        statuses[name] = Status.objects.create(name=name, is_final=final, needs_review=not final)
+    aliases = {a.key: a for a in InvestigatorAlias.objects.all()}
+    for raw in analysis.new_aliases:
+        alias = InvestigatorAlias(raw_name=raw)
+        alias.save()
+        aliases[alias.key] = alias
+    link_register_names()
+    aliases = {a.key: a for a in InvestigatorAlias.objects.select_related("investigator")}  # now linked
+    # a signer without a rank gets the one the big system writes (never overwrites a rank staff entered)
+    for key, rank in analysis.ranks.items():
+        alias = aliases.get(key)
+        inv = alias.investigator if alias and alias.investigator_id else None
+        if inv is not None and not inv.rank_full:
+            inv.rank_full = rank
+            inv.save()
+    own_units = [u for u in Unit.objects.all() if u.name.strip() and is_own_unit(u.name)]
+    own = (next((u for u in own_units if unit_key(u.name) == unit_key(settings.OWN_UNIT)), None)
+           or (own_units[0] if own_units else Unit.objects.create(name=settings.OWN_UNIT)))
+
+    now = timezone.now()
+    to_create = []
+    for key in analysis.new_keys:
+        values = dict(analysis.rows[key].values)
+        status_name = values.pop("status_name")
+        day = values["report_date"]
+        values["source_sheet"] = f"ปี {day.year + 543} ({day.year})" if day else "อัปเดตจากระบบใหญ่"
+        to_create.append(Case(
+            receipt_no=key, **values, report_year=day.year if day else None,
+            status=statuses.get(status_name) if status_name else None, unit=own,
+            investigator_alias=aliases.get(normalize_person_key(values["investigator_raw"])), last_batch=batch))
+    Case.objects.bulk_create(to_create, batch_size=CHUNK)
+
+    existing = _existing(Case, analysis.changes_by_key.keys(), select_related=("status",))
+    to_update, fields = [], {"last_batch", "updated_at"}
+    for key, changes in analysis.changes_by_key.items():
+        obj = existing[key]
+        for f, value in changes.items():
+            if f == "status_name":
+                obj.status = statuses.get(value)
+                fields.add("status")
+                if key in analysis.manual_status_released:
+                    obj.status_manual_at = obj.status_manual_by = None
+                    obj.status_file_value = ""
+                    fields |= {"status_manual_at", "status_manual_by", "status_file_value"}
+            else:
+                setattr(obj, f, value)
+                fields.add(f)
+                if f == "report_date":
+                    obj.report_year = value.year
+                    fields.add("report_year")
+                if f == "investigator_raw":
+                    obj.investigator_alias = aliases.get(normalize_person_key(value))
+                    fields.add("investigator_alias")
+        obj.last_batch, obj.updated_at = batch, now
+        to_update.append(obj)
+    Case.objects.bulk_update(to_update, sorted(fields), batch_size=CHUNK)
+
+
 def relink_cases() -> int:
     """Attach complainants to cases that have none yet (by เลขรับแจ้ง). Returns count linked."""
     unlinked = dict(Case.objects.filter(complainant__isnull=True).values_list("receipt_no", "pk"))
@@ -595,8 +790,11 @@ def relink_cases() -> int:
 def commit(batch: ImportBatch, progress=None) -> Analysis:
     analysis = analyze(batch, progress=lambda p: progress and progress(int(p * 0.5)))
     with transaction.atomic():
+        batch_removed = 0
         if batch.kind == ImportKind.COMPLAINANTS:
             _apply_complainants(batch, analysis)
+        elif batch.kind == ImportKind.UPDATE:
+            _apply_update(batch, analysis)  # never removes anything
         else:
             _apply_register(batch, analysis)
             batch_removed = _remove_other_unit_cases(analysis)

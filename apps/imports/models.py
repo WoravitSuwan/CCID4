@@ -5,6 +5,7 @@ from django.db import models
 class ImportKind(models.TextChoices):
     COMPLAINANTS = "complainants", "ข้อมูลผู้แจ้ง"
     REGISTER = "register", "ทะเบียนคดี"
+    UPDATE = "update", "อัปเดตจากระบบใหญ่ (ไฟล์รายสัปดาห์)"
 
 
 class BatchStatus(models.TextChoices):

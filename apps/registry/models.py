@@ -355,10 +355,11 @@ def unit_key(name) -> str:
 
 
 def is_own_unit(name) -> bool:
-    """The unit this system is for (settings.OWN_UNIT). A blank unit cannot be told apart: kept."""
+    """The unit this system is for (settings.OWN_UNIT). A blank unit cannot be told apart: kept.
+    A longer name of the same unit counts too: 'กก.1 บก.สอท.4 บช.สอท.' (the big system's export)."""
     from django.conf import settings
 
-    return not str(name or "").strip() or unit_key(name) == unit_key(settings.OWN_UNIT)
+    return not str(name or "").strip() or unit_key(name).startswith(unit_key(settings.OWN_UNIT))
 
 
 def other_unit_cases():
