@@ -2,5 +2,6 @@
 -r requirements.txt
 psycopg[binary]==3.3.6
 celery==5.6.3
+kombu[redis]==5.7.0  # pinned with celery: 5.7 is the first kombu whose redis extra accepts redis 8.x
 redis==8.1.0
 gunicorn==26.2.0

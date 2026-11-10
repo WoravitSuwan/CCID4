@@ -24,7 +24,7 @@ git clone https://github.com/WoravitSuwan/CCID4.git
 ```
 
 ### แบบที่ 1: Docker (ใช้งานจริง) — แนะนำ
-ระบบใช้งานจริงรันด้วย Docker: PostgreSQL, Redis, งานเบื้องหลัง (Celery) และ LibreOffice สำหรับสร้าง PDF อยู่ใน container ทั้งหมด
+ระบบใช้งานจริงรันด้วย Docker: PostgreSQL, Redis, งานเบื้องหลัง (Celery) และ LibreOffice (Writer สำหรับหมายเรียก/ซอง และ Calc สำหรับรายงานแก้สถานะ) อยู่ใน container ทั้งหมด
 
 | เครื่อง | ทำอย่างไร |
 |---|---|

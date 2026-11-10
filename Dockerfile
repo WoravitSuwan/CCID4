@@ -4,10 +4,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# LibreOffice (Word -> PDF), Thai fallback font, fontconfig
+# LibreOffice: Writer (summons/envelopes Word -> PDF) and Calc (status report Excel -> PDF),
+# Thai fallback font, fontconfig
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      libreoffice-writer-nogui fonts-tlwg-laksaman-ttf fontconfig poppler-utils \
+      libreoffice-writer-nogui libreoffice-calc-nogui fonts-tlwg-laksaman-ttf fontconfig poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 
 # Agency fonts (TH SarabunIT๙ / TH Sarabun New) from fonts/ win; otherwise "Sarabun Compat"
