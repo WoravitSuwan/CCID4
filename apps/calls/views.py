@@ -110,6 +110,18 @@ SORTS = [("", "ลำดับงานโทร"), ("damage", "มูลค่�
          ("-date", "วันที่รับแจ้ง ใหม่ → เก่า"), ("date", "วันที่รับแจ้ง เก่า → ใหม่")]
 
 
+SORT_KEY, LIST_KEY = "calls_sort", "calls_list_query"  # remembered per user (session)
+
+
+def _current_sort(request) -> str:
+    """The order picked on the call list; kept until the user picks another one."""
+    if "sort" in request.GET:
+        sort = request.GET.get("sort", "")
+        request.session[SORT_KEY] = sort if sort in dict(SORTS) else ""
+    sort = request.session.get(SORT_KEY, "")
+    return sort if sort in dict(SORTS) else ""
+
+
 def _sorted(qs, sort):
     from django.db.models import F
 
@@ -148,9 +160,8 @@ def queue(request):
                           never=Count("pk", filter=Q(attempt_count=0)))
                 .order_by("assignee__first_name"))
         per_staff = list(rows)
-    sort = request.GET.get("sort", "")
-    if sort not in dict(SORTS):
-        sort = ""
+    sort = _current_sort(request)
+    request.session[LIST_KEY] = request.GET.urlencode()  # the call page's "back" returns to this exact list
     page = Paginator(_sorted(qs, sort), 50).get_page(request.GET.get("page"))
     return render(request, "calls/queue.html", {
         "page": page, "tab": tab, "tabs": TABS, "counts": counts, "stats": stats, "per_staff": per_staff,
@@ -217,11 +228,19 @@ class CallForm(StyledForm):
 
 
 def _next_case(request, current_pk):
-    """Next case to call - skipping ones another staff member has open right now."""
+    """Next case to call - skipping ones another staff member has open right now.
+    With an order picked on the call list (e.g. damage, smallest first) it is the next case after this one in
+    that order, going round to the start at the end; otherwise the work order."""
     busy = Q(opened_at__gte=timezone.now() - dt.timedelta(minutes=OPEN_LOCK_MINUTES)) & ~Q(opened_by=request.user)
-    qs = _ordered(_apply_tab(_queue(request), "todo")).exclude(case_id=current_pk).exclude(busy)
-    nxt = qs.first()
-    return nxt.case_id if nxt else None
+    todo = _apply_tab(_queue(request), "todo").exclude(busy)
+    sort = request.session.get(SORT_KEY, "")
+    if sort not in dict(SORTS) or not sort:
+        nxt = _ordered(todo).exclude(case_id=current_pk).first()
+        return nxt.case_id if nxt else None
+    order = list(_sorted(_queue(request), sort).values_list("case_id", flat=True))
+    wanted = set(todo.values_list("case_id", flat=True)) - {current_pk}
+    start = order.index(current_pk) + 1 if current_pk in order else 0
+    return next((pk for pk in order[start:] + order[:start] if pk in wanted), None)
 
 
 def call_case(request, pk):
@@ -254,7 +273,8 @@ def call_case(request, pk):
             if nxt:
                 return redirect("call_case", pk=nxt)
             messages.info(request, "ไม่มีคดีที่ต้องโทรเหลือในรายการแล้ว")
-            return redirect("calls_queue")
+            back = request.session.get(LIST_KEY, "")
+            return redirect(f"{reverse('calls_queue')}?{back}" if back else "calls_queue")
         return redirect("call_case", pk=case.pk)
     assignment = CallAssignment.objects.filter(case=case).select_related("assignee", "opened_by").first()
     if assignment is None:
@@ -270,6 +290,7 @@ def call_case(request, pk):
         "outcomes_reached": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c in REACHED],
         "outcomes_not": [(c.value, SHORT_LABELS[c]) for c in CallOutcome if c not in REACHED],
         "next_pk": _next_case(request, case.pk),
+        "back_query": request.session.get(LIST_KEY, ""),
         "summonses": case.summonses.select_related("issuer", "ems_by").order_by("-number"),
         "can_issue": perms.can_issue_for_case(request.user, case),
         "issue_blockers": case.issue_blockers(),

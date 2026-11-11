@@ -44,3 +44,38 @@ def test_case_register_by_damage(client, admin_user, amounts):
     assert all(v is None for v in up[4:])
     down = _amounts(client.get("/cases/", {"scope": "all", "sort": "-damage"}).context["page"])
     assert down[:4] == [Decimal("99999"), Decimal("5000"), Decimal("120.50"), Decimal("0")]
+
+
+def test_call_list_remembers_the_order_and_the_back_link_returns_to_the_same_list(client, admin_user, amounts):
+    client.force_login(admin_user)
+    client.get("/calls/", {"tab": "all", "sort": "damage", "page": "1"})
+    case = amounts[0]
+    page = client.get(f"/calls/{case.pk}/").content.decode()
+    assert "/calls/?tab=all&amp;sort=damage&amp;page=1" in page  # "← รายการที่ต้องโทร" goes back to that list
+    # coming back by any way (menu, plain address) keeps the order
+    assert client.get("/calls/").context["sort"] == "damage"
+    assert client.get("/calls/", {"tab": "not_reached"}).context["sort"] == "damage"
+    # picking the work order again puts it back
+    assert client.get("/calls/", {"sort": ""}).context["sort"] == ""
+    assert client.get("/calls/").context["sort"] == ""
+
+
+def test_next_case_follows_the_chosen_order(client, admin_user, amounts):
+    from django.utils import timezone
+
+    client.force_login(admin_user)
+    client.get("/calls/", {"sort": "damage"})
+    by_amount = sorted(amounts, key=lambda c: Case.objects.get(pk=c.pk).damage_amount)  # 0, 120.50, 5000, 99999
+    now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    resp = client.post(f"/calls/{by_amount[0].pk}/", {"outcome": "off", "called_at": now, "go": "next"})
+    assert resp["Location"] == f"/calls/{by_amount[1].pk}/"
+    resp = client.post(f"/calls/{by_amount[1].pk}/", {"outcome": "off", "called_at": now, "go": "next"})
+    assert resp["Location"] == f"/calls/{by_amount[2].pk}/"  # onwards, not back to the first one
+
+
+def test_case_register_remembers_the_order(client, admin_user, amounts):
+    client.force_login(admin_user)
+    client.get("/cases/", {"sort": "-damage"})
+    page = client.get("/cases/", {"open": "on"})  # e.g. the menu or the case page's back link
+    assert page.context["form"].current_sort == "-damage"
+    assert _amounts(page.context["page"])[0] == Decimal("99999")

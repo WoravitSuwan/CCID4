@@ -2,7 +2,7 @@
 {% block title %}โทร {{ case.receipt_no }}{% endblock %}
 {% block content %}
 <div class="mb-3 flex items-center gap-2 text-sm">
-  <a href="{% url 'calls_queue' %}" class="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} รายการที่ต้องโทร</a>
+  <a href="{% url 'calls_queue' %}{% if back_query %}?{{ back_query }}{% endif %}" class="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} รายการที่ต้องโทร</a>
   {% if next_pk %}<a href="{% url 'call_case' next_pk %}" class="ml-auto inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">ข้ามไปคดีถัดไป {% icon "chevron-right" "h-4 w-4" %}</a>{% endif %}
 </div>
 

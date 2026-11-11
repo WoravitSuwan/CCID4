@@ -141,10 +141,13 @@ def filtered_cases(request):
         if d["conflict"]:
             qs = qs.filter(receipt_no__in=conflict_receipts())
     # status scope: ยังไม่สิ้นสุด / สิ้นสุดแล้ว / ทั้งหมด (counts are for the other filters)
-    scope, sort = "all", "-date"
+    scope, sort = "all", request.session.get("cases_sort") or "-date"  # the order picked last time stays
     if form.is_valid():
         scope = form.cleaned_data["scope"] or ("open" if form.cleaned_data["open"] else "all")
-        sort = form.cleaned_data["sort"] or "-date"
+        if form.cleaned_data["sort"]:
+            sort = request.session["cases_sort"] = form.cleaned_data["sort"]
+    if sort not in dict(form.fields["sort"].choices):
+        sort = "-date"
     form.scope_counts = {"all": qs.count(), "open": qs.not_final().count(), "final": qs.final().count()}
     form.current_scope, form.current_sort = scope, sort
     if scope == "open":
