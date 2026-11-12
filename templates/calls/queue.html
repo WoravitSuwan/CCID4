@@ -56,11 +56,18 @@
     <select name="result" class="input w-full py-2 sm:w-52" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
       {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
       {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-    <select name="year" class="input w-full py-2 sm:w-44" onchange="this.form.submit()" aria-label="ปีที่รับแจ้ง">
+    <select name="year" class="input w-full py-2 sm:w-44 {% if year %}border-indigo-400 ring-1 ring-indigo-300{% endif %}" onchange="this.form.submit()" aria-label="ปีที่รับแจ้ง">
       <option value="">ปีที่รับแจ้ง: ทุกปี</option>
       {% for ce, be in years %}<option value="{{ be }}" {% if year == ce %}selected{% endif %}>ปี {{ be }}</option>{% endfor %}</select>
+    <select name="state" class="input w-full py-2 sm:w-52 {% if state %}border-indigo-400 ring-1 ring-indigo-300{% endif %}" onchange="this.form.submit()" aria-label="สถานะคดี">
+      <option value="">สถานะคดี: ทุกสถานะ</option>
+      <option value="open" {% if state == "open" %}selected{% endif %}>ยังไม่สิ้นสุด</option>
+      <option value="final" {% if state == "final" %}selected{% endif %}>สิ้นสุดแล้ว</option>
+      <optgroup label="สถานะในทะเบียน">
+        {% for value, name in case_statuses %}<option value="{{ value }}" {% if state == value %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </optgroup></select>
     <input type="hidden" name="sort" value="{{ sort }}">
-    {% if filtered %}<a class="btn py-2" href="?tab={{ tab }}">ล้างตัวกรอง</a><span class="self-center text-xs text-amber-700">ตัวเลขทั้งหน้านับเฉพาะคดีที่ตรงกับคำค้น/ตัวกรอง</span>{% endif %}
+    {% if filtered %}<a class="btn py-2" href="?tab={{ tab }}&amp;year=&amp;state=">ล้างตัวกรอง</a><span class="self-center text-xs text-amber-700">ตัวเลขทั้งหน้านับเฉพาะคดีที่ตรงกับคำค้น/ตัวกรอง</span>{% endif %}
   </form>
   <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3" role="group" aria-label="เรียงตาม">
     <span class="text-sm text-slate-500">เรียงตาม</span>

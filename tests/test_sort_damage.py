@@ -108,3 +108,32 @@ def test_sort_buttons_turn_the_direction_around(client, admin_user, amounts):
     assert buttons["มูลค่าความเสียหาย"]["down"] and buttons["มูลค่าความเสียหาย"]["sort"] == "damage"
     html = client.get("/calls/", {"sort": "-date"}).content.decode()
     assert 'class="sort-btn is-active"' in html and "ใหม่ → เก่า" in html
+
+
+def test_case_status_filter_on_the_call_list_is_remembered(client, admin_user, imported):
+    from apps.calls import funnel
+    from apps.calls.models import CallAssignment
+    from apps.registry.models import Status
+
+    client.force_login(admin_user)
+    all_cases = Case.objects.count()
+    resp = client.get("/calls/", {"tab": "all", "state": "open"})  # (the first visit fills the call pool)
+    open_ids = set(CallAssignment.objects.filter(funnel.OPEN_CASE).values_list("case_id", flat=True))
+    listed = {a.case_id for a in resp.context["page"].paginator.object_list}
+    assert listed == open_ids and resp.context["counts"]["all"] == len(open_ids) < all_cases
+    assert resp.context["filtered"] and 'value="open" selected' in resp.content.decode()
+    # still filtered when coming back (menu, back link, plain address)
+    assert client.get("/calls/").context["state"] == "open"
+    assert client.get("/calls/").context["counts"]["all"] == len(open_ids)
+    final = client.get("/calls/", {"state": "final"}).context
+    assert final["counts"]["all"] == all_cases - len(open_ids)
+    st = Status.objects.filter(case__isnull=False).first()
+    one = client.get("/calls/", {"tab": "all", "state": f"s{st.pk}"}).context
+    assert {a.case.status_id for a in one["page"].paginator.object_list} == {st.pk}
+    # "ล้างตัวกรอง" clears the remembered year and status
+    client.get("/calls/", {"year": "2569"})
+    html = client.get("/calls/").content.decode()
+    assert "?tab=all&amp;year=&amp;state=" in html
+    cleared = client.get("/calls/", {"tab": "all", "year": "", "state": ""}).context
+    assert cleared["state"] == "" and cleared["year"] is None and cleared["counts"]["all"] == all_cases
+    assert client.get("/calls/", {"state": "zzz"}).context["state"] == ""

@@ -1,6 +1,7 @@
 import datetime as dt
 from collections import Counter
 import io
+import re
 from pathlib import Path
 
 from django import forms
@@ -100,16 +101,37 @@ def _apply_filters(request, qs):
     year = _year(request)
     if year:
         qs = qs.filter(case__report_year=year)
+    state = _state(request)
+    if state == "open":
+        qs = qs.filter(funnel.OPEN_CASE)
+    elif state == "final":
+        qs = qs.exclude(funnel.OPEN_CASE)
+    elif state.startswith("s"):
+        qs = qs.filter(case__status_id=int(state[1:]))
     return qs
 
 
+def _sticky(request, name: str) -> str:
+    """A choice kept for this user (session) until changed: ?name=... sets it, ?name= clears it."""
+    key = f"calls_{name}"
+    if name in request.GET:
+        request.session[key] = request.GET.get(name, "").strip()
+    return request.session.get(key, "")
+
+
 def _year(request) -> int | None:
-    """?year=2569 (Buddhist era, as shown) or 2026 -> 2026."""
-    value = request.GET.get("year", "").strip()
+    """?year=2569 (Buddhist era, as shown) or 2026 -> 2026; remembered like the order."""
+    value = _sticky(request, "year")
     if not value.isdigit():
         return None
     year = int(value)
     return year - 543 if year > 2400 else year
+
+
+def _state(request) -> str:
+    """'open' (ยังไม่สิ้นสุด), 'final' (สิ้นสุดแล้ว), 's<status id>' or '' (all); remembered like the order."""
+    value = _sticky(request, "state")
+    return value if value in ("open", "final") or re.fullmatch(r"s\d+", value) else ""
 
 
 def _years():
@@ -208,8 +230,9 @@ def queue(request):
         "sort": sort, "sorts": SORTS,
         "tab_label": funnel.STAGES[tab][0], "tab_in_nav": tab in funnel.TAB_KEYS,
         "sankey": funnel.sankey(counts),
-        "filtered": bool(request.GET.get("q") or request.GET.get("result") or _year(request)),
-        "years": _years(), "year": _year(request),
+        "filtered": bool(request.GET.get("q") or request.GET.get("result") or _year(request) or _state(request)),
+        "years": _years(), "year": _year(request), "state": _state(request),
+        "case_statuses": [(f"s{st.pk}", st.name) for st in Status.objects.order_by("sort_order", "name")],
         "sort_buttons": _sort_buttons(sort),
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
