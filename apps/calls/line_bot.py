@@ -1,8 +1,9 @@
 """LINE bot that posts the daily summary (สรุปผลประจำวัน) to the unit's LINE group.
 
-Off unless LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET are set in .env. This is the only part of the
-system that talks to an outside service (api.line.me), so it sends only the counts unless an
-administrator also turns on "ส่งรายชื่อ".
+Off until an administrator enters the channel secret and access token in ตั้งค่า > บอท LINE (kept in the
+database, never in git), or LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN are set in .env.
+This is the only part of the system that talks to an outside service (api.line.me), so it sends only the
+counts unless an administrator also turns on "ส่งรายชื่อ".
 
 Quota: a push message to a group counts once per member of the group (a 15-person group uses 15 of the free
 messages each day). Replies to a command typed in the group ("สรุป") do not count, so the group can
@@ -42,14 +43,26 @@ class LineError(Exception):
     pass
 
 
-def configured() -> bool:
+def from_env() -> bool:
     return bool(settings.LINE_CHANNEL_ACCESS_TOKEN and settings.LINE_CHANNEL_SECRET)
+
+
+def credentials() -> tuple[str, str]:
+    """(secret, access token): from .env if set there, else as entered on the settings page."""
+    if from_env():
+        return settings.LINE_CHANNEL_SECRET, settings.LINE_CHANNEL_ACCESS_TOKEN
+    s = SystemSetting.get()
+    return s.line_channel_secret.strip(), s.line_access_token.strip()
+
+
+def configured() -> bool:
+    return all(credentials())
 
 
 def _call(method: str, path: str, payload: dict | None = None) -> dict:
     data = json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None
     req = urllib.request.Request(f"{API}{path}", data=data, method=method, headers={
-        "Authorization": f"Bearer {settings.LINE_CHANNEL_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {credentials()[1]}",
         "Content-Type": "application/json",
     })
     try:
@@ -91,6 +104,11 @@ def group_name(group_id: str) -> str:
         return ""
 
 
+def bot_name() -> str:
+    """The bot's display name; raises LineError when the token is wrong (used to check a new token)."""
+    return _call("GET", "/info").get("displayName", "")
+
+
 def quota() -> dict | None:
     """{'limit': 300 or None, 'used': n} for this month, or None if LINE cannot be reached."""
     try:
@@ -103,7 +121,7 @@ def quota() -> dict | None:
 
 
 def valid_signature(body: bytes, signature: str) -> bool:
-    secret = settings.LINE_CHANNEL_SECRET
+    secret = credentials()[0]
     if not secret or not signature:
         return False
     digest = hmac.new(secret.encode(), body, hashlib.sha256).digest()
@@ -124,7 +142,7 @@ def send_day(day: dt.date) -> int:
     """Push the summary of one day to the confirmed group. Returns the number of cases in it."""
     s = SystemSetting.get()
     if not configured():
-        raise LineError("ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET ในไฟล์ .env")
+        raise LineError("ยังไม่ได้ใส่รหัสเชื่อมต่อ LINE (ตั้งค่า > บอท LINE)")
     if not s.line_group_id:
         raise LineError("ยังไม่ได้เลือกกลุ่ม LINE (เชิญบอทเข้ากลุ่มแล้วกดยืนยันที่หน้าตั้งค่า LINE)")
     push(s.line_group_id, texts_for(day))

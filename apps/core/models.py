@@ -59,7 +59,10 @@ class SystemSetting(models.Model):
     logo_data = models.BinaryField("โลโก้หน่วย", null=True, blank=True, editable=False)
     logo_type = models.CharField(max_length=30, blank=True, editable=False)
     logo_updated = models.DateTimeField(null=True, blank=True, editable=False)
-    # LINE bot (off unless LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET are set in .env)
+    # LINE bot: off until an administrator enters the channel's secret and access token on the settings page
+    # (or LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN in .env, which win). Never shown again once saved.
+    line_channel_secret = models.CharField(max_length=100, blank=True, editable=False)
+    line_access_token = models.TextField(blank=True, editable=False)
     line_enabled = models.BooleanField(
         "ส่งสรุปผลประจำวันเข้ากลุ่ม LINE อัตโนมัติ", default=False,
         help_text="ส่งเฉพาะตัวเลขสรุป (ไม่มีชื่อ เบอร์โทร) วันละครั้งตามเวลาที่ตั้งไว้")

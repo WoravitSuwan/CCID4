@@ -472,9 +472,25 @@ class LineForm(StyledModelForm):
         widgets = {"line_send_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M")}
 
 
+class LineKeysForm(forms.Form):
+    """The channel's secret and access token. Inputs never show a saved value; blank keeps the old one."""
+    secret = forms.CharField(label="Channel secret", required=False, max_length=100,
+                             widget=forms.PasswordInput(attrs={"class": "input", "autocomplete": "off"}),
+                             help_text="LINE Developers → Channel → แท็บ Basic settings")
+    token = forms.CharField(label="Channel access token (long-lived)", required=False, max_length=1000,
+                            widget=forms.PasswordInput(attrs={"class": "input", "autocomplete": "off"}),
+                            help_text="LINE Developers → Channel → แท็บ Messaging API → Issue")
+
+    def clean(self):
+        data = super().clean()
+        for name in ("secret", "token"):
+            data[name] = "".join((data.get(name) or "").split())  # pasted with spaces or a new line
+        return data
+
+
 @admin_only
 def line(request):
-    """บอท LINE: confirm the group, daily time, test send. The token and secret live in .env only."""
+    """บอท LINE: keys, confirm the group, daily time, test send."""
     from django.urls import reverse
     from django.utils import timezone
 
@@ -506,6 +522,33 @@ def line(request):
             s.save()
             messages.success(request, "เรียบร้อย")
             return redirect("settings_line")
+        if action == "keys":
+            keys = LineKeysForm(request.POST)
+            if keys.is_valid():
+                secret, token = keys.cleaned_data["secret"], keys.cleaned_data["token"]
+                if secret:
+                    s.line_channel_secret = secret
+                if token:
+                    s.line_access_token = token
+                s.save(update_fields=["line_channel_secret", "line_access_token"])
+                log(request, AuditAction.SETTINGS, s, "บันทึกรหัสเชื่อมต่อ LINE"
+                    + "".join(f" ({x})" for x, v in (("Channel secret", secret), ("access token", token)) if v))
+                if line_bot.configured():
+                    try:
+                        name = line_bot.bot_name()
+                    except line_bot.LineError as exc:
+                        messages.error(request, f"บันทึกแล้ว แต่ LINE ไม่รับ access token นี้: {exc}")
+                    else:
+                        messages.success(request, f"เชื่อมต่อบอท \"{name}\" สำเร็จ")
+                else:
+                    messages.success(request, "บันทึกแล้ว (ยังต้องใส่อีกช่องให้ครบ)")
+            return redirect("settings_line")
+        if action == "clear_keys":
+            s.line_channel_secret = s.line_access_token = ""
+            s.save(update_fields=["line_channel_secret", "line_access_token"])
+            log(request, AuditAction.SETTINGS, s, "ลบรหัสเชื่อมต่อ LINE")
+            messages.success(request, "ลบรหัสเชื่อมต่อ LINE แล้ว บอทหยุดทำงาน")
+            return redirect("settings_line")
         if action == "test":
             day = timezone.localdate()
             try:
@@ -519,6 +562,8 @@ def line(request):
             return redirect("settings_line")
     return render(request, "settings/line.html", {
         "form": form, "s": s, "tab": "line", "configured": line_bot.configured(),
+        "keys_form": LineKeysForm(), "from_env": line_bot.from_env(),
+        "has_secret": bool(s.line_channel_secret), "has_token": bool(s.line_access_token),
         "webhook_url": request.build_absolute_uri(reverse("line_webhook")),
         "quota": line_bot.quota() if line_bot.configured() and "quota" in request.GET else None,
         "quota_checked": "quota" in request.GET, "help_text": line_bot.HELP,

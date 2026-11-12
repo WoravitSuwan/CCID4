@@ -352,3 +352,54 @@ def test_command_line_print(day_calls, capsys):
 
     call_command("send_line_report", "--date", "2026-11-09", "--print")
     assert "จำนวน 7 Case ID" in capsys.readouterr().out
+
+
+def test_keys_entered_on_the_settings_page(client, admin_user, settings, monkeypatch):
+    """No .env needed: an administrator pastes the secret and token on the page; they are never shown again."""
+    settings.LINE_CHANNEL_ACCESS_TOKEN = settings.LINE_CHANNEL_SECRET = ""
+    calls = []
+
+    def fake_call(method, path, payload=None):
+        calls.append(path)
+        return {"displayName": "สรุปผลการโทร กก.1"}
+
+    monkeypatch.setattr(line_bot, "_call", fake_call)
+    client.force_login(admin_user)
+    assert not line_bot.configured()
+    resp = client.post("/settings/line/", {"action": "keys", "secret": " abc123 \n", "token": ""}, follow=True)
+    assert "ยังต้องใส่อีกช่อง" in resp.content.decode() and not line_bot.configured() and not calls
+    resp = client.post("/settings/line/", {"action": "keys", "secret": "", "token": "tok-en\n"}, follow=True)
+    html = resp.content.decode()
+    assert "เชื่อมต่อบอท &quot;สรุปผลการโทร กก.1&quot; สำเร็จ" in html and calls == ["/info"]
+    assert line_bot.credentials() == ("abc123", "tok-en")  # blank kept the secret; spaces removed
+    assert "abc123" not in html and "tok-en" not in html  # never shown again
+    # the webhook checks signatures with the saved secret
+    assert signed(client, {"events": []}, secret="abc123").status_code == 200
+    assert signed(client, {"events": []}, secret="secret").status_code == 403
+    from apps.core.models import AuditLog
+    assert not AuditLog.objects.filter(detail__contains="abc123").exists()
+    # .env wins when set
+    settings.LINE_CHANNEL_ACCESS_TOKEN, settings.LINE_CHANNEL_SECRET = "env-token", "env-secret"
+    assert line_bot.credentials() == ("env-secret", "env-token")
+    assert "ตั้งไว้ในไฟล์ .env" in client.get("/settings/line/").content.decode()
+    settings.LINE_CHANNEL_ACCESS_TOKEN = settings.LINE_CHANNEL_SECRET = ""
+    client.post("/settings/line/", {"action": "clear_keys"})
+    assert not line_bot.configured()
+
+
+def test_wrong_token_is_reported(client, admin_user, settings, monkeypatch):
+    settings.LINE_CHANNEL_ACCESS_TOKEN = settings.LINE_CHANNEL_SECRET = ""
+
+    def refuse(*a, **k):
+        raise line_bot.LineError("LINE ตอบกลับ 401: Authentication failed")
+
+    monkeypatch.setattr(line_bot, "_call", refuse)
+    client.force_login(admin_user)
+    resp = client.post("/settings/line/", {"action": "keys", "secret": "s", "token": "bad"}, follow=True)
+    assert "LINE ไม่รับ access token นี้" in resp.content.decode()
+
+
+def test_only_admins_enter_keys(client, caller):
+    client.force_login(caller)
+    resp = client.post("/settings/line/", {"action": "keys", "secret": "x", "token": "y"})
+    assert resp.status_code in (302, 403) and not line_bot.configured()

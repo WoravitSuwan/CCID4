@@ -12,18 +12,46 @@
     {% if not configured %}
     <section class="card text-sm text-slate-700">
       <h2>ยังไม่ได้เชื่อมต่อ LINE</h2>
-      <p class="mt-1 text-slate-500">บอทปิดอยู่ ระบบไม่ติดต่อ LINE เลยจนกว่าจะตั้งค่าตามขั้นตอนนี้ (ทำครั้งเดียว)</p>
+      <p class="mt-1 text-slate-500">บอทปิดอยู่ ระบบไม่ติดต่อ LINE เลยจนกว่าจะใส่รหัสด้านล่าง (ทำครั้งเดียว)</p>
       <ol class="mt-3 list-decimal space-y-1.5 pl-5">
-        <li>สร้าง LINE Official Account แล้วเปิด Messaging API ที่ <span class="font-mono">developers.line.biz</span> (Provider → Channel แบบ Messaging API)</li>
-        <li>ในแท็บ Messaging API ของ Channel: ออก <b>Channel access token (long-lived)</b> และคัดลอก <b>Channel secret</b> จากแท็บ Basic settings</li>
-        <li>ใส่ในไฟล์ <span class="font-mono">.env</span> ของเซิร์ฟเวอร์ แล้วเริ่มระบบใหม่ (<span class="font-mono">docker compose up -d</span>)
-          <pre class="mt-1 overflow-x-auto rounded bg-slate-900 p-2 text-xs text-slate-100">LINE_CHANNEL_ACCESS_TOKEN=...
-LINE_CHANNEL_SECRET=...</pre></li>
-        <li>ตั้ง Webhook URL เป็น <span class="break-all font-mono">{{ webhook_url }}</span> เปิด "Use webhook" และเปิด "Allow bot to join group chats" (ต้องเป็น https ที่เข้าจากอินเทอร์เน็ตได้)</li>
+        <li>สร้าง LINE Official Account ที่ <span class="font-mono">manager.line.biz</span> แล้วเปิด Messaging API (ตั้งค่า → Messaging API)</li>
+        <li>ตั้งค่าบัญชี → อนุญาตให้เข้าร่วมแชทกลุ่ม · ตั้งค่าการตอบกลับ → ปิดข้อความตอบกลับอัตโนมัติ เปิด Webhook</li>
+        <li>Webhook URL: <span class="break-all font-mono">{{ webhook_url }}</span> (ต้องเป็น https ที่เข้าจากอินเทอร์เน็ตได้)</li>
+        <li>ใส่ <b>Channel secret</b> และ <b>Channel access token</b> จาก <span class="font-mono">developers.line.biz</span> ในช่องด้านล่าง</li>
         <li>เชิญบอทเข้ากลุ่ม LINE แล้วกลับมากดยืนยันกลุ่มที่หน้านี้</li>
       </ol>
     </section>
-    {% else %}
+    {% endif %}
+
+    <section class="card text-sm">
+      <div class="flex flex-wrap items-center gap-2">
+        <h2>รหัสเชื่อมต่อ LINE</h2>
+        {% if configured %}<span class="badge badge-green">{% icon "check" "h-4 w-4" %} ใส่แล้ว</span>{% endif %}
+      </div>
+      {% if from_env %}
+      <p class="mt-1 text-slate-500">ตั้งไว้ในไฟล์ .env ของเซิร์ฟเวอร์ (เปลี่ยนได้ที่ไฟล์นั้นเท่านั้น)</p>
+      {% else %}
+      <p class="mt-1 text-slate-500">เก็บในฐานข้อมูลของระบบ ไม่แสดงซ้ำหลังบันทึก และไม่อยู่ใน git · อย่าส่งรหัสนี้ทางแชทหรือแคปหน้าจอ ใครได้ไปจะส่งข้อความในนามบอทได้</p>
+      <form method="post" class="mt-3 space-y-3" autocomplete="off">{% csrf_token %}<input type="hidden" name="action" value="keys">
+        {% for f in keys_form %}
+        <div>
+          <label class="label" for="{{ f.id_for_label }}">{{ f.label }}
+            {% if f.name == "secret" and has_secret or f.name == "token" and has_token %}<span class="font-normal text-emerald-700">· ใส่แล้ว (เว้นว่าง = ใช้รหัสเดิม)</span>{% endif %}</label>
+          {{ f }}<span class="helptext">{{ f.help_text }}</span>
+        </div>
+        {% endfor %}
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-primary">บันทึกและทดสอบการเชื่อมต่อ</button>
+        </div>
+      </form>
+      {% if has_secret or has_token %}
+      <form method="post" class="mt-2" onsubmit="return confirm('ลบรหัสเชื่อมต่อ LINE? บอทจะหยุดทำงานทันที')">{% csrf_token %}
+        <button class="btn btn-sm btn-ghost text-rose-700" name="action" value="clear_keys">ลบรหัส</button></form>
+      {% endif %}
+      {% endif %}
+    </section>
+
+    {% if configured %}
     <section class="card text-sm">
       <h2>กลุ่ม LINE</h2>
       {% if s.line_group_id %}
