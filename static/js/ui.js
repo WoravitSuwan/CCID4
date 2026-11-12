@@ -9,6 +9,34 @@
   "use strict";
   const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* keep the scroll position when a sort button, tab or filter reloads the same list
+     (elements or forms marked data-keep-scroll) */
+  const KEEP = "ui-keep-scroll";
+  function keepScroll() {
+    try { sessionStorage.setItem(KEEP, JSON.stringify({ path: location.pathname, y: window.scrollY })); } catch (e) {}
+  }
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("a[data-keep-scroll], [data-keep-scroll] a")) keepScroll();
+  }, true);
+  document.addEventListener("change", function (e) {  // selects that submit on change (form.submit() skips "submit")
+    if (e.target.closest && e.target.closest("form[data-keep-scroll]")) keepScroll();
+  }, true);
+  document.addEventListener("submit", function (e) {
+    if (e.target.matches && e.target.matches("form[data-keep-scroll]")) keepScroll();
+  }, true);
+  let restoreTo = null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(KEEP) || "null");
+    sessionStorage.removeItem(KEEP);
+    if (saved && saved.path === location.pathname && !location.hash) restoreTo = saved.y;
+  } catch (e) {}
+  if (restoreTo !== null) {
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    const go = function () { window.scrollTo(0, restoreTo); };
+    document.addEventListener("DOMContentLoaded", go);
+    window.addEventListener("load", go);  // again once fonts and charts have their final size
+  }
+
   /* ripple */
   document.addEventListener("pointerdown", function (e) {
     const btn = e.target.closest && e.target.closest(".btn, .pager-item");

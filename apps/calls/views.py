@@ -292,17 +292,30 @@ class CallForm(StyledForm):
 
 
 def _next_case(request, current_pk):
-    """Next case to call - skipping ones another staff member has open right now.
-    With an order picked on the call list (e.g. damage, smallest first) it is the next case after this one in
-    that order, going round to the start at the end; otherwise the work order."""
+    """Next case in the list the user was looking at - same tab, search, filters (year, case status) and order -
+    skipping ones another staff member has open right now.
+    With an order picked (date, damage) it is the row after this one, going round at the end; this case counts
+    for its place even if it has just left the list (e.g. it was called from the tab ยังไม่ได้โทร).
+    With the work order it is the first case of that list still to call."""
+    from django.http import QueryDict
+
     busy = Q(opened_at__gte=timezone.now() - dt.timedelta(minutes=OPEN_LOCK_MINUTES)) & ~Q(opened_by=request.user)
-    todo = _apply_tab(_queue(request), "todo").exclude(busy)
-    sort = request.session.get(SORT_KEY, "")
-    if sort not in dict(SORTS) or not sort:
-        nxt = _ordered(todo).exclude(case_id=current_pk).first()
+    saved = QueryDict(request.session.get(LIST_KEY, ""))
+    original, request.GET = request.GET, saved  # the filters read the list's own address
+    try:
+        tab = saved.get("tab", "all")
+        base = _queue(request)
+        listed = _apply_tab(_apply_filters(request, base), tab if tab in funnel.STAGES else "all")
+        sort = _current_sort(request)
+    finally:
+        request.GET = original
+    free = listed.exclude(busy).exclude(case_id=current_pk)
+    if not sort:
+        nxt = _ordered(_apply_tab(free, "todo")).first() or _ordered(free).first()
         return nxt.case_id if nxt else None
-    order = list(_sorted(_queue(request), sort).values_list("case_id", flat=True))
-    wanted = set(todo.values_list("case_id", flat=True)) - {current_pk}
+    order = list(_sorted(base.filter(Q(pk__in=listed.values("pk")) | Q(case_id=current_pk)), sort)
+                 .values_list("case_id", flat=True))
+    wanted = set(free.values_list("case_id", flat=True))
     start = order.index(current_pk) + 1 if current_pk in order else 0
     return next((pk for pk in order[start:] + order[:start] if pk in wanted), None)
 

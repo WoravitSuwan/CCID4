@@ -24,7 +24,7 @@
     <a class="btn btn-sm {% if g.unmatched %}btn-primary{% endif %}" href="?unmatched=on">{% icon "alert" "h-3.5 w-3.5" %} จับคู่ไม่ได้</a>
   </div>
   {% endwith %}
-  <form method="get" class="ml-auto flex items-center gap-2 text-sm">
+  <form method="get" class="ml-auto flex items-center gap-2 text-sm" data-keep-scroll>
     {% for k, v in request.GET.items %}{% if k != "sort" and k != "page" %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
     <label for="sort" class="text-slate-500">{% icon "calendar" "inline h-4 w-4" %} เรียงตาม</label>
     <select id="sort" name="sort" class="input w-auto py-1.5" onchange="this.form.submit()">
@@ -62,7 +62,7 @@
   </div>
   {% endif %}
 
-  <div class="table-wrap">
+  <div class="table-wrap scroll-mt-4" id="list">
   <table class="table">
     <thead><tr>
       {% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="check-all" aria-label="เลือกทั้งหมด"></th>{% endif %}

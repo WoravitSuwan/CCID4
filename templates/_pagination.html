@@ -2,14 +2,14 @@
 <nav class="pager" aria-label="เลือกหน้า">
   <span class="pager-info">แสดง <b class="tabular-nums text-slate-700">{{ page.start_index|intcomma }}–{{ page.end_index|intcomma }}</b> จาก <b class="tabular-nums text-slate-700">{{ page.paginator.count|intcomma }}</b> รายการ</span>
   <div class="pager-nav">
-    {% if page.has_previous %}<a class="pager-item" href="?{% query_replace page=page.previous_page_number %}" rel="prev" aria-label="หน้าก่อนหน้า">{% icon "chevron-left" "h-4 w-4" %}<span class="hidden sm:inline">ก่อนหน้า</span></a>
+    {% if page.has_previous %}<a class="pager-item" href="?{% query_replace page=page.previous_page_number %}#list" rel="prev" aria-label="หน้าก่อนหน้า">{% icon "chevron-left" "h-4 w-4" %}<span class="hidden sm:inline">ก่อนหน้า</span></a>
     {% else %}<span class="pager-item is-disabled" aria-hidden="true">{% icon "chevron-left" "h-4 w-4" %}<span class="hidden sm:inline">ก่อนหน้า</span></span>{% endif %}
     {% for n in page|page_window %}
       {% if n is None %}<span class="pager-gap">…</span>
       {% elif n == page.number %}<span class="pager-item is-current" aria-current="page">{{ n|intcomma }}</span>
-      {% else %}<a class="pager-item {% if n != 1 and n != page.paginator.num_pages %}hidden sm:inline-flex{% endif %}" href="?{% query_replace page=n %}">{{ n|intcomma }}</a>{% endif %}
+      {% else %}<a class="pager-item {% if n != 1 and n != page.paginator.num_pages %}hidden sm:inline-flex{% endif %}" href="?{% query_replace page=n %}#list">{{ n|intcomma }}</a>{% endif %}
     {% endfor %}
-    {% if page.has_next %}<a class="pager-item" href="?{% query_replace page=page.next_page_number %}" rel="next" aria-label="หน้าถัดไป"><span class="hidden sm:inline">ถัดไป</span>{% icon "chevron-right" "h-4 w-4" %}</a>
+    {% if page.has_next %}<a class="pager-item" href="?{% query_replace page=page.next_page_number %}#list" rel="next" aria-label="หน้าถัดไป"><span class="hidden sm:inline">ถัดไป</span>{% icon "chevron-right" "h-4 w-4" %}</a>
     {% else %}<span class="pager-item is-disabled" aria-hidden="true"><span class="hidden sm:inline">ถัดไป</span>{% icon "chevron-right" "h-4 w-4" %}</span>{% endif %}
   </div>
 </nav>

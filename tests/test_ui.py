@@ -28,7 +28,7 @@ def test_pagination_shows_range_and_pages(client, admin_user):
     client.force_login(admin_user)
     html = client.get("/settings/audit/", {"page": 2}).content.decode()
     assert "แสดง <b" in html and "101–200" in html and 'aria-current="page"' in html and 'rel="next"' in html
-    assert 'href="?page=5"' in html  # last page
+    assert 'href="?page=5#list"' in html  # last page, landing on the list
 
 
 def test_every_page_loads_the_feedback_script_and_messages_can_be_closed(client, admin_user):

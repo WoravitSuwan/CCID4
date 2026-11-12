@@ -137,3 +137,39 @@ def test_case_status_filter_on_the_call_list_is_remembered(client, admin_user, i
     cleared = client.get("/calls/", {"tab": "all", "year": "", "state": ""}).context
     assert cleared["state"] == "" and cleared["year"] is None and cleared["counts"]["all"] == all_cases
     assert client.get("/calls/", {"state": "zzz"}).context["state"] == ""
+
+
+def test_next_case_follows_the_filters_and_the_order(client, admin_user, amounts):
+    """ปี + สถานะคดี + เรียงมูลค่า: "ข้ามไปคดีถัดไป" walks the same list the user sees."""
+    from django.utils import timezone
+
+    by_amount = sorted(amounts, key=lambda c: Case.objects.get(pk=c.pk).damage_amount)  # 0, 120.50, 5000, 99999
+    year = Case.objects.get(pk=by_amount[0].pk).report_year
+    Case.objects.filter(pk__in=[c.pk for c in by_amount]).update(report_year=year)
+    Case.objects.filter(pk=by_amount[1].pk).update(report_year=year - 1)  # filtered out by the year
+    client.force_login(admin_user)
+    client.get("/calls/", {"tab": "all", "year": year + 543, "state": "open", "sort": "damage"})
+    page = client.get(f"/calls/{by_amount[0].pk}/")
+    assert page.context["next_pk"] == by_amount[2].pk  # 120.50 is another year: skipped
+    now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    resp = client.post(f"/calls/{by_amount[2].pk}/", {"outcome": "off", "called_at": now, "go": "next"})
+    assert resp["Location"] == f"/calls/{by_amount[3].pk}/"
+
+
+def test_next_case_keeps_its_place_when_the_case_leaves_the_tab(client, admin_user, amounts):
+    """From the tab ยังไม่ได้โทร: once called, the case leaves the tab, but "next" is still the row after it."""
+    from django.utils import timezone
+
+    by_amount = sorted(amounts, key=lambda c: Case.objects.get(pk=c.pk).damage_amount)
+    Case.objects.filter(pk__in=[c.pk for c in by_amount]).update(contact_log="")
+    client.force_login(admin_user)
+    client.get("/calls/", {"tab": "never", "sort": "damage", "year": "", "state": ""})
+    now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    resp = client.post(f"/calls/{by_amount[1].pk}/", {"outcome": "off", "called_at": now, "go": "next"})
+    assert resp["Location"] == f"/calls/{by_amount[2].pk}/"  # not back to the first row of the tab
+
+
+def test_list_controls_keep_the_scroll_position(client, admin_user, imported):
+    client.force_login(admin_user)
+    html = client.get("/calls/").content.decode()
+    assert html.count("data-keep-scroll") >= 3 and 'id="list"' in html
