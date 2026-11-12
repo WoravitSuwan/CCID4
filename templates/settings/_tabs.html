@@ -6,6 +6,7 @@
   <a class="tab {% if tab == 'templates' %}active{% endif %}" href="{% url 'settings_templates' %}">แบบฟอร์ม</a>
   <a class="tab {% if tab == 'users' %}active{% endif %}" href="{% url 'settings_users' %}">ผู้ใช้และสิทธิ์</a>
   <a class="tab {% if tab == 'system' %}active{% endif %}" href="{% url 'settings_system' %}">ระบบ</a>
+  <a class="tab {% if tab == 'line' %}active{% endif %}" href="{% url 'settings_line' %}">บอท LINE</a>
   <a class="tab {% if tab == 'audit' %}active{% endif %}" href="{% url 'settings_audit' %}">บันทึกการใช้งาน</a>
   <a class="tab ml-auto text-red-600 hover:text-red-700 {% if tab == 'wipe' %}active{% endif %}" href="{% url 'settings_wipe' %}">ล้างข้อมูล</a>
 </nav>

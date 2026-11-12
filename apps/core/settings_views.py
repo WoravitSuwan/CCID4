@@ -465,6 +465,66 @@ def system(request):
                                                   "back": "settings_system"})
 
 
+class LineForm(StyledModelForm):
+    class Meta:
+        model = SystemSetting
+        fields = ["line_enabled", "line_send_time", "line_skip_empty", "line_include_list"]
+        widgets = {"line_send_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M")}
+
+
+@admin_only
+def line(request):
+    """บอท LINE: confirm the group, daily time, test send. The token and secret live in .env only."""
+    from django.urls import reverse
+    from django.utils import timezone
+
+    from apps.calls import daily_report, line_bot
+
+    s = SystemSetting.get()
+    form = LineForm(request.POST if request.POST.get("action") == "save" else None, instance=s)
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "save" and form.is_valid():
+            form.save()
+            log(request, AuditAction.SETTINGS, s, "แก้ไขการตั้งค่าบอท LINE"
+                + (" (เปิดส่งรายชื่อ)" if form.cleaned_data["line_include_list"] else ""))
+            messages.success(request, "บันทึกแล้ว")
+            return redirect("settings_line")
+        if action == "confirm" and s.line_pending_group_id:
+            s.line_group_id, s.line_group_name = s.line_pending_group_id, s.line_pending_group_name
+            s.line_pending_group_id = s.line_pending_group_name = ""
+            s.save()
+            log(request, AuditAction.SETTINGS, s, f"เลือกกลุ่ม LINE {s.line_group_name or s.line_group_id}")
+            messages.success(request, "ยืนยันกลุ่ม LINE แล้ว ระบบจะส่งข้อความเข้ากลุ่มนี้เท่านั้น")
+            return redirect("settings_line")
+        if action in ("reject", "forget"):
+            if action == "reject":
+                s.line_pending_group_id = s.line_pending_group_name = ""
+            else:
+                log(request, AuditAction.SETTINGS, s, f"เลิกส่งเข้ากลุ่ม LINE {s.line_group_name or s.line_group_id}")
+                s.line_group_id = s.line_group_name = ""
+            s.save()
+            messages.success(request, "เรียบร้อย")
+            return redirect("settings_line")
+        if action == "test":
+            day = timezone.localdate()
+            try:
+                total = line_bot.send_day(day)
+            except line_bot.LineError as exc:
+                messages.error(request, f"ส่งไม่ได้: {exc}")
+            else:
+                log(request, AuditAction.EXPORT, None,
+                    f"ส่งสรุปผลประจำวัน {daily_report.file_day(day)} เข้ากลุ่ม LINE ({total:,} Case, ทดสอบ)")
+                messages.success(request, "ส่งสรุปผลวันนี้เข้ากลุ่ม LINE แล้ว")
+            return redirect("settings_line")
+    return render(request, "settings/line.html", {
+        "form": form, "s": s, "tab": "line", "configured": line_bot.configured(),
+        "webhook_url": request.build_absolute_uri(reverse("line_webhook")),
+        "quota": line_bot.quota() if line_bot.configured() and "quota" in request.GET else None,
+        "quota_checked": "quota" in request.GET, "help_text": line_bot.HELP,
+    })
+
+
 @admin_only
 def audit(request):
     qs = AuditLog.objects.select_related("user")

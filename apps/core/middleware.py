@@ -4,7 +4,7 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse
 
-PUBLIC_PREFIXES = ("/accounts/login", "/static/", "/healthz", "/branding/")
+PUBLIC_PREFIXES = ("/accounts/login", "/static/", "/healthz", "/branding/", "/line/webhook/")  # LINE: signed
 # Call staff (outsource) may only use the call pages - everything else redirects there.
 OUTSOURCE_PREFIXES = ("/calls/", "/accounts/", "/static/", "/healthz", "/summons/", "/exports/", "/branding/",
                       "/stats/", "/reports/")

@@ -7,6 +7,9 @@
 !sample_data/*.xlsx
 !apps/imports/data/thai_postcodes.csv
 *.doc
+# daily reports downloaded from the system (ลงบันทึกประจำวัน / สรุปข้อมูลคดี): names and phone numbers
+*.docx
+!templates_docx/*.docx
 /backups/
 *.sql
 *.dump

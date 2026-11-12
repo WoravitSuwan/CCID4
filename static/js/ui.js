@@ -107,6 +107,36 @@
   document.addEventListener("htmx:beforeRequest", startBar);
   document.addEventListener("htmx:afterRequest", stopBar);
 
+  /* copy buttons: <button data-copy="#textarea-id"> (works on plain http too, where the clipboard API is missing) */
+  document.addEventListener("click", function (e) {
+    const btn = e.target.closest && e.target.closest("[data-copy]");
+    if (!btn) return;
+    const src = document.querySelector(btn.getAttribute("data-copy"));
+    if (!src) return;
+    const text = "value" in src ? src.value : src.textContent;
+    const label = btn.querySelector("[data-copy-label]") || btn;
+    const done = function (ok) {
+      if (!label.dataset.text) label.dataset.text = label.textContent;
+      label.textContent = ok ? "คัดลอกแล้ว ✓" : "คัดลอกไม่ได้ (เลือกข้อความแล้วกด Ctrl+C)";
+      btn.classList.toggle("is-copied", ok);
+      clearTimeout(btn._copyTimer);
+      btn._copyTimer = setTimeout(function () { label.textContent = label.dataset.text; btn.classList.remove("is-copied"); }, 2200);
+    };
+    const fallback = function () {
+      let ok = false;
+      if ("select" in src) {
+        src.focus(); src.select();
+        try { ok = document.execCommand("copy"); } catch (err) {}
+      }
+      done(ok);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    } else {
+      fallback();
+    }
+  });
+
   /* messages */
   function closeAlert(el) {
     el.classList.remove("alert-enter");

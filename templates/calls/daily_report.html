@@ -1,0 +1,120 @@
+{% extends "base.html" %}{% load thai ui humanize %}
+{% block title %}สรุปผลประจำวัน{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>สรุปผลประจำวัน</h1>
+    <p class="page-sub">ผลการโทร{{ period_text }}{% if caller %} · เฉพาะ {{ caller.display_name }}{% endif %} · คดีที่โทรหลายครั้งนับครั้งเดียว ตามผลการโทรครั้งสุดท้าย{% if start %}ในช่วงนั้น{% else %}ของวันนั้น{% endif %}</p>
+  </div>
+</div>
+
+<form method="get" class="card mb-5 flex flex-wrap items-end gap-3" data-keep-scroll>
+  <div>
+  <span class="label">วันที่</span>
+  <div class="flex items-center gap-1">
+    <a class="btn btn-sm" href="?date={{ prev_day|date:'Y-m-d' }}{% if caller %}&caller={{ caller.pk }}{% endif %}" title="วันก่อนหน้า" aria-label="วันก่อนหน้า">{% icon "chevron-left" "h-4 w-4" %}</a>
+    <label class="sr-only" for="f-date">วันที่</label>
+    <input id="f-date" type="date" name="date" value="{{ day|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" class="input w-auto" onchange="this.form.submit()">
+    {% if next_day %}<a class="btn btn-sm" href="?date={{ next_day|date:'Y-m-d' }}{% if caller %}&caller={{ caller.pk }}{% endif %}" title="วันถัดไป" aria-label="วันถัดไป">{% icon "chevron-right" "h-4 w-4" %}</a>{% endif %}
+    {% if day != today %}<a class="btn btn-sm" href="?{% if caller %}caller={{ caller.pk }}{% endif %}">วันนี้</a>{% endif %}
+  </div>
+  </div>
+  <div>
+    <label class="label" for="f-from">ตั้งแต่วันที่ <span class="font-normal text-slate-400">(ถ้ารวมหลายวัน)</span></label>
+    <div class="flex items-center gap-1">
+      <input id="f-from" type="date" name="from" value="{% if start %}{{ start|date:'Y-m-d' }}{% endif %}" max="{{ day|date:'Y-m-d' }}" class="input w-auto" onchange="this.form.submit()">
+      {% if start %}<a class="btn btn-sm btn-ghost" href="?date={{ day|date:'Y-m-d' }}{% if caller %}&caller={{ caller.pk }}{% endif %}" title="กลับเป็นวันเดียว">{% icon "x" "h-4 w-4" %}</a>{% endif %}
+    </div>
+  </div>
+  <div>
+    <label class="label" for="f-caller">ผู้โทร</label>
+    <select id="f-caller" name="caller" class="input w-auto" onchange="this.form.submit()">
+      <option value="">ทุกคน</option>
+      {% for u in callers %}<option value="{{ u.pk }}" {% if caller and caller.pk == u.pk %}selected{% endif %}>{{ u.display_name }}</option>{% endfor %}
+      {% if caller and caller not in callers %}<option value="{{ caller.pk }}" selected>{{ caller.display_name }}</option>{% endif %}
+    </select>
+  </div>
+  <noscript><button class="btn">แสดง</button></noscript>
+</form>
+
+<div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+  <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ counts.total|intcomma }}</span> <span class="text-sm font-normal text-slate-400">Case ID</span></div></div>
+  <div class="stat block"><div class="stat-label">1. ไม่ประสงค์ดำเนินคดี</div><div class="stat-value text-slate-700"><span data-countup>{{ counts.not_want|intcomma }}</span></div></div>
+  <div class="stat block"><div class="stat-label">2. ประสงค์ดำเนินคดีต่อ</div><div class="stat-value text-emerald-700"><span data-countup>{{ counts.want|intcomma }}</span></div></div>
+  <div class="stat block"><div class="stat-label">3. ไม่สามารถติดต่อได้</div><div class="stat-value text-amber-700"><span data-countup>{{ counts.unreached|intcomma }}</span></div>
+    {% if counts.other %}<div class="mt-1 text-xs text-slate-500">+ ยังไม่ได้ข้อยุติ (ขอให้โทรกลับ ฯลฯ) {{ counts.other|intcomma }} Case</div>{% endif %}</div>
+</div>
+
+<div class="mb-5 grid gap-5 lg:grid-cols-2">
+  <section class="card flex flex-col">
+    <div class="mb-2 flex flex-wrap items-center gap-2">
+      <h2 class="text-base font-semibold text-slate-800">ข้อความรายงานผู้บังคับบัญชา</h2>
+      <span class="text-xs text-slate-500">ตัวเลขอย่างเดียว ไม่มีชื่อ/เบอร์โทร</span>
+    </div>
+    <label class="sr-only" for="t-summary">ข้อความรายงานผู้บังคับบัญชา</label>
+    <textarea id="t-summary" class="input min-h-[11rem] flex-1 font-[inherit] leading-relaxed" rows="7" readonly>{{ summary }}</textarea>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button type="button" class="btn btn-primary" data-copy="#t-summary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
+      <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary">{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี (Word)</a>
+      {% if perm_settings %}
+      {% if line_ready and not start %}
+      <form method="post" class="inline" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE {{ line_group|default:'' }} ตอนนี้?\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
+        <button class="btn">{% icon "chat" "h-4 w-4" %} ส่งเข้ากลุ่ม LINE</button></form>
+      {% else %}
+      <a class="btn btn-ghost text-slate-500" href="{% url 'settings_line' %}">{% icon "chat" "h-4 w-4" %} ตั้งค่าบอท LINE</a>
+      {% endif %}
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card flex flex-col">
+    <div class="mb-2 flex flex-wrap items-center gap-2">
+      <h2 class="text-base font-semibold text-slate-800">ข้อความลงบันทึกประจำวัน</h2>
+      <span class="badge badge-gray">ไม่ประสงค์ดำเนินคดี {{ counts.not_want|intcomma }} ราย</span>
+    </div>
+    {% if counts.not_want %}
+    <label class="sr-only" for="t-diary">ข้อความลงบันทึกประจำวัน</label>
+    <textarea id="t-diary" class="input min-h-[11rem] flex-1 font-[inherit] leading-relaxed" rows="9" readonly>{{ diary }}</textarea>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button type="button" class="btn btn-primary" data-copy="#t-diary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
+      <a class="btn" href="?{% if query %}{{ query }}&{% endif %}format=diary">{% icon "download" "h-4 w-4" %} ลงบันทึกประจำวัน (Word)</a>
+    </div>
+    {% else %}
+    <div class="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
+      {% icon "info" "mb-2 h-6 w-6 text-slate-400" %}
+      ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี{{ period_text }}{% if caller %} (ของ {{ caller.display_name }}){% endif %}
+      <span class="mt-1 text-xs">รายการจะขึ้นเมื่อบันทึกผลการโทรเป็น "ไม่ประสงค์ดำเนินคดีต่อ"</span>
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% for key, label, rows in groups %}{% if rows %}
+<details class="card mb-3 p-0" {% if key == "not_want" %}open{% endif %}>
+  <summary class="flex cursor-pointer items-center gap-2 px-4 py-3 font-medium text-slate-800">
+    {{ forloop.counter }}. {{ label }} <span class="badge {% if key == 'want' %}badge-green{% elif key == 'unreached' %}badge-amber{% else %}badge-gray{% endif %}">{{ rows|length|intcomma }}</span>
+  </summary>
+  <div class="table-wrap rounded-none border-0 border-t">
+    <table class="table table-cards">
+      <thead><tr><th>ลำดับ</th><th>เลขรับแจ้ง</th><th>ผู้เสียหาย</th><th>เบอร์โทรศัพท์</th><th>ผลการโทรล่าสุด</th><th>ผู้โทร</th><th>เวลา</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td data-label="ลำดับ" class="tabular-nums text-slate-500">{{ forloop.counter }}</td>
+          <td data-label="เลขรับแจ้ง"><a class="font-mono" href="{% url 'call_case' r.case.pk %}">{{ r.case.receipt_no }}</a></td>
+          <td data-label="ผู้เสียหาย">{{ r.name }}</td>
+          <td data-label="เบอร์โทร" class="whitespace-nowrap font-mono">{{ r.phone }}</td>
+          <td data-label="ผล">{{ r.attempt.get_outcome_display }}{% if r.calls > 1 %} <span class="text-xs text-slate-400">(โทร {{ r.calls }} ครั้ง)</span>{% endif %}</td>
+          <td data-label="ผู้โทร">{% if r.attempt.created_by %}{{ r.attempt.created_by.display_name }}{% else %}-{% endif %}</td>
+          <td data-label="เวลา" class="whitespace-nowrap tabular-nums">{% if start %}{{ r.attempt.called_at|thai_date }} {% endif %}{{ r.attempt.called_at|time:"H:i" }} น.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}{% empty %}{% endfor %}
+{% if not counts.total %}
+<div class="card py-12 text-center text-slate-500">ยังไม่มีการบันทึกผลการโทร{{ period_text }}{% if caller %} ของ {{ caller.display_name }}{% endif %}</div>
+{% endif %}
+{% endblock %}

@@ -1,3 +1,5 @@
+import datetime as dt
+
 from django.conf import settings
 from django.db import models
 
@@ -57,6 +59,21 @@ class SystemSetting(models.Model):
     logo_data = models.BinaryField("โลโก้หน่วย", null=True, blank=True, editable=False)
     logo_type = models.CharField(max_length=30, blank=True, editable=False)
     logo_updated = models.DateTimeField(null=True, blank=True, editable=False)
+    # LINE bot (off unless LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET are set in .env)
+    line_enabled = models.BooleanField(
+        "ส่งสรุปผลประจำวันเข้ากลุ่ม LINE อัตโนมัติ", default=False,
+        help_text="ส่งเฉพาะตัวเลขสรุป (ไม่มีชื่อ เบอร์โทร) วันละครั้งตามเวลาที่ตั้งไว้")
+    line_send_time = models.TimeField("เวลาส่งอัตโนมัติ", default=dt.time(18, 0))
+    line_skip_empty = models.BooleanField("ไม่ส่งในวันที่ไม่มีการโทร (ประหยัดโควตา)", default=True)
+    line_include_list = models.BooleanField(
+        "ส่งรายชื่อผู้ไม่ประสงค์ดำเนินคดี (ชื่อ เลขรับแจ้ง เบอร์โทร) ไปด้วย", default=False,
+        help_text="ข้อมูลส่วนบุคคลจะออกไปอยู่บนเซิร์ฟเวอร์ของ LINE - เปิดเมื่อผู้บังคับบัญชาอนุญาตแล้วเท่านั้น")
+    line_group_id = models.CharField("กลุ่ม LINE ที่ส่ง", max_length=64, blank=True, editable=False)
+    line_group_name = models.CharField(max_length=200, blank=True, editable=False)
+    line_pending_group_id = models.CharField(max_length=64, blank=True, editable=False)
+    line_pending_group_name = models.CharField(max_length=200, blank=True, editable=False)
+    line_last_sent = models.DateField("ส่งอัตโนมัติล่าสุด (วันที่ของข้อมูล)", null=True, blank=True, editable=False)
+    line_last_error = models.TextField(blank=True, editable=False)
 
     class Meta:
         verbose_name = "การตั้งค่าระบบ"

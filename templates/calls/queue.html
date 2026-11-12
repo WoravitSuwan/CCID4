@@ -6,12 +6,13 @@
     <h1>{% if is_outsource %}รายการคดีที่ต้องโทร{% else %}ติดต่อผู้เสียหาย{% endif %}</h1>
     <p class="page-sub">คดีทั้งหมดในทะเบียน แยกตามการโทรและสถานะคดี · เจ้าหน้าที่ทุกคนใช้รายการเดียวกัน ใครโทรคดีไหนก่อนจะเป็นผู้รับผิดชอบคดีนั้น</p>
   </div>
-  {% if can_manage %}
   <div class="ml-auto flex flex-wrap gap-2">
+    <a class="btn btn-primary" href="{% url 'daily_report' %}">{% icon "clipboard" "h-4 w-4" %} สรุปผลวันนี้ / ข้อความลงบันทึกประจำวัน</a>
+    {% if can_manage %}
     <a class="btn" href="{% url 'calls_export' %}">{% icon "download" "h-4 w-4" %} ส่งออกผลการโทร (Excel)</a>
     <a class="btn" href="{% url 'calls_assign' %}">{% icon "users" "h-4 w-4" %} กำหนดผู้รับผิดชอบ (ไม่บังคับ)</a>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 <style>

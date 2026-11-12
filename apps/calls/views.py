@@ -1,6 +1,7 @@
 import datetime as dt
 from collections import Counter
 import io
+import json
 import re
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -25,7 +27,7 @@ from apps.accounts.models import Role
 from apps.core import permissions as perms
 from apps.core.audit import log
 from apps.core.downloads import content_disposition, file_download
-from apps.core.models import AuditAction
+from apps.core.models import AuditAction, SystemSetting
 from apps.registry.address_edit import address_form, save_address
 from apps.registry.forms import StyledForm
 from apps.registry.models import Case, Status
@@ -607,3 +609,81 @@ def status_report(request):
         "statuses": [(name, n, name in skip) for name, n in Counter(r["status"] for r in everything).most_common()],
         "skip": skip, "query": request.GET.urlencode(),
     })
+
+
+# --------------------------------------------------------------------------- daily summary (สรุปผลประจำวัน)
+def daily_report(request):
+    """สรุปผลประจำวัน + ข้อความลงบันทึกประจำวัน for one day: copy, Word files, and (admins) send to LINE."""
+    import tempfile
+
+    from apps.core.params import date_param
+    from apps.core.thai_format import thai_date_full
+
+    from . import daily_report as report
+    from . import line_bot
+
+    today = timezone.localdate()
+    day = min(date_param(request, "date") or today, today)
+    User = get_user_model()
+    caller_id = request.GET.get("caller", "")
+    caller = User.objects.filter(pk=caller_id).first() if caller_id.isdigit() else None
+    start = date_param(request, "from")
+    start = start if start and start < day else None  # several days, e.g. a diary that was not written in time
+    d = report.load(day, caller, start)
+
+    if request.method == "POST":
+        if not perms.is_admin(request.user):
+            raise PermissionDenied("ไม่มีสิทธิ์ส่งข้อความเข้า LINE")
+        try:
+            total = line_bot.send_day(day)
+        except line_bot.LineError as exc:
+            messages.error(request, f"ส่งเข้า LINE ไม่ได้: {exc}")
+        else:
+            log(request, AuditAction.EXPORT, None, f"ส่งสรุปผลประจำวัน {report.file_day(day)} เข้ากลุ่ม LINE "
+                                                   f"({total:,} Case)")
+            messages.success(request, f"ส่งสรุปผลวันที่ {thai_date_full(day, thai_digits=False)} เข้ากลุ่ม LINE แล้ว")
+        return redirect(f"{reverse('daily_report')}?date={day.isoformat()}")
+
+    fmt = request.GET.get("format", "")
+    if fmt in ("diary", "summary"):
+        name = report.file_name("ลงบันทึกประจำวัน" if fmt == "diary" else "สรุปข้อมูลคดี", d)
+        with tempfile.TemporaryDirectory() as tmp:
+            write = report.write_diary_docx if fmt == "diary" else report.write_summary_docx
+            body = write(d, Path(tmp) / "out.docx").read_bytes()
+        log(request, AuditAction.EXPORT, None, f"ดาวน์โหลด {name} ({d.counts['total']:,} Case)")
+        resp = HttpResponse(
+            body, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        resp["Content-Disposition"] = content_disposition(name)
+        return resp
+
+    s = SystemSetting.get()
+    return render(request, "calls/daily_report.html", {
+        "d": d, "day": day, "today": today, "counts": d.counts, "caller": caller,
+        "callers": User.objects.filter(pk__in=report.caller_ids(day, start)).order_by("first_name", "username"),
+        "start": start, "period_text": report.period_text(d),
+        "diary": report.diary_text(d), "summary": report.summary_text(d),
+        "groups": [(g, report.GROUP_SHORT[g], d.of(g)) for g in report.GROUP_LABEL],
+        "prev_day": day - dt.timedelta(days=1), "next_day": day + dt.timedelta(days=1) if day < today else None,
+        "date_text": thai_date_full(day, thai_digits=False),
+        "line_ready": line_bot.configured() and bool(s.line_group_id), "line_group": s.line_group_name,
+        "query": request.GET.urlencode(),
+    })
+
+
+@csrf_exempt
+@require_POST
+def line_webhook(request):
+    """Events from LINE (the bot joins/leaves a group, someone types a command). No login: the request is
+    checked by its X-Line-Signature instead."""
+    from . import line_bot
+
+    if not line_bot.configured():
+        return HttpResponse(status=404)
+    if not line_bot.valid_signature(request.body, request.headers.get("X-Line-Signature", "")):
+        return HttpResponse(status=403)
+    try:
+        events = json.loads(request.body or b"{}").get("events", [])
+    except ValueError:
+        return HttpResponse(status=400)
+    line_bot.handle_events(events)
+    return HttpResponse("OK")

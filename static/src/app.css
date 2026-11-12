@@ -41,6 +41,7 @@
   .btn-success:hover { @apply border-emerald-700 bg-emerald-700 text-white; box-shadow: 0 6px 16px -6px rgb(5 150 105 / .6); }
   .btn-danger { @apply border-rose-600 bg-rose-600 text-white; box-shadow: 0 1px 2px rgb(136 19 55 / .25); }
   .btn-danger:hover { @apply border-rose-700 bg-rose-700 text-white; box-shadow: 0 6px 16px -6px rgb(225 29 72 / .55); }
+  .btn.is-copied { @apply border-emerald-600 bg-emerald-600 text-white; background-image: none; }
   .btn-ghost { @apply border-transparent bg-transparent shadow-none; }
   .btn-ghost:hover { @apply translate-y-0 border-transparent bg-slate-200/60 shadow-none; }
   .btn-sm { @apply gap-1 rounded-md px-2.5 py-1 text-xs; }

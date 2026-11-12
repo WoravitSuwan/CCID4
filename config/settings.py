@@ -171,6 +171,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.core.tasks.cleanup_media",
         "schedule": 24 * 3600,
     },
+    # posts the daily summary to LINE once the set time has passed (does nothing while LINE is off)
+    "line-daily-summary": {
+        "task": "apps.calls.tasks.line_daily_summary",
+        "schedule": 5 * 60,
+    },
 }
 
 # Application settings
@@ -180,6 +185,11 @@ EXPORT_ASYNC_THRESHOLD = env_int("EXPORT_ASYNC_THRESHOLD", 20)
 DEFAULT_RETENTION_DAYS = env_int("MEDIA_RETENTION_DAYS", 30)
 # This system is for one unit only: the register import keeps only its cases (คอลัมน์ "หน่วยที่รับผิดชอบ")
 OWN_UNIT = env("OWN_UNIT", "กก.1 บก.สอท.4")
+
+# LINE bot (optional): leave empty to keep the system fully offline. See README "บอท LINE".
+LINE_CHANNEL_ACCESS_TOKEN = env("LINE_CHANNEL_ACCESS_TOKEN", "")
+LINE_CHANNEL_SECRET = env("LINE_CHANNEL_SECRET", "")
+LINE_TIMEOUT = env_int("LINE_TIMEOUT", 15)
 TEMPLATES_DOCX_DIR = BASE_DIR / "templates_docx"
 
 LOGGING = {
