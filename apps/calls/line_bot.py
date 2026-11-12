@@ -220,6 +220,12 @@ def handle_events(events: list[dict]) -> None:
                     s.line_pending_group_id = s.line_pending_group_name = ""
                 s.save(update_fields=["line_group_id", "line_group_name", "line_pending_group_id",
                                       "line_pending_group_name"])
+            elif (kind == "message" and group and group != s.line_group_id
+                  and not s.line_pending_group_id):
+                # the bot was invited before the webhook worked (the "join" was missed): any message in that
+                # group puts it up for an administrator to confirm, as a join would have
+                s.line_pending_group_id, s.line_pending_group_name = group, group_name(group)
+                s.save(update_fields=["line_pending_group_id", "line_pending_group_name"])
             elif kind == "message" and token and group and group == s.line_group_id:
                 text = (event.get("message") or {}).get("text", "")
                 if text.strip() in ("help", "ช่วยเหลือ", "คำสั่ง"):

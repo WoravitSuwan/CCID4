@@ -33,7 +33,7 @@ LINE_CHANNEL_SECRET=...</pre></li>
         <form method="post" class="ml-auto" onsubmit="return confirm('เลิกส่งข้อความเข้ากลุ่มนี้?')">{% csrf_token %}<input type="hidden" name="action" value="forget"><button class="btn btn-sm btn-ghost text-rose-700">เลิกใช้กลุ่มนี้</button></form>
       </div>
       {% else %}
-      <p class="mt-1 text-slate-500">ยังไม่มีกลุ่ม: เชิญบอทเข้ากลุ่ม LINE ระบบจะแสดงกลุ่มนั้นที่นี่ให้กดยืนยัน</p>
+      <p class="mt-1 text-slate-500">ยังไม่มีกลุ่ม: เชิญบอทเข้ากลุ่ม LINE ระบบจะแสดงกลุ่มนั้นที่นี่ให้กดยืนยัน (ถ้าเชิญไว้ก่อนแล้ว ให้พิมพ์ข้อความอะไรก็ได้ในกลุ่ม 1 ครั้ง แล้วรีเฟรชหน้านี้)</p>
       {% endif %}
       {% if s.line_pending_group_id %}
       <div class="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-indigo-50 p-3 ring-1 ring-indigo-200">

@@ -252,6 +252,19 @@ def test_group_is_used_only_after_an_admin_confirms_it(client, admin_user, line,
     assert s.line_group_id == ""
 
 
+def test_group_found_by_a_message_when_the_join_was_missed(client, line):
+    """Invited before the webhook was set up: typing anything in the group makes it show up for confirming."""
+    message = {"type": "message", "replyToken": "r1", "message": {"type": "text", "text": "ทดสอบ"},
+               "source": {"type": "group", "groupId": "Cgroup2", "userId": "U1"}}
+    signed(client, {"events": [message]})
+    s = SystemSetting.get()
+    assert s.line_pending_group_id == "Cgroup2" and s.line_pending_group_name == "กก.1 ห้องรายงาน"
+    assert not s.line_group_id and not [x for x in line if x[1] == "/message/reply"]  # nothing said in the group
+    # a message from another group does not replace the one waiting
+    signed(client, {"events": [dict(message, source={"type": "group", "groupId": "Cother"})]})
+    assert SystemSetting.get().line_pending_group_id == "Cgroup2"
+
+
 def test_push_sends_counts_and_the_list_only_when_allowed(line, day_calls):
     setting(line_group_id="Cgroup1")
     assert line_bot.send_day(DAY) == 7
