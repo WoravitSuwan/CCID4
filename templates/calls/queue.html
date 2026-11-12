@@ -56,10 +56,25 @@
     <select name="result" class="input w-full py-2 sm:w-52" onchange="this.form.submit()" aria-label="ผลการโทรล่าสุด"><option value="">ผลการโทร: ทุกแบบ</option>
       {% for v, l in results %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
       {% for v, l in outcomes %}<option value="{{ v }}" {% if request.GET.result == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
-    <select name="sort" class="input w-full py-2 sm:w-80" onchange="this.form.submit()" aria-label="เรียงตาม">
-      {% for v, l in sorts %}<option value="{{ v }}" {% if sort == v %}selected{% endif %}>เรียง: {{ l }}</option>{% endfor %}</select>
+    <select name="year" class="input w-full py-2 sm:w-44" onchange="this.form.submit()" aria-label="ปีที่รับแจ้ง">
+      <option value="">ปีที่รับแจ้ง: ทุกปี</option>
+      {% for ce, be in years %}<option value="{{ be }}" {% if year == ce %}selected{% endif %}>ปี {{ be }}</option>{% endfor %}</select>
+    <input type="hidden" name="sort" value="{{ sort }}">
     {% if filtered %}<a class="btn py-2" href="?tab={{ tab }}">ล้างตัวกรอง</a><span class="self-center text-xs text-amber-700">ตัวเลขทั้งหน้านับเฉพาะคดีที่ตรงกับคำค้น/ตัวกรอง</span>{% endif %}
   </form>
+  <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3" role="group" aria-label="เรียงตาม">
+    <span class="text-sm text-slate-500">เรียงตาม</span>
+    {% for b in sort_buttons %}
+    <a href="?{% query_replace sort=b.sort page='' %}" title="{{ b.title }}" aria-pressed="{% if b.active %}true{% else %}false{% endif %}"
+       class="sort-btn {% if b.active %}is-active{% endif %}">
+      {{ b.label }}
+      {% if b.up %}<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 3a1 1 0 0 1 .7.3l4 4a1 1 0 1 1-1.4 1.4L11 6.4V16a1 1 0 1 1-2 0V6.4L6.7 8.7a1 1 0 0 1-1.4-1.4l4-4A1 1 0 0 1 10 3Z" clip-rule="evenodd"/></svg>
+      {% elif b.down %}<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 17a1 1 0 0 1-.7-.3l-4-4a1 1 0 1 1 1.4-1.4L9 13.6V4a1 1 0 1 1 2 0v9.6l2.3-2.3a1 1 0 0 1 1.4 1.4l-4 4a1 1 0 0 1-.7.3Z" clip-rule="evenodd"/></svg>{% endif %}
+      {% if b.hint %}<span class="sort-hint">{{ b.hint }}</span>{% endif %}
+    </a>
+    {% endfor %}
+    <span class="text-xs text-slate-400">กดซ้ำเพื่อสลับลำดับ</span>
+  </div>
 </div>
 
 {% if can_issue and tab == "not_reached" or can_issue and tab == "to_issue" %}

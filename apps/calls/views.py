@@ -97,7 +97,26 @@ def _apply_filters(request, qs):
         qs = qs.filter(funnel.NOT_REACHED_Q)
     elif result in CallOutcome.values:
         qs = qs.filter(last_outcome=result)
+    year = _year(request)
+    if year:
+        qs = qs.filter(case__report_year=year)
     return qs
+
+
+def _year(request) -> int | None:
+    """?year=2569 (Buddhist era, as shown) or 2026 -> 2026."""
+    value = request.GET.get("year", "").strip()
+    if not value.isdigit():
+        return None
+    year = int(value)
+    return year - 543 if year > 2400 else year
+
+
+def _years():
+    """The report years present, newest first, as (CE, BE)."""
+    years = (Case.objects.exclude(report_year__isnull=True).values_list("report_year", flat=True)
+             .distinct().order_by("-report_year"))
+    return [(y, y + 543) for y in years]
 
 
 def _ordered(qs):
@@ -120,6 +139,27 @@ def _current_sort(request) -> str:
         request.session[SORT_KEY] = sort if sort in dict(SORTS) else ""
     sort = request.session.get(SORT_KEY, "")
     return sort if sort in dict(SORTS) else ""
+
+
+# button: label, first click, second click, and how each direction reads
+SORT_BUTTONS = [
+    ("ลำดับงานโทร", "", "", {"": ""}),
+    ("วันที่รับแจ้ง", "-date", "date", {"-date": "ใหม่ → เก่า", "date": "เก่า → ใหม่"}),
+    ("มูลค่าความเสียหาย", "damage", "-damage", {"damage": "น้อย → มาก", "-damage": "มาก → น้อย"}),
+]
+
+
+def _sort_buttons(sort: str) -> list[dict]:
+    """Buttons for the order; clicking the active one turns its direction around."""
+    out = []
+    for label, first, second, hints in SORT_BUTTONS:
+        active = sort in hints
+        target = (second if sort == first else first) if active else first
+        out.append({"label": label, "active": active, "hint": hints.get(sort, "") if active else "",
+                    "sort": target, "up": active and sort in ("date", "damage"),
+                    "down": active and sort in ("-date", "-damage"),
+                    "title": f"เรียงตาม{label}" + (f" ({hints[target]})" if hints.get(target) else "")})
+    return out
 
 
 def _sorted(qs, sort):
@@ -168,7 +208,9 @@ def queue(request):
         "sort": sort, "sorts": SORTS,
         "tab_label": funnel.STAGES[tab][0], "tab_in_nav": tab in funnel.TAB_KEYS,
         "sankey": funnel.sankey(counts),
-        "filtered": bool(request.GET.get("q") or request.GET.get("result")),
+        "filtered": bool(request.GET.get("q") or request.GET.get("result") or _year(request)),
+        "years": _years(), "year": _year(request),
+        "sort_buttons": _sort_buttons(sort),
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
         "lock_minutes": OPEN_LOCK_MINUTES,
@@ -211,13 +253,12 @@ class CallForm(StyledForm):
     note = forms.CharField(label="หมายเหตุ / สิ่งที่ผู้เสียหายแจ้ง", required=False,
                            widget=forms.Textarea(attrs={"rows": 3}))
     callback_at = forms.DateTimeField(label="นัดโทรกลับ", required=False, widget=DT_WIDGET)
-    appointment_at = forms.DateTimeField(label="นัดเข้าพบพนักงานสอบสวน", required=False, widget=DT_WIDGET)
+    appointment_at = forms.DateTimeField(label="วันเวลานัดเข้าพบพนักงานสอบสวน", required=False, widget=DT_WIDGET)
+    # the date can be left out (not agreed yet); it can be added later with another call record
 
     def clean(self):
         data = super().clean()
         outcome = data.get("outcome")
-        if outcome == CallOutcome.APPOINTED and not data.get("appointment_at"):
-            self.add_error("appointment_at", "ระบุวันเวลาที่นัดเข้าพบพนักงานสอบสวน")
         if outcome == CallOutcome.CALLBACK and not data.get("callback_at"):
             self.add_error("callback_at", "ระบุวันเวลาที่จะโทรกลับ")
         if outcome == CallOutcome.REACHED_OTHER and not data.get("note", "").strip():

@@ -137,6 +137,37 @@
   .alert-warning { @apply border-amber-200 bg-amber-50 text-amber-900; }
   .alert-error { @apply border-rose-200 bg-rose-50 text-rose-900; }
 
+  /* call result: one card per outcome */
+  .outcome-card { @apply flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-slate-700 shadow-sm;
+                  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+  .outcome-card:hover { @apply -translate-y-px shadow; }
+  .outcome-card:active { transform: scale(.98); }
+  .outcome-icon { @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500; transition: background-color .15s ease, color .15s ease; }
+  .outcome-card.is-good:hover { @apply border-emerald-300; }
+  .outcome-card.is-drop:hover { @apply border-amber-300; }
+  .outcome-card.is-good:has(:checked) { @apply border-emerald-500 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-500; }
+  .outcome-card.is-good:has(:checked) .outcome-icon { @apply bg-emerald-600 text-white; }
+  .outcome-card.is-drop:has(:checked) { @apply border-amber-500 bg-amber-50 text-amber-900 ring-1 ring-amber-500; }
+  .outcome-card.is-drop:has(:checked) .outcome-icon { @apply bg-amber-500 text-white; }
+  .appt-box { @apply rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200; animation: rise .25s ease both; }
+  .appt-box input[type="datetime-local"] { @apply w-auto py-2; }
+  .appt-badge { @apply inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white; }
+  .appt-chip { @apply rounded-full bg-white px-3 py-1.5 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200;
+               transition: background-color .15s ease, color .15s ease, transform .15s ease; }
+  .appt-chip:hover { @apply bg-emerald-100; }
+  .appt-chip:active { transform: scale(.95); }
+  .appt-chip.is-active { @apply bg-emerald-600 text-white ring-emerald-600; }
+  .appt-chip.is-none.is-active { @apply bg-slate-600 ring-slate-600; }
+
+  /* sort buttons on the call list */
+  .sort-btn { @apply inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-sm font-medium text-slate-600 shadow-sm ring-1 ring-slate-200;
+              transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease; }
+  .sort-btn:hover { @apply -translate-y-px text-indigo-700 ring-indigo-300; }
+  .sort-btn:active { transform: scale(.96); }
+  .sort-btn.is-active { @apply bg-indigo-600 text-white ring-indigo-600; box-shadow: 0 6px 14px -6px rgb(79 70 229 / .6); }
+  .sort-btn.is-active:hover { @apply text-white; }
+  .sort-hint { @apply rounded-full bg-white/20 px-2 py-0.5 text-xs font-normal; }
+
   .dl { @apply grid grid-cols-3 gap-x-3 gap-y-2.5 text-sm; }
   .dl dt { @apply text-slate-500; }
   .dl dd { @apply col-span-2 text-slate-800; }

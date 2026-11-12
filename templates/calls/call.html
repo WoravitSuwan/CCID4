@@ -131,24 +131,39 @@
     <div class="mb-2 text-sm font-medium text-emerald-700">ติดต่อได้</div>
     <div class="grid gap-2 sm:grid-cols-2">
       {% for value, label in outcomes_reached %}
-      <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm transition hover:border-emerald-300 hover:bg-emerald-50/50 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 has-[:checked]:ring-1 has-[:checked]:ring-emerald-500">
-        <input type="radio" name="outcome" value="{{ value }}" class="mt-0.5 h-4 w-4 text-emerald-600" {% if form.outcome.value == value %}checked{% endif %} required>
+      <label class="outcome-card is-good">
+        <input type="radio" name="outcome" value="{{ value }}" class="h-4 w-4 shrink-0 text-emerald-600" {% if form.outcome.value == value %}checked{% endif %} required>
+        <span class="outcome-icon">{% if value == "appointed" %}{% icon "calendar" "h-4 w-4" %}{% elif value == "info" %}{% icon "info" "h-4 w-4" %}{% elif value == "callback" %}{% icon "clock" "h-4 w-4" %}{% elif value == "not_proceed" %}{% icon "x" "h-4 w-4" %}{% else %}{% icon "pencil" "h-4 w-4" %}{% endif %}</span>
         <span>{{ label }}</span></label>
       {% endfor %}
     </div>
     <div class="mb-2 mt-4 text-sm font-medium text-amber-700">ติดต่อไม่ได้</div>
     <div class="grid gap-2 sm:grid-cols-2">
       {% for value, label in outcomes_not %}
-      <label class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm transition hover:border-amber-300 hover:bg-amber-50/50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 has-[:checked]:ring-1 has-[:checked]:ring-amber-500">
-        <input type="radio" name="outcome" value="{{ value }}" class="mt-0.5 h-4 w-4 text-amber-600" {% if form.outcome.value == value %}checked{% endif %}>
+      <label class="outcome-card is-drop">
+        <input type="radio" name="outcome" value="{{ value }}" class="h-4 w-4 shrink-0 text-amber-600" {% if form.outcome.value == value %}checked{% endif %}>
+        <span class="outcome-icon">{% icon "phone" "h-4 w-4" %}</span>
         <span>{{ label }}</span></label>
       {% endfor %}
     </div>
     {{ form.outcome.errors }}
 
     <div class="mt-5 grid gap-4 sm:grid-cols-2">
-      <div id="f-appointment" class="hidden sm:col-span-2 rounded-lg bg-emerald-50 p-3 ring-1 ring-emerald-200"><label class="label" for="id_appointment_at">{{ form.appointment_at.label }} *</label>{{ form.appointment_at }}{{ form.appointment_at.errors }}
-        <span class="helptext">แจ้งพนักงานสอบสวน: {% if case.investigator %}{{ case.investigator }}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %}</span></div>
+      <div id="f-appointment" class="appt-box hidden sm:col-span-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="appt-badge">{% icon "calendar" "h-4 w-4" %} นัดเข้าพบพนักงานสอบสวน</span>
+          <span class="text-sm text-emerald-900/70">ใส่วันเวลานัด หรือเว้นว่างไว้ถ้ายังไม่ได้ตกลงวัน</span>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <label class="sr-only" for="id_appointment_at">{{ form.appointment_at.label }}</label>
+          {{ form.appointment_at }}
+          <button type="button" class="appt-chip" data-days="1">พรุ่งนี้ 09:00</button>
+          <button type="button" class="appt-chip" data-days="3">อีก 3 วัน</button>
+          <button type="button" class="appt-chip" data-days="7">อีก 7 วัน</button>
+          <button type="button" class="appt-chip is-none" data-days="">ยังไม่กำหนดวัน</button>
+        </div>
+        {{ form.appointment_at.errors }}
+        <span class="helptext mt-2">แจ้งพนักงานสอบสวน: {% if case.investigator %}{{ case.investigator }}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %} · ตกลงวันได้ภายหลัง บันทึกผลอีกครั้งพร้อมวันนัด</span></div>
       <div id="f-callback" class="hidden sm:col-span-2 rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200"><label class="label" for="id_callback_at">{{ form.callback_at.label }}</label>{{ form.callback_at }}{{ form.callback_at.errors }}
         <span class="helptext">คดีจะกลับมาอยู่ในแท็บ "ต้องโทร" เมื่อถึงเวลา</span></div>
       <div><label class="label" for="id_phone">{{ form.phone.label }}</label>{{ form.phone }}{{ form.phone.errors }}</div>
@@ -173,6 +188,17 @@
     const cb=['callback','off','no_answer','busy','voicemail'].includes(v);
     document.getElementById('f-callback').classList.toggle('hidden',!cb);};
   form.addEventListener('change',show); show();
+  // quick appointment dates (working days, 09:00); "ยังไม่กำหนดวัน" clears it
+  const appt=document.getElementById('id_appointment_at'), chips=[...document.querySelectorAll('.appt-chip')];
+  const mark=()=>chips.forEach(c=>c.classList.toggle('is-active', c.dataset.days==='' ? !appt.value : c.dataset.value===appt.value));
+  chips.forEach(c=>c.addEventListener('click',()=>{
+    if(c.dataset.days===''){appt.value='';}
+    else{const d=new Date();d.setDate(d.getDate()+Number(c.dataset.days));
+      while(d.getDay()===0||d.getDay()===6)d.setDate(d.getDate()+1);
+      const p=n=>String(n).padStart(2,'0');
+      appt.value=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T09:00`;c.dataset.value=appt.value;}
+    mark();}));
+  appt.addEventListener('input',mark); mark();
 })();
 </script>
 {% endblock %}

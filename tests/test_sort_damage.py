@@ -31,7 +31,7 @@ def test_call_list_by_damage(client, admin_user, amounts):
     assert [a.case.damage_amount for a in down.context["page"]][:4] == [
         Decimal("99999"), Decimal("5000"), Decimal("120.50"), Decimal("0")]
     html = up.content.decode()
-    assert "มูลค่า 99,999.00 บาท" in html and 'value="damage" selected' in html
+    assert "มูลค่า 99,999.00 บาท" in html and 'class="sort-btn is-active"' in html and "น้อย → มาก" in html
     # the order is kept when changing tab or page
     assert "sort=damage" in html
     assert client.get("/calls/", {"sort": "nonsense"}).context["sort"] == ""
@@ -79,3 +79,32 @@ def test_case_register_remembers_the_order(client, admin_user, amounts):
     page = client.get("/cases/", {"open": "on"})  # e.g. the menu or the case page's back link
     assert page.context["form"].current_sort == "-damage"
     assert _amounts(page.context["page"])[0] == Decimal("99999")
+
+
+def test_year_filter_on_the_call_list(client, admin_user, imported):
+    years = sorted(set(Case.objects.exclude(report_year__isnull=True).values_list("report_year", flat=True)))
+    assert len(years) >= 2  # the sample register has two years
+    client.force_login(admin_user)
+    page = client.get("/calls/")
+    assert [ce for ce, be in page.context["years"]] == sorted(years, reverse=True)
+    for ce in years:
+        for value in (ce + 543, ce):  # Buddhist era as shown, or the CE year
+            resp = client.get("/calls/", {"tab": "all", "year": value})
+            listed = {a.case.report_year for a in resp.context["page"].paginator.object_list}
+            assert listed == {ce}, value
+            assert resp.context["counts"]["all"] == Case.objects.filter(report_year=ce).count()
+            assert resp.context["filtered"]
+    assert f'value="{years[0] + 543}"' in page.content.decode()
+    assert client.get("/calls/", {"year": "abc"}).status_code == 200
+
+
+def test_sort_buttons_turn_the_direction_around(client, admin_user, amounts):
+    client.force_login(admin_user)
+    buttons = {b["label"]: b for b in client.get("/calls/", {"sort": "damage"}).context["sort_buttons"]}
+    damage, date, work = buttons["มูลค่าความเสียหาย"], buttons["วันที่รับแจ้ง"], buttons["ลำดับงานโทร"]
+    assert damage["active"] and damage["up"] and damage["hint"] == "น้อย → มาก" and damage["sort"] == "-damage"
+    assert not date["active"] and date["sort"] == "-date" and not work["active"] and work["sort"] == ""
+    buttons = {b["label"]: b for b in client.get("/calls/", {"sort": "-damage"}).context["sort_buttons"]}
+    assert buttons["มูลค่าความเสียหาย"]["down"] and buttons["มูลค่าความเสียหาย"]["sort"] == "damage"
+    html = client.get("/calls/", {"sort": "-date"}).content.decode()
+    assert 'class="sort-btn is-active"' in html and "ใหม่ → เก่า" in html

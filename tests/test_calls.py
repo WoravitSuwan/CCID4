@@ -84,9 +84,7 @@ def test_record_calls_flow(client, imported, caller, clerk):
     assert resp.status_code == 302
     a = CallAssignment.objects.get(case=c1)
     assert a.attempt_count == 1 and not a.is_done and a.last_outcome == "off"
-    # appointment requires a date
-    resp = client.post(f"/calls/{c1.pk}/", {"outcome": "appointed", "called_at": now, "go": "stay"})
-    assert resp.status_code == 200 and "appointment_at" in resp.context["form"].errors
+    # (the appointment date is optional: see test_appointment_date_is_optional)
     appt = (timezone.localtime() + dt.timedelta(days=3)).strftime("%Y-%m-%dT10:00")
     resp = client.post(f"/calls/{c1.pk}/", {"outcome": "appointed", "called_at": now, "appointment_at": appt,
                                             "note": "สะดวกมาวันพฤหัส", "go": "next"})
@@ -260,3 +258,18 @@ def test_call_pages_work_for_a_case_without_complainant_record(client, imported,
     page = client.get(f"/calls/?q={case.receipt_no}")
     assert page.status_code == 200 and case.receipt_no in page.content.decode()
     assert client.get(f"/calls/{case.pk}/").status_code == 200
+
+
+def test_appointment_date_is_optional(client, imported, caller):
+    client.force_login(caller)
+    case = Case.objects.not_final().order_by("receipt_no").first()
+    now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    resp = client.post(f"/calls/{case.pk}/", {"outcome": "appointed", "called_at": now, "go": "stay"})
+    assert resp.status_code == 302  # saved without a date
+    attempt = CallAttempt.objects.get(case=case)
+    assert attempt.outcome == "appointed" and attempt.appointment_at is None
+    later = (timezone.localtime() + dt.timedelta(days=3)).strftime("%Y-%m-%dT09:00")
+    client.post(f"/calls/{case.pk}/", {"outcome": "appointed", "called_at": now, "appointment_at": later, "go": "stay"})
+    assert CallAttempt.objects.filter(case=case, appointment_at__isnull=False).count() == 1
+    page = client.get(f"/calls/{case.pk}/").content.decode()
+    assert "ยังไม่กำหนดวัน" in page and 'class="appt-chip"' in page and "outcome-card" in page
