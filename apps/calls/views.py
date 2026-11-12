@@ -627,9 +627,7 @@ def daily_report(request):
     User = get_user_model()
     caller_id = request.GET.get("caller", "")
     caller = User.objects.filter(pk=caller_id).first() if caller_id.isdigit() else None
-    start = date_param(request, "from")
-    start = start if start and start < day else None  # several days, e.g. a diary that was not written in time
-    d = report.load(day, caller, start)
+    d = report.load(day, caller)
 
     if request.method == "POST":
         if not perms.is_admin(request.user):
@@ -659,8 +657,8 @@ def daily_report(request):
     s = SystemSetting.get()
     return render(request, "calls/daily_report.html", {
         "d": d, "day": day, "today": today, "counts": d.counts, "caller": caller,
-        "callers": User.objects.filter(pk__in=report.caller_ids(day, start)).order_by("first_name", "username"),
-        "start": start, "period_text": report.period_text(d),
+        "callers": User.objects.filter(pk__in=report.caller_ids(day)).order_by("first_name", "username"),
+        "period_text": report.period_text(d),
         "diary": report.diary_text(d), "summary": report.summary_text(d),
         "groups": [(g, report.GROUP_SHORT[g], d.of(g)) for g in report.GROUP_LABEL],
         "prev_day": day - dt.timedelta(days=1), "next_day": day + dt.timedelta(days=1) if day < today else None,

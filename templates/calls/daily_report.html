@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <h1>สรุปผลประจำวัน</h1>
-    <p class="page-sub">ผลการโทร{{ period_text }}{% if caller %} · เฉพาะ {{ caller.display_name }}{% endif %} · คดีที่โทรหลายครั้งนับครั้งเดียว ตามผลการโทรครั้งสุดท้าย{% if start %}ในช่วงนั้น{% else %}ของวันนั้น{% endif %}</p>
+    <p class="page-sub">ผลการโทร{{ period_text }}{% if caller %} · เฉพาะ {{ caller.display_name }}{% endif %} · คดีที่โทรหลายครั้งนับครั้งเดียว ตามผลการโทรครั้งสุดท้ายของวันนั้น</p>
   </div>
 </div>
 
@@ -18,13 +18,6 @@
     {% if next_day %}<a class="btn btn-sm" href="?date={{ next_day|date:'Y-m-d' }}{% if caller %}&caller={{ caller.pk }}{% endif %}" title="วันถัดไป" aria-label="วันถัดไป">{% icon "chevron-right" "h-4 w-4" %}</a>{% endif %}
     {% if day != today %}<a class="btn btn-sm" href="?{% if caller %}caller={{ caller.pk }}{% endif %}">วันนี้</a>{% endif %}
   </div>
-  </div>
-  <div>
-    <label class="label" for="f-from">ตั้งแต่วันที่ <span class="font-normal text-slate-400">(ถ้ารวมหลายวัน)</span></label>
-    <div class="flex items-center gap-1">
-      <input id="f-from" type="date" name="from" value="{% if start %}{{ start|date:'Y-m-d' }}{% endif %}" max="{{ day|date:'Y-m-d' }}" class="input w-auto" onchange="this.form.submit()">
-      {% if start %}<a class="btn btn-sm btn-ghost" href="?date={{ day|date:'Y-m-d' }}{% if caller %}&caller={{ caller.pk }}{% endif %}" title="กลับเป็นวันเดียว">{% icon "x" "h-4 w-4" %}</a>{% endif %}
-    </div>
   </div>
   <div>
     <label class="label" for="f-caller">ผู้โทร</label>
@@ -57,7 +50,7 @@
       <button type="button" class="btn btn-primary" data-copy="#t-summary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
       <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary">{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี (Word)</a>
       {% if perm_settings %}
-      {% if line_ready and not start %}
+      {% if line_ready %}
       <form method="post" class="inline" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE {{ line_group|default:'' }} ตอนนี้?\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
         <button class="btn">{% icon "chat" "h-4 w-4" %} ส่งเข้ากลุ่ม LINE</button></form>
       {% else %}
@@ -106,7 +99,7 @@
           <td data-label="เบอร์โทร" class="whitespace-nowrap font-mono">{{ r.phone }}</td>
           <td data-label="ผล">{{ r.attempt.get_outcome_display }}{% if r.calls > 1 %} <span class="text-xs text-slate-400">(โทร {{ r.calls }} ครั้ง)</span>{% endif %}</td>
           <td data-label="ผู้โทร">{% if r.attempt.created_by %}{{ r.attempt.created_by.display_name }}{% else %}-{% endif %}</td>
-          <td data-label="เวลา" class="whitespace-nowrap tabular-nums">{% if start %}{{ r.attempt.called_at|thai_date }} {% endif %}{{ r.attempt.called_at|time:"H:i" }} น.</td>
+          <td data-label="เวลา" class="whitespace-nowrap tabular-nums">{{ r.attempt.called_at|time:"H:i" }} น.</td>
         </tr>
       {% endfor %}
       </tbody>

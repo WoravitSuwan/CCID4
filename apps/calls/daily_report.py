@@ -59,17 +59,9 @@ class Row:
 
 @dataclass
 class Day:
-    day: dt.date  # the report day (the last day of a range)
+    day: dt.date
     rows: list[Row] = field(default_factory=list)
     caller: object = None  # one staff member, or None for everyone
-    start: dt.date | None = None  # first day, when the report covers several days
-
-    def __post_init__(self):
-        self.start = self.start or self.day
-
-    @property
-    def is_range(self) -> bool:
-        return self.start < self.day
 
     def of(self, group: str) -> list[Row]:
         return [r for r in self.rows if r.group == group]
@@ -87,22 +79,20 @@ class Day:
         return self.of(NOT_WANT)
 
 
-def _between(start: dt.date, end: dt.date):
+def _of_day(day: dt.date):
     tz = timezone.get_current_timezone()
-    first = timezone.make_aware(dt.datetime.combine(start, dt.time.min), tz)
-    after = timezone.make_aware(dt.datetime.combine(end + dt.timedelta(days=1), dt.time.min), tz)
+    first = timezone.make_aware(dt.datetime.combine(day, dt.time.min), tz)
+    after = timezone.make_aware(dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min), tz)
     return CallAttempt.objects.filter(called_at__gte=first, called_at__lt=after)
 
 
-def caller_ids(day: dt.date, start: dt.date | None = None) -> set[int]:
-    return set(_between(start or day, day).exclude(created_by=None).values_list("created_by", flat=True))
+def caller_ids(day: dt.date) -> set[int]:
+    return set(_of_day(day).exclude(created_by=None).values_list("created_by", flat=True))
 
 
-def load(day: dt.date, caller=None, start: dt.date | None = None) -> Day:
-    """Cases called on ``day`` (or from ``start`` to ``day``), each once, by its last call in that time."""
-    start = min(start or day, day)
-    qs = (_between(start, day).select_related("case__complainant", "created_by")
-          .order_by("called_at", "number", "pk"))
+def load(day: dt.date, caller=None) -> Day:
+    """Cases called on ``day``, each once, by its last call of that day."""
+    qs = _of_day(day).select_related("case__complainant", "created_by").order_by("called_at", "number", "pk")
     if caller is not None:
         qs = qs.filter(created_by=caller)
     first_at, last, calls = {}, {}, {}
@@ -112,7 +102,7 @@ def load(day: dt.date, caller=None, start: dt.date | None = None) -> Day:
         calls[a.case_id] = calls.get(a.case_id, 0) + 1
     rows = [Row(a, GROUP_OF.get(a.outcome, OTHER), calls[cid]) for cid, a in last.items()]
     rows.sort(key=lambda r: (first_at[r.case.pk], r.case.receipt_no))
-    return Day(day, rows, caller, start)
+    return Day(day, rows, caller)
 
 
 # --------------------------------------------------------------------------- texts
@@ -141,10 +131,7 @@ def diary_text(d: Day) -> str:
 
 
 def period_text(d: Day) -> str:
-    """'ประจำวันที่ 9 พฤศจิกายน 2569', or 'ระหว่างวันที่ 28 ตุลาคม 2569 ถึง 9 พฤศจิกายน 2569'."""
-    if d.is_range:
-        return (f"ระหว่างวันที่ {thai_date_full(d.start, thai_digits=False)} "
-                f"ถึง {thai_date_full(d.day, thai_digits=False)}")
+    """'ประจำวันที่ 9 พฤศจิกายน 2569'."""
     return f"ประจำวันที่ {thai_date_full(d.day, thai_digits=False)}"
 
 
@@ -173,9 +160,8 @@ def file_day(day: dt.date) -> str:
 
 
 def file_name(stem: str, d: Day) -> str:
-    """'ลงบันทึกประจำวัน 9.11.2569.docx' (a range: 'ลงบันทึกประจำวัน 28.10.2569-9.11.2569.docx')."""
-    days = f"{file_day(d.start)}-{file_day(d.day)}" if d.is_range else file_day(d.day)
-    return f"{stem} {days}.docx"
+    """'ลงบันทึกประจำวัน 9.11.2569.docx'."""
+    return f"{stem} {file_day(d.day)}.docx"
 
 
 def _when(value: dt.datetime) -> str:
@@ -266,7 +252,7 @@ def write_diary_docx(d: Day, path: Path) -> Path:
 
 
 def write_summary_docx(d: Day, path: Path) -> Path:
-    """สรุปข้อมูลคดีและบันทึกการติดต่อ: every case called, six lines each."""
+    """สรุปข้อมูลคดีและบันทึกการติดต่อ: every case called that day, six lines each."""
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     from apps.core.templatetags.thai import money

@@ -146,19 +146,16 @@ def test_page_texts_and_word_files(client, caller, day_calls):
     assert mine["counts"]["total"] == 6 and mine["caller"] == caller
 
 
-def test_several_days(client, caller, day_calls):
-    """e.g. the diary of 28 ต.ค. - 9 พ.ย. written late: each case once, by its last call in the range."""
-    before = DAY - dt.timedelta(days=1)
-    d = report.load(DAY, start=before)
-    assert d.is_range and d.counts["total"] == 8 and d.counts["not_want"] == 3  # + the call at 23:59 the day before
-    assert report.period_text(d) == "ระหว่างวันที่ 8 พฤศจิกายน 2569 ถึง 9 พฤศจิกายน 2569"
-    assert report.file_name("ลงบันทึกประจำวัน", d) == "ลงบันทึกประจำวัน 8.11.2569-9.11.2569.docx"
-    assert report.diary_text(d).startswith("วันนี้( 9 พ.ย.69)")
+def test_summary_word_file_has_only_the_cases_called_that_day(client, caller, day_calls):
+    """สรุปข้อมูลคดี is daily: calls of the day before or after are not in it."""
+    from docx import Document
+
     client.force_login(caller)
-    page = client.get("/reports/daily/", {"date": "2026-11-09", "from": "2026-11-08"})
-    assert page.context["counts"]["total"] == 8 and "ระหว่างวันที่ 8 พฤศจิกายน 2569" in page.content.decode()
-    # a start after the end is ignored
-    assert client.get("/reports/daily/", {"date": "2026-11-09", "from": "2026-11-10"}).context["start"] is None
+    resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary", "from": "2026-11-01"})
+    text = "\n".join(p.text for p in Document(BytesIO(resp.content)).paragraphs)
+    assert sum(line.startswith("ผู้เสียหาย:") for line in text.split("\n")) == 7
+    assert day_calls[7].receipt_no not in text and day_calls[8].receipt_no not in text
+    assert "วันที่ 8 พ.ย." not in text and "วันที่ 10 พ.ย." not in text
 
 
 def test_contact_log_lines_in_the_registers_words(day_calls):
