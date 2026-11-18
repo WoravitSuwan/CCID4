@@ -73,6 +73,7 @@
       </div>
       {% endif %}
       <p class="mt-3 text-xs text-slate-500">Webhook URL: <span class="break-all font-mono">{{ webhook_url }}</span></p>
+      <p class="mt-1 text-xs text-slate-500">ที่อยู่ระบบสำหรับลิงก์ไฟล์: {% if site_url %}<span class="break-all font-mono">{{ site_url }}</span>{% else %}<span class="text-amber-700">ยังไม่ทราบ (จะรู้เองเมื่อ LINE ส่งข้อมูลมาครั้งแรก หรือตั้ง SITE_URL ใน .env)</span>{% endif %}</p>
     </section>
 
     <form method="post" class="card space-y-3">{% csrf_token %}<input type="hidden" name="action" value="save">
@@ -81,7 +82,7 @@
       <div>
         {% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>
         {% else %}<label class="label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
-        {% if f.help_text %}<span class="helptext {% if f.name == 'line_include_list' %}text-amber-700{% endif %}">{{ f.help_text }}</span>{% endif %}{{ f.errors }}
+        {% if f.help_text %}<span class="helptext {% if f.name == 'line_include_list' or f.name == 'line_send_files' %}text-amber-700{% endif %}">{{ f.help_text }}</span>{% endif %}{{ f.errors }}
       </div>
       {% endfor %}
       <div class="flex flex-wrap items-center gap-2">

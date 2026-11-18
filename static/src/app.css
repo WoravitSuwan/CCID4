@@ -105,6 +105,7 @@
   .table { @apply min-w-full text-sm; }
   .table thead th { @apply sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur; }
   .table td { @apply border-b border-slate-100 px-3 py-2.5 align-top; }
+  .table-tight th, .table-tight td { padding-left: .55rem; padding-right: .55rem; }  /* many columns: fits 1366 px */
   .table tbody tr { @apply transition-colors hover:bg-indigo-50/40; }
   .table tbody tr.cursor-pointer td:first-child { box-shadow: inset 0 0 0 rgb(79 70 229); transition: box-shadow .2s ease; }
   .table tbody tr.cursor-pointer:hover td:first-child { box-shadow: inset 3px 0 0 rgb(79 70 229); }
@@ -169,6 +170,26 @@
   .sort-btn.is-active:hover { @apply text-white; }
   .sort-hint { @apply rounded-full bg-white/20 px-2 py-0.5 text-xs font-normal; }
 
+  /* column headings: click the name to sort, the funnel to filter (several values can be ticked) */
+  .col-head { @apply inline-flex items-center gap-1; }
+  th.text-right .col-head { @apply justify-end; }
+  .col-sort { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1 py-0.5 -mx-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900; }
+  .col-sort.is-active { @apply text-indigo-700; }
+  .col-sort-idle { @apply opacity-30; }
+  .col-sort:hover .col-sort-idle { @apply opacity-70; }
+  .col-filter { @apply relative inline-block; }
+  .col-filter > summary { list-style: none; }
+  .col-filter > summary::-webkit-details-marker { display: none; }
+  .col-filter-btn { @apply relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700; }
+  .col-filter-btn.is-active { @apply bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200; }
+  .col-filter[open] > .col-filter-btn { @apply bg-indigo-600 text-white; }
+  .col-filter-dot { @apply absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-indigo-600 ring-2 ring-white; }
+  .col-filter-panel { @apply fixed z-50 w-64 rounded-xl bg-white p-3 text-left font-normal normal-case tracking-normal shadow-xl ring-1 ring-slate-200; }
+  .col-filter-list { @apply max-h-72 overflow-y-auto pr-1; }
+  .col-filter-group { @apply px-1 pb-1 pt-2 text-xs font-semibold text-slate-400; }
+  .col-filter-item { @apply flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm text-slate-700 hover:bg-slate-50; }
+  .filter-chip { @apply inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-800 ring-1 ring-indigo-200 hover:bg-indigo-100 hover:text-indigo-900; }
+
   .dl { @apply grid grid-cols-3 gap-x-3 gap-y-2.5 text-sm; }
   .dl dt { @apply text-slate-500; }
   .dl dd { @apply col-span-2 text-slate-800; }
@@ -178,6 +199,12 @@
 @media (max-width: 767px) {
   .table-wrap:has(> .table-cards) { background: transparent; box-shadow: none; overflow: visible; }
   .table-cards thead { display: none; }
+  /* the call list keeps its headings on phones as a row of sort/filter buttons */
+  .table-cards.has-head-controls thead { display: block; margin-bottom: .75rem; }
+  .table-cards.has-head-controls thead tr { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .table-cards.has-head-controls thead th { display: block; padding: .25rem .6rem; border: 0; border-radius: 9999px; background: #fff;
+                                            box-shadow: 0 0 0 1px rgb(226 232 240); }
+  .table-cards.has-head-controls thead th.th-plain, .table-cards.has-head-controls thead th.th-check { display: none; }
   .table-cards, .table-cards tbody { display: block; }
   .table-cards tbody tr { display: block; margin-bottom: .75rem; border-radius: .9rem; background: #fff; padding: .6rem .9rem;
                           box-shadow: 0 1px 2px rgb(15 23 42 / .06), 0 0 0 1px rgb(226 232 240); }
@@ -195,7 +222,7 @@
 
 /* motion: page enters, bars grow, charts draw; all switched off for people who ask for less motion */
 @layer utilities {
-  .page-enter { animation: rise .35s cubic-bezier(.2,.8,.2,1) both; }
+  .page-enter { animation: rise .35s cubic-bezier(.2,.8,.2,1) backwards; }  /* no transform left behind: it would move fixed menus */
   .grow-x { transform-origin: left; animation: grow-x .8s cubic-bezier(.2,.8,.2,1) both; }
   .fade-in { animation: fade .5s ease both; }
 }

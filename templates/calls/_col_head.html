@@ -1,0 +1,38 @@
+{% load ui thai %}{# one column heading: label (click = sort), optional filter dropdown. args: label key(sort) c(col info) filter(name) groups active #}
+<div class="col-head">
+  {% if c %}<a href="?{% query_replace sort=c.sort page='' %}" class="col-sort {% if c.up or c.down %}is-active{% endif %}" title="{{ c.title }}" data-keep-scroll>{{ label }}
+    {% if c.up %}<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-label="น้อยไปมาก"><path fill-rule="evenodd" d="M10 3a1 1 0 0 1 .7.3l4 4a1 1 0 1 1-1.4 1.4L11 6.4V16a1 1 0 1 1-2 0V6.4L6.7 8.7a1 1 0 0 1-1.4-1.4l4-4A1 1 0 0 1 10 3Z" clip-rule="evenodd"/></svg>
+    {% elif c.down %}<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-label="มากไปน้อย"><path fill-rule="evenodd" d="M10 17a1 1 0 0 1-.7-.3l-4-4a1 1 0 1 1 1.4-1.4L9 13.6V4a1 1 0 1 1 2 0v9.6l2.3-2.3a1 1 0 0 1 1.4 1.4l-4 4a1 1 0 0 1-.7.3Z" clip-rule="evenodd"/></svg>
+    {% else %}<svg class="col-sort-idle h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3 6 7h8l-4-4Zm0 14 4-4H6l4 4Z"/></svg>{% endif %}</a>
+  {% else %}<span>{{ label }}</span>{% endif %}
+  {% if filter %}
+  <details class="col-filter" data-col-filter>
+    <summary class="col-filter-btn {% if active %}is-active{% endif %}" title="กรอง{{ label }}" aria-label="กรอง{{ label }}">{% icon "filter" "h-3.5 w-3.5" %}{% if active %}<span class="col-filter-dot"></span>{% endif %}</summary>
+    <div class="col-filter-panel" role="dialog" aria-label="กรอง{{ label }}">
+      <div class="col-filter-list">
+        {% for title, options in groups %}{% if options %}
+        {% if title %}<div class="col-filter-group">{{ title }}</div>{% endif %}
+        {% for value, text, on in options %}
+        <label class="col-filter-item"><input type="checkbox" class="check" name="{% if filter == 'damage' %}drange{% else %}{{ filter }}{% endif %}" value="{{ value }}" form="list-filters" {% if on %}checked{% endif %}> <span>{{ text }}</span></label>
+        {% endfor %}{% endif %}{% endfor %}
+      </div>
+      {% if filter == "damage" %}
+      <div class="mt-2 border-t border-slate-100 pt-2 text-sm font-normal normal-case text-slate-700">
+        <div class="col-filter-group px-0">หรือกำหนดเอง (บาท)</div>
+        <div class="flex items-center gap-1.5">
+          <input class="input w-full py-1.5" name="dmin" form="list-filters" inputmode="decimal" value="{{ f.dmin }}" placeholder="ตั้งแต่" aria-label="มูลค่าตั้งแต่ (บาท)">
+          <span class="text-slate-400">–</span>
+          <input class="input w-full py-1.5" name="dmax" form="list-filters" inputmode="decimal" value="{{ f.dmax }}" placeholder="ถึง" aria-label="มูลค่าถึง (บาท)">
+        </div>
+      </div>
+      {% else %}
+      <input type="hidden" name="{{ filter }}" value="" form="list-filters">
+      {% endif %}
+      <div class="mt-3 flex gap-2 border-t border-slate-100 pt-3">
+        <button class="btn btn-primary btn-sm flex-1" form="list-filters">ใช้ตัวกรอง</button>
+        <button type="button" class="btn btn-sm" data-col-clear>ล้าง</button>
+      </div>
+    </div>
+  </details>
+  {% endif %}
+</div>

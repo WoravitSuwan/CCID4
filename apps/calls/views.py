@@ -87,53 +87,167 @@ def _apply_tab(qs, tab):
     return funnel.stage(qs, tab)
 
 
-def _apply_filters(request, qs):
-    """Search box, case status and latest call result - kept across tabs."""
+# มูลค่าความเสียหาย ranges to tick: (key, label, from (included), to (not included))
+DAMAGE_RANGES = [
+    ("lt10k", "ต่ำกว่า 10,000", None, 10_000), ("10k", "10,000 – 49,999", 10_000, 50_000),
+    ("50k", "50,000 – 99,999", 50_000, 100_000), ("100k", "100,000 – 499,999", 100_000, 500_000),
+    ("500k", "500,000 – 999,999", 500_000, 1_000_000), ("1m", "1,000,000 ขึ้นไป", 1_000_000, None),
+    ("none", "ไม่ระบุมูลค่า", None, None),
+]
+
+
+def _range_q(key: str) -> Q:
+    _, _, low, high = next(r for r in DAMAGE_RANGES if r[0] == key)
+    if key == "none":
+        return Q(case__damage_amount__isnull=True)
+    q = Q(case__damage_amount__isnull=False)
+    if low is not None:
+        q &= Q(case__damage_amount__gte=low)
+    if high is not None:
+        q &= Q(case__damage_amount__lt=high)
+    return q
+
+
+def _ranges(request) -> list[str]:
+    keys = {r[0] for r in DAMAGE_RANGES}
+    return [v for v in dict.fromkeys(request.GET.getlist("drange")) if v in keys]
+
+
+def _apply_filters(request, qs, damage=True):
+    """Search box and the column filters - kept across tabs. Several values ticked in one column: any of them;
+    filters of different columns: all of them."""
     q = request.GET.get("q", "").strip()
     if q:
         qs = qs.filter(Q(case__receipt_no__icontains=q.replace(" ", "")) | Q(case__victim_name__icontains=q)
                        | Q(case__victim_phone__icontains=q))
-    result = request.GET.get("result", "")
-    if result == "reached":
-        qs = qs.filter(funnel.REACHED_Q)
-    elif result == "not_reached":
-        qs = qs.filter(funnel.NOT_REACHED_Q)
-    elif result in CallOutcome.values:
-        qs = qs.filter(last_outcome=result)
-    year = _year(request)
-    if year:
-        qs = qs.filter(case__report_year=year)
-    state = _state(request)
-    if state == "open":
-        qs = qs.filter(funnel.OPEN_CASE)
-    elif state == "final":
-        qs = qs.exclude(funnel.OPEN_CASE)
-    elif state.startswith("s"):
-        qs = qs.filter(case__status_id=int(state[1:]))
+    results = _results(request)
+    if results:
+        any_of = Q()
+        for value in results:
+            any_of |= (funnel.REACHED_Q if value == "reached" else funnel.NOT_REACHED_Q if value == "not_reached"
+                       else Q(last_outcome=value))
+        qs = qs.filter(any_of)
+    years = _year(request)
+    if years:
+        qs = qs.filter(case__report_year__in=years)
+    states = _state(request)
+    if states:
+        any_of = Q()
+        for value in states:
+            any_of |= (funnel.OPEN_CASE if value == "open" else ~funnel.OPEN_CASE if value == "final"
+                       else Q(case__status_id=int(value[1:])))
+        qs = qs.filter(any_of)
+    if not damage:  # (for the counts shown next to each range)
+        return qs
+    ranges = _ranges(request)
+    if ranges:
+        any_of = Q()
+        for key in ranges:
+            any_of |= _range_q(key)
+        qs = qs.filter(any_of)
+    low, high = _amount(request, "dmin"), _amount(request, "dmax")
+    if low is not None:
+        qs = qs.filter(case__damage_amount__gte=low)
+    if high is not None:
+        qs = qs.filter(case__damage_amount__lte=high)
     return qs
 
 
-def _sticky(request, name: str) -> str:
-    """A choice kept for this user (session) until changed: ?name=... sets it, ?name= clears it."""
+def _sticky(request, name: str) -> list[str]:
+    """Choices kept for this user (session) until changed: ?name=a&name=b sets them, ?name= clears them."""
     key = f"calls_{name}"
     if name in request.GET:
-        request.session[key] = request.GET.get(name, "").strip()
-    return request.session.get(key, "")
+        request.session[key] = [v.strip() for v in request.GET.getlist(name) if v.strip()]
+    value = request.session.get(key, [])
+    return [value] if isinstance(value, str) and value else list(value or [])  # (older sessions kept one value)
 
 
-def _year(request) -> int | None:
-    """?year=2569 (Buddhist era, as shown) or 2026 -> 2026; remembered like the order."""
-    value = _sticky(request, "year")
-    if not value.isdigit():
+def _year(request) -> list[int]:
+    """?year=2569&year=2568 (Buddhist era, as shown) or 2026 -> [2026, 2025]; remembered like the order."""
+    out = []
+    for value in _sticky(request, "year"):
+        if value.isdigit():
+            year = int(value)
+            out.append(year - 543 if year > 2400 else year)
+    return sorted(set(out), reverse=True)
+
+
+def _state(request) -> list[str]:
+    """'open' (ยังไม่สิ้นสุด), 'final' (สิ้นสุดแล้ว) and/or 's<status id>'; remembered like the order."""
+    return [v for v in dict.fromkeys(_sticky(request, "state"))
+            if v in ("open", "final") or re.fullmatch(r"s\d+", v)]
+
+
+def _results(request) -> list[str]:
+    """Latest call result: 'reached', 'not_reached' and/or call outcomes (not remembered)."""
+    allowed = {v for v, _ in RESULTS} | set(CallOutcome.values)
+    return [v for v in dict.fromkeys(request.GET.getlist("result")) if v in allowed]
+
+
+def _amount(request, name: str):
+    from decimal import Decimal, InvalidOperation
+
+    value = (request.GET.get(name) or "").replace(",", "").strip()
+    try:
+        return Decimal(value) if value else None
+    except InvalidOperation:
         return None
-    year = int(value)
-    return year - 543 if year > 2400 else year
 
 
-def _state(request) -> str:
-    """'open' (ยังไม่สิ้นสุด), 'final' (สิ้นสุดแล้ว), 's<status id>' or '' (all); remembered like the order."""
-    value = _sticky(request, "state")
-    return value if value in ("open", "final") or re.fullmatch(r"s\d+", value) else ""
+def _filter_ui(request, tab: str, base=None) -> dict:
+    """What the column filters show: the options with their ticks, and the active filters as removable chips.
+    base: the call list before filters, to count the cases in each damage range (with the other filters)."""
+    from django.http import QueryDict
+
+    years, states, results, ranges = _year(request), _state(request), _results(request), _ranges(request)
+    range_counts = {}
+    if base is not None:
+        others = _apply_tab(_apply_filters(request, base, damage=False), tab)
+        range_counts = others.aggregate(**{key: Count("pk", filter=_range_q(key)) for key, *_ in DAMAGE_RANGES})
+    low, high = _amount(request, "dmin"), _amount(request, "dmax")
+    status_names = {f"s{st.pk}": st.name for st in Status.objects.order_by("sort_order", "name")}
+    state_labels = {"open": "ยังไม่สิ้นสุด", "final": "สิ้นสุดแล้ว", **status_names}
+    result_labels = dict(RESULTS) | dict(CallOutcome.choices)
+
+    def url(**change):
+        params = {"tab": tab, "q": request.GET.get("q", ""), "result": results, "drange": ranges,
+                  "dmin": request.GET.get("dmin", ""),
+                  "dmax": request.GET.get("dmax", ""), "year": [y + 543 for y in years], "state": states}
+        params.update(change)
+        qd = QueryDict(mutable=True)
+        for k, v in params.items():
+            values = v if isinstance(v, list) else [v]
+            if k in ("year", "state") and not values:
+                qd.setlist(k, [""])  # clears the remembered choice
+            elif any(str(x) for x in values):
+                qd.setlist(k, [str(x) for x in values if str(x)])
+        return "?" + qd.urlencode()
+
+    chips = [(f"ปี {y + 543}", url(year=[x + 543 for x in years if x != y])) for y in years]
+    chips += [(state_labels.get(v, v), url(state=[x for x in states if x != v])) for v in states]
+    chips += [(result_labels.get(v, v), url(result=[x for x in results if x != v])) for v in results]
+    range_labels = {key: label for key, label, *_ in DAMAGE_RANGES}
+    chips += [(f"มูลค่า {range_labels[k]}", url(drange=[x for x in ranges if x != k])) for k in ranges]
+    if low is not None:
+        chips.append((f"มูลค่า ≥ {low:,.2f}", url(dmin="")))
+    if high is not None:
+        chips.append((f"มูลค่า ≤ {high:,.2f}", url(dmax="")))
+    if request.GET.get("q", "").strip():
+        chips.append((f"ค้นหา \"{request.GET['q'].strip()}\"", url(q="")))
+    return {
+        "year_groups": [("", [(be, f"ปี {be}", ce in years) for ce, be in _years()])],
+        "state_groups": [("", [(v, state_labels[v], v in states) for v in ("open", "final")]),
+                         ("สถานะในทะเบียน", [(v, n, v in states) for v, n in status_names.items()])],
+        "result_groups": [("", [(v, label, v in results) for v, label in RESULTS]),
+                          ("ผลการโทรครั้งล่าสุดในระบบ", [(v, label, v in results) for v, label in CallOutcome.choices])],
+        "damage_groups": [("", [(key, f"{label} · {range_counts[key]:,} คดี" if key in range_counts else label,
+                                 key in ranges) for key, label, *_ in DAMAGE_RANGES])],
+        "dmin": request.GET.get("dmin", "") if low is not None else "",
+        "dmax": request.GET.get("dmax", "") if high is not None else "",
+        "active": {"year": bool(years), "state": bool(states), "result": bool(results),
+                   "damage": bool(ranges) or low is not None or high is not None},
+        "chips": chips, "clear_url": f"?tab={tab}&year=&state=",
+    }
 
 
 def _years():
@@ -148,9 +262,17 @@ def _ordered(qs):
     return qs.order_by("is_done", "callback_at", "attempt_count", "last_call_at", "case__receipt_no")
 
 
-# list order the user can pick ("" = the work order above); cases without an amount or date go last
-SORTS = [("", "ลำดับงานโทร"), ("damage", "มูลค่าความเสียหาย น้อย → มาก"), ("-damage", "มูลค่าความเสียหาย มาก → น้อย"),
-         ("-date", "วันที่รับแจ้ง ใหม่ → เก่า"), ("date", "วันที่รับแจ้ง เก่า → ใหม่")]
+# list order the user can pick ("" = the work order above); empty values (no amount, no date...) go last
+SORT_FIELDS = {"receipt": "case__receipt_no", "date": "case__report_date", "name": "case__victim_name",
+               "damage": "case__damage_amount", "status": "case__status__name", "calls": "attempt_count",
+               "last": "last_call_at"}
+SORT_LABELS = {"receipt": ("เลขรับแจ้ง", "ก → ฮ / 0 → 9", "9 → 0"), "date": ("วันที่รับแจ้ง", "เก่า → ใหม่", "ใหม่ → เก่า"),
+               "name": ("ผู้เสียหาย", "ก → ฮ", "ฮ → ก"), "damage": ("มูลค่าความเสียหาย", "น้อย → มาก", "มาก → น้อย"),
+               "status": ("สถานะคดี", "ก → ฮ", "ฮ → ก"), "calls": ("จำนวนครั้งที่โทร", "น้อย → มาก", "มาก → น้อย"),
+               "last": ("โทรล่าสุด", "เก่า → ใหม่", "ใหม่ → เก่า")}
+SORTS = [("", "ลำดับงานโทร")] + [
+    (prefix + key, f"{label} {hint}") for key, (label, up, down) in SORT_LABELS.items()
+    for prefix, hint in (("", up), ("-", down))]
 
 
 SORT_KEY, LIST_KEY = "calls_sort", "calls_list_query"  # remembered per user (session)
@@ -189,15 +311,25 @@ def _sort_buttons(sort: str) -> list[dict]:
 def _sorted(qs, sort):
     from django.db.models import F
 
-    if sort in ("damage", "-damage"):
-        amount = F("case__damage_amount")
-        return qs.order_by(amount.asc(nulls_last=True) if sort == "damage" else amount.desc(nulls_last=True),
-                           "case__receipt_no")
-    if sort in ("date", "-date"):
-        day = F("case__report_date")
-        return qs.order_by(day.asc(nulls_last=True) if sort == "date" else day.desc(nulls_last=True),
-                           "case__receipt_no")
-    return _ordered(qs)
+    field = SORT_FIELDS.get(sort.lstrip("-"))
+    if not field:
+        return _ordered(qs)
+    column = F(field)
+    return qs.order_by(column.desc(nulls_last=True) if sort.startswith("-") else column.asc(nulls_last=True),
+                       "case__receipt_no")
+
+
+def _column_sort(sort: str) -> dict:
+    """Per column: the order a click on its heading gives, and its arrow (first click: the button's first way)."""
+    first = {"date": "-date", "damage": "damage", "calls": "-calls", "last": "-last"}
+    out = {}
+    for key, (label, up, down) in SORT_LABELS.items():
+        start = first.get(key, key)
+        active = sort.lstrip("-") == key
+        nxt = (("-" + key) if sort == key else key) if active else start
+        out[key] = {"sort": nxt, "up": sort == key, "down": sort == "-" + key,
+                    "title": f"เรียงตาม{label} ({down if nxt.startswith('-') else up})"}
+    return out
 
 
 def queue(request):
@@ -225,6 +357,7 @@ def queue(request):
                 .order_by("assignee__first_name"))
         per_staff = list(rows)
     sort = _current_sort(request)
+    ui = _filter_ui(request, tab, base)
     request.session[LIST_KEY] = request.GET.urlencode()  # the call page's "back" returns to this exact list
     page = Paginator(_sorted(qs, sort), 50).get_page(request.GET.get("page"))
     return render(request, "calls/queue.html", {
@@ -232,9 +365,8 @@ def queue(request):
         "sort": sort, "sorts": SORTS,
         "tab_label": funnel.STAGES[tab][0], "tab_in_nav": tab in funnel.TAB_KEYS,
         "sankey": funnel.sankey(counts),
-        "filtered": bool(request.GET.get("q") or request.GET.get("result") or _year(request) or _state(request)),
-        "years": _years(), "year": _year(request), "state": _state(request),
-        "case_statuses": [(f"s{st.pk}", st.name) for st in Status.objects.order_by("sort_order", "name")],
+        "filtered": bool(ui["chips"]), "f": ui, "col": _column_sort(sort),
+        "year": _year(request), "state": _state(request),
         "sort_buttons": _sort_buttons(sort),
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
@@ -630,7 +762,7 @@ def daily_report(request):
     d = report.load(day, caller)
 
     if request.method == "POST":
-        if not perms.is_admin(request.user):
+        if not (perms.is_admin(request.user) or perms.is_outsource(request.user)):
             raise PermissionDenied("ไม่มีสิทธิ์ส่งข้อความเข้า LINE")
         try:
             total = line_bot.send_day(day)
@@ -664,6 +796,7 @@ def daily_report(request):
         "prev_day": day - dt.timedelta(days=1), "next_day": day + dt.timedelta(days=1) if day < today else None,
         "date_text": thai_date_full(day, thai_digits=False),
         "line_ready": line_bot.configured() and bool(s.line_group_id), "line_group": s.line_group_name,
+        "line_files": s.line_send_files and bool(line_bot.site_url()),
         "query": request.GET.urlencode(),
     })
 
@@ -683,5 +816,35 @@ def line_webhook(request):
         events = json.loads(request.body or b"{}").get("events", [])
     except ValueError:
         return HttpResponse(status=400)
+    line_bot.remember_site(request, https=True)  # LINE only calls https addresses
     line_bot.handle_events(events)
     return HttpResponse("OK")
+
+
+def line_file(request, token):
+    """A Word file linked from a LINE message: no login (the link is signed and expires), every download logged."""
+    import tempfile
+
+    from django.core import signing
+
+    from . import daily_report as report
+    from . import line_bot
+
+    try:
+        day, kind = line_bot.read_file_token(token)
+    except signing.SignatureExpired:
+        return HttpResponse("ลิงก์นี้หมดอายุแล้ว ขอไฟล์ใหม่ได้ที่หน้า สรุปผลประจำวัน ในระบบ",
+                            status=410, content_type="text/plain; charset=utf-8")
+    except (signing.BadSignature, ValueError):
+        raise Http404 from None
+    d = report.load(day)
+    name = report.file_name(line_bot.FILE_KINDS[kind], d)
+    with tempfile.TemporaryDirectory() as tmp:
+        write = report.write_diary_docx if kind == "diary" else report.write_summary_docx
+        body = write(d, Path(tmp) / "out.docx").read_bytes()
+    log(request, AuditAction.DOWNLOAD, None, f"ดาวน์โหลด {name} ผ่านลิงก์ใน LINE", user=None)
+    resp = HttpResponse(
+        body, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    resp["Content-Disposition"] = content_disposition(name)
+    resp["Cache-Control"] = "no-store"
+    return resp

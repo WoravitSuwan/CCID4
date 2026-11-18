@@ -190,6 +190,9 @@ OWN_UNIT = env("OWN_UNIT", "กก.1 บก.สอท.4")
 LINE_CHANNEL_ACCESS_TOKEN = env("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_CHANNEL_SECRET = env("LINE_CHANNEL_SECRET", "")
 LINE_TIMEOUT = env_int("LINE_TIMEOUT", 15)
+# the system's public address for links in LINE messages, e.g. https://callcenter.example.org
+# (empty: taken from the address LINE and administrators use)
+SITE_URL = env("SITE_URL", "")
 TEMPLATES_DOCX_DIR = BASE_DIR / "templates_docx"
 
 LOGGING = {

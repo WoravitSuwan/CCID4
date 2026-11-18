@@ -1,6 +1,7 @@
 import datetime as dt
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -71,6 +72,13 @@ class SystemSetting(models.Model):
     line_include_list = models.BooleanField(
         "ส่งรายชื่อผู้ไม่ประสงค์ดำเนินคดี (ชื่อ เลขรับแจ้ง เบอร์โทร) ไปด้วย", default=False,
         help_text="ข้อมูลส่วนบุคคลจะออกไปอยู่บนเซิร์ฟเวอร์ของ LINE - เปิดเมื่อผู้บังคับบัญชาอนุญาตแล้วเท่านั้น")
+    line_send_files = models.BooleanField(
+        "ส่งลิงก์ไฟล์ Word (ลงบันทึกประจำวัน / สรุปข้อมูลคดี) ไปด้วย", default=False,
+        help_text="LINE ไม่ให้บอทส่งไฟล์ Word ได้โดยตรง จึงส่งเป็นลิงก์ดาวน์โหลดที่หมดอายุเอง "
+                  "ใครได้ลิงก์ก็เปิดได้โดยไม่ต้องเข้าระบบ (ไฟล์มีชื่อและเบอร์โทร)")
+    line_link_days = models.PositiveIntegerField("ลิงก์ไฟล์ใช้ได้ (วัน)", default=7,
+                                                 validators=[MinValueValidator(1), MaxValueValidator(30)])
+    line_site_url = models.CharField(max_length=200, blank=True, editable=False)  # for links in messages
     line_group_id = models.CharField("กลุ่ม LINE ที่ส่ง", max_length=64, blank=True, editable=False)
     line_group_name = models.CharField(max_length=200, blank=True, editable=False)
     line_pending_group_id = models.CharField(max_length=64, blank=True, editable=False)

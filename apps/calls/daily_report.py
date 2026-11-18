@@ -238,14 +238,11 @@ def _run(paragraph, text: str, bold: bool = False, size: int | None = None):
 
 
 def write_diary_docx(d: Day, path: Path) -> Path:
-    """ลงบันทึกประจำวัน: one line per victim who does not want to proceed, a blank line between."""
+    """ลงบันทึกประจำวัน: only the victims who do not want to proceed, one line each, a blank line between."""
     doc = _document()
     for r in d.not_want:
         p = doc.add_paragraph()
-        _run(p, f"ผู้เสียหาย: {r.name} - เลขรับแจ้ง: ")
-        _run(p, f"{r.case.receipt_no} - ")
-        _run(p, "เบอร์โทรศัพท์: ")
-        _run(p, f"{r.phone} ")
+        _run(p, f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}")
         doc.add_paragraph()
     doc.save(path)
     return Path(path)
@@ -257,7 +254,7 @@ def write_summary_docx(d: Day, path: Path) -> Path:
 
     from apps.core.templatetags.thai import money
 
-    doc = _document(margins_cm=(2.0, 1.34, 1.5, 1.5))
+    doc = _document(margins_cm=(1.5, 1.34, 1.5, 1.5))
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(title, "สรุปข้อมูลคดีและบันทึกการติดต่อ", bold=True, size=20)

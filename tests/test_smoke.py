@@ -16,7 +16,7 @@ from apps.accounts.models import Role, User
 pytestmark = pytest.mark.django_db
 
 SKIP = {"logout", "healthz"}  # logout is checked on its own, last
-PUBLIC = {"login", "branding_logo"}
+PUBLIC = {"login", "branding_logo", "line_file"}  # line_file: a signed link that expires, no login (by design)
 
 
 def all_patterns(patterns=None, prefix=""):
@@ -88,6 +88,11 @@ def fill(path: str, name: str, w: dict) -> str:
         pk = ids.get(group, w["case"])
     path = path.replace("<int:pk>", str(pk)).replace("<int:attempt_pk>", str(w["attempt"]))
     path = path.replace("<int:idx>", "0")
+    if "<str:token>" in path:  # a signed link to a Word file (from a LINE message)
+        from django.utils import timezone
+
+        from apps.calls.line_bot import file_token
+        path = path.replace("<str:token>", file_token(timezone.localdate(), "summary"))
     assert "<" not in path, path
     return "/" + path
 

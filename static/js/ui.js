@@ -137,6 +137,52 @@
     }
   });
 
+  /* column filter dropdowns (<details data-col-filter>): the panel floats under its button (the table scrolls
+     sideways, so it is placed with position:fixed), one open at a time, closes on a click outside or Esc */
+  function placePanel(d) {
+    const panel = panelOf(d), r = d.querySelector("summary").getBoundingClientRect();
+    if (!panel) return;
+    const w = panel.offsetWidth || 256, margin = 8;
+    let left = Math.min(r.left, window.innerWidth - w - margin);
+    panel.style.left = Math.max(margin, left) + "px";
+    const below = r.bottom + 6, h = panel.offsetHeight;
+    panel.style.top = (below + h > window.innerHeight - margin && r.top - h - 6 > margin ? r.top - h - 6 : below) + "px";
+  }
+  function panelOf(d) { return d._panel || (d._panel = d.querySelector(".col-filter-panel")); }
+  document.addEventListener("toggle", function (e) {
+    const d = e.target;
+    if (!d.matches || !d.matches("[data-col-filter]")) return;
+    const panel = panelOf(d);
+    if (!d.open) { if (panel && panel.parentElement !== d) d.appendChild(panel); return; }  // back inside: hidden again
+    document.querySelectorAll("[data-col-filter][open]").forEach(function (o) { if (o !== d) o.open = false; });
+    // shown from <body>: a table heading (sticky, blurred) or an animated page would move a fixed box
+    if (panel) document.body.appendChild(panel);
+    placePanel(d);
+    const first = d.querySelector(".col-filter-panel input:not([type=hidden])");
+    if (first) first.focus({ preventScroll: true });
+  }, true);
+  document.addEventListener("click", function (e) {
+    const clear = e.target.closest && e.target.closest("[data-col-clear]");
+    if (clear) {
+      const panel = clear.closest(".col-filter-panel");
+      panel.querySelectorAll("input[type=checkbox]").forEach(function (c) { c.checked = false; });
+      panel.querySelectorAll("input:not([type=checkbox]):not([type=hidden])").forEach(function (i) { i.value = ""; });
+      const form = document.getElementById(panel.querySelector("[form]").getAttribute("form"));
+      if (form) { keepScroll(); form.requestSubmit ? form.requestSubmit() : form.submit(); }
+      return;
+    }
+    document.querySelectorAll("[data-col-filter][open]").forEach(function (d) {
+      if (!d.contains(e.target) && !panelOf(d).contains(e.target)) d.open = false;
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll("[data-col-filter][open]").forEach(function (d) { d.open = false; d.querySelector("summary").focus(); });
+  });
+  ["scroll", "resize"].forEach(function (ev) {
+    window.addEventListener(ev, function () { document.querySelectorAll("[data-col-filter][open]").forEach(placePanel); }, true);
+  });
+
   /* messages */
   function closeAlert(el) {
     el.classList.remove("alert-enter");

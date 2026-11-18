@@ -67,6 +67,7 @@ urlpatterns = [
     path("reports/status-final/", cv.status_report, name="status_report"),
     path("reports/daily/", cv.daily_report, name="daily_report"),
     path("line/webhook/", cv.line_webhook, name="line_webhook"),
+    path("line/file/<str:token>/", cv.line_file, name="line_file"),
     path("calls/assign/bulk/", cv.assign_bulk, name="calls_assign_bulk"),
     path("calls/export.xlsx", cv.export_calls, name="calls_export"),
     path("calls/<int:pk>/", cv.call_case, name="call_case"),

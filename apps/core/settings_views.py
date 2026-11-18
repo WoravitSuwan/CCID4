@@ -468,7 +468,8 @@ def system(request):
 class LineForm(StyledModelForm):
     class Meta:
         model = SystemSetting
-        fields = ["line_enabled", "line_send_time", "line_skip_empty", "line_include_list"]
+        fields = ["line_enabled", "line_send_time", "line_skip_empty", "line_include_list", "line_send_files",
+                  "line_link_days"]
         widgets = {"line_send_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M")}
 
 
@@ -497,13 +498,15 @@ def line(request):
     from apps.calls import daily_report, line_bot
 
     s = SystemSetting.get()
+    line_bot.remember_site(request)
     form = LineForm(request.POST if request.POST.get("action") == "save" else None, instance=s)
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "save" and form.is_valid():
             form.save()
             log(request, AuditAction.SETTINGS, s, "แก้ไขการตั้งค่าบอท LINE"
-                + (" (เปิดส่งรายชื่อ)" if form.cleaned_data["line_include_list"] else ""))
+                + (" (เปิดส่งรายชื่อ)" if form.cleaned_data["line_include_list"] else "")
+                + (" (เปิดส่งลิงก์ไฟล์)" if form.cleaned_data["line_send_files"] else ""))
             messages.success(request, "บันทึกแล้ว")
             return redirect("settings_line")
         if action == "confirm" and s.line_pending_group_id:
@@ -562,7 +565,7 @@ def line(request):
             return redirect("settings_line")
     return render(request, "settings/line.html", {
         "form": form, "s": s, "tab": "line", "configured": line_bot.configured(),
-        "keys_form": LineKeysForm(), "from_env": line_bot.from_env(),
+        "keys_form": LineKeysForm(), "from_env": line_bot.from_env(), "site_url": line_bot.site_url(),
         "has_secret": bool(s.line_channel_secret), "has_token": bool(s.line_access_token),
         "webhook_url": request.build_absolute_uri(reverse("line_webhook")),
         "quota": line_bot.quota() if line_bot.configured() and "quota" in request.GET else None,

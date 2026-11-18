@@ -129,12 +129,69 @@ def valid_signature(body: bytes, signature: str) -> bool:
 
 
 # --------------------------------------------------------------------------- what is sent
+FILE_KINDS = {"diary": "ลงบันทึกประจำวัน", "summary": "สรุปข้อมูลคดี"}
+FILE_SALT = "line-file"
+
+
+def remember_site(request, https: bool = False) -> None:
+    """Keep the address people use (for the links in LINE messages, which are sent without a request)."""
+    if settings.SITE_URL:
+        return
+    host = request.get_host()
+    url = f"{'https' if https or request.is_secure() else 'http'}://{host}"
+    if host.split(":")[0] in ("localhost", "127.0.0.1", "testserver") and not https:
+        return
+    s = SystemSetting.get()
+    if s.line_site_url != url:
+        SystemSetting.objects.filter(pk=s.pk).update(line_site_url=url)
+
+
+def site_url() -> str:
+    return (settings.SITE_URL or SystemSetting.get().line_site_url).rstrip("/")
+
+
+def file_token(day: dt.date, kind: str) -> str:
+    from django.core import signing
+
+    return signing.TimestampSigner(salt=FILE_SALT).sign_object({"d": day.isoformat(), "k": kind})
+
+
+def read_file_token(token: str) -> tuple[dt.date, str]:
+    """(day, kind); raises django.core.signing.BadSignature / SignatureExpired."""
+    from django.core import signing
+
+    days = SystemSetting.get().line_link_days or 7
+    data = signing.TimestampSigner(salt=FILE_SALT).unsign_object(token, max_age=dt.timedelta(days=days))
+    if data.get("k") not in FILE_KINDS:
+        raise signing.BadSignature("kind")
+    return dt.date.fromisoformat(data["d"]), data["k"]
+
+
+def files_text(d) -> str:
+    """The message with the download links of the day's Word files."""
+    from django.urls import reverse
+
+    from apps.core.thai_format import thai_date_full
+
+    base = site_url()
+    until = timezone.localdate() + dt.timedelta(days=SystemSetting.get().line_link_days or 7)
+    lines = [f"ไฟล์ประจำวันที่ {thai_date_full(d.day, thai_digits=False)} (ลิงก์ใช้ได้ถึง "
+             f"{thai_date_full(until, thai_digits=False)})"]
+    for kind, label in FILE_KINDS.items():
+        if kind == "diary" and not d.not_want:
+            continue
+        lines.append(f"{label}: {base}{reverse('line_file', args=[file_token(d.day, kind)])}")
+    return "\n".join(lines)
+
+
 def texts_for(day: dt.date, with_list: bool | None = None) -> list[str]:
     s = SystemSetting.get()
     d = report.load(day)
     texts = [report.summary_text(d)]
     if (s.line_include_list if with_list is None else with_list) and d.not_want:
         texts.append(report.diary_text(d))
+    if s.line_send_files and d.rows and site_url():
+        texts.append(files_text(d))
     return texts
 
 

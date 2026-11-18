@@ -118,7 +118,7 @@ def test_page_texts_and_word_files(client, caller, day_calls):
     assert page.status_code == 200
     html = page.content.decode()
     assert "วันนี้( 9 พ.ย.69)" in html and "จำนวน 7 Case ID" in html and 'data-copy="#t-diary"' in html
-    assert "ส่งเข้ากลุ่ม LINE" not in html  # admins only
+    assert "ส่งเข้ากลุ่ม LINE" not in html  # LINE is not set up
     diary = client.get("/reports/daily/", {"date": "2026-11-09", "format": "diary"})
     assert "%E0%B8%A5%E0%B8%87%E0%B8%9A%E0%B8%B1%E0%B8%99%E0%B8%97%E0%B8%B6%E0%B8%81" in diary["Content-Disposition"]
     assert "9.11.2569.docx" in diary["Content-Disposition"]
@@ -127,8 +127,8 @@ def test_page_texts_and_word_files(client, caller, day_calls):
     lines = [p.text for p in doc.paragraphs]
     c0, c1 = day_calls[0], day_calls[1]
     assert lines == [
-        f"ผู้เสียหาย: นางสาวทดสอบ หนึ่ง - เลขรับแจ้ง: {c0.receipt_no} - เบอร์โทรศัพท์: 0811111111 ", "",
-        f"ผู้เสียหาย: นายทดสอบ สอง - เลขรับแจ้ง: {c1.receipt_no} - เบอร์โทรศัพท์: 0899999999 ", ""]
+        f"ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: {c0.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0811111111", "",
+        f"ผู้เสียหาย: นายทดสอบ สอง เลขรับแจ้ง: {c1.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0899999999", ""]
     assert doc.styles["Normal"].font.name == "TH SarabunPSK" and doc.styles["Normal"].font.size.pt == 16
     resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary"})
     assert "9.11.2569.docx" in resp["Content-Disposition"]
@@ -179,9 +179,13 @@ def test_page_with_bad_or_future_dates(client, caller, imported):
     assert client.get("/calls/").content.decode().count('href="/reports/daily/"') >= 1
 
 
-def test_only_admins_send_to_line(client, caller):
+def test_call_staff_send_to_line_too(client, caller, line, day_calls):
+    setting(line_group_id="Cgroup1")
     client.force_login(caller)
-    assert client.post("/reports/daily/").status_code == 403
+    assert "ส่งเข้ากลุ่ม LINE" in client.get("/reports/daily/", {"date": "2026-11-09"}).content.decode()
+    resp = client.post("/reports/daily/?date=2026-11-09")
+    assert resp.status_code == 302 and line[-1][1] == "/message/push"
+    assert "จำนวน 7 Case ID" in line[-1][2]["messages"][0]["text"]
 
 
 # --------------------------------------------------------------------------- LINE bot
@@ -329,7 +333,7 @@ def test_line_settings_page(client, admin_user, settings, line):
     html = client.get("/settings/line/").content.decode()
     assert "http://testserver/line/webhook/" in html and "ส่งอัตโนมัติ" in html
     resp = client.post("/settings/line/", {"action": "save", "line_enabled": "on", "line_send_time": "17:30",
-                                           "line_skip_empty": "on"})
+                                           "line_link_days": "7", "line_skip_empty": "on"})
     assert resp.status_code == 302
     s = SystemSetting.get()
     assert s.line_enabled and s.line_send_time == dt.time(17, 30) and not s.line_include_list
@@ -403,3 +407,47 @@ def test_only_admins_enter_keys(client, caller):
     client.force_login(caller)
     resp = client.post("/settings/line/", {"action": "keys", "secret": "x", "token": "y"})
     assert resp.status_code in (302, 403) and not line_bot.configured()
+
+
+def test_bot_sends_links_to_the_word_files(client, line, day_calls, settings):
+    """LINE does not let bots send Word files: the message carries signed links that expire."""
+    from docx import Document
+
+    setting(line_group_id="Cgroup1")
+    line_bot.send_day(DAY)
+    assert len(line[-1][2]["messages"]) == 1  # off by default
+    setting(line_send_files=True, line_link_days=7)
+    signed(client, {"events": []})  # LINE's request tells the system its public address
+    assert SystemSetting.get().line_site_url == "https://testserver"
+    line_bot.send_day(DAY)
+    texts = [m["text"] for m in line[-1][2]["messages"]]
+    assert len(texts) == 2 and "ลงบันทึกประจำวัน: https://testserver/line/file/" in texts[1]
+    assert "สรุปข้อมูลคดี: https://testserver/line/file/" in texts[1]
+    assert day_calls[0].receipt_no not in "".join(texts)  # names only inside the files
+    links = [line.split(": ", 1)[1] for line in texts[1].split("\n")[1:]]
+    client.logout()
+    diary = client.get(links[0].replace("https://testserver", ""))  # no login needed
+    assert diary.status_code == 200 and "9.11.2569.docx" in diary["Content-Disposition"]
+    rows = [p.text for p in Document(BytesIO(diary.content)).paragraphs if p.text]
+    assert len(rows) == 2 and rows[0].startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
+    summary = client.get(links[1].replace("https://testserver", ""))
+    assert "สรุปข้อมูลคดี" in summary.content.decode("latin-1") or summary.status_code == 200
+    from apps.core.models import AuditLog
+    assert AuditLog.objects.filter(detail__contains="ผ่านลิงก์ใน LINE").count() == 2
+    # a changed link does not work; an old one has expired
+    assert client.get(links[0].replace("https://testserver", "")[:-3] + "xx/").status_code == 404
+    import time
+
+    from django.core import signing
+    real = time.time
+    signing.time.time = lambda: real() - 8 * 86400  # a link made 8 days ago (links last 7 days)
+    try:
+        old = line_bot.file_token(DAY, "diary")
+    finally:
+        signing.time.time = real
+    assert client.get(f"/line/file/{old}/").status_code == 410
+
+
+def test_site_address_from_env(settings, line):
+    settings.SITE_URL = "https://callcenter.example.org/"
+    assert line_bot.site_url() == "https://callcenter.example.org"
