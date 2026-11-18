@@ -779,6 +779,10 @@ def daily_report(request):
         return redirect(f"{reverse('daily_report')}?date={day.isoformat()}")
 
     fmt = request.GET.get("format", "")
+    if fmt == "stamp":  # the open page asks every few seconds whether a call was recorded since
+        resp = HttpResponse(report.stamp(day, caller), content_type="text/plain")
+        resp["Cache-Control"] = "no-store"
+        return resp
     if fmt in ("diary", "summary"):
         name = report.file_name("ลงบันทึกประจำวัน" if fmt == "diary" else "สรุปข้อมูลคดี", d)
         with tempfile.TemporaryDirectory() as tmp:
@@ -794,7 +798,8 @@ def daily_report(request):
     return render(request, "calls/daily_report.html", {
         "d": d, "day": day, "today": today, "counts": d.counts, "caller": caller,
         "callers": User.objects.filter(pk__in=report.caller_ids(day)).order_by("first_name", "username"),
-        "period_text": report.period_text(d),
+        "period_text": report.period_text(d), "stamp": report.stamp(day, caller), "live": day == today,
+        "now": timezone.localtime(),
         "diary": report.diary_text(d), "summary": report.summary_text(d),
         "groups": [(g, report.GROUP_SHORT[g], d.of(g)) for g in report.GROUP_LABEL],
         "prev_day": day - dt.timedelta(days=1), "next_day": day + dt.timedelta(days=1) if day < today else None,

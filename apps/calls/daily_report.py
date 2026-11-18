@@ -142,7 +142,8 @@ def summary_text(d: Day) -> str:
     if d.caller is not None:
         who += f" ({d.caller.display_name()})"
     lines = [
-        "เรียนผู้บังคับบัญชาเพื่อโปรดทราบ",
+        "เรียนผู้บังคับบัญชา",
+        "",
         f"ขอรายงานสรุปผลการดำเนินการ ของ {who} สะสาง Case ID {period_text(d)}",
         f"จำนวน {c['total']:,} Case ID",
         f"1. {GROUP_LABEL[NOT_WANT]} จำนวน {c[NOT_WANT]:,} Case",
@@ -151,7 +152,19 @@ def summary_text(d: Day) -> str:
     ]
     if c[OTHER]:  # so the lines always add up to the total
         lines.append(f"4. {GROUP_LABEL[OTHER]} จำนวน {c[OTHER]:,} Case")
+    lines += ["", "จึงเรียนมาเพื่อโปรดทราบ"]
     return "\n".join(lines)
+
+
+def stamp(day: dt.date, caller=None) -> str:
+    """Changes whenever a call of that day is recorded, edited away or deleted (the page then reloads its numbers)."""
+    from django.db.models import Count, Max
+
+    qs = _of_day(day)
+    if caller is not None:
+        qs = qs.filter(created_by=caller)
+    agg = qs.aggregate(n=Count("pk"), last=Max("pk"), at=Max("created_at"))
+    return f"{agg['n']}-{agg['last'] or 0}-{agg['at'].timestamp() if agg['at'] else 0}"
 
 
 def file_day(day: dt.date) -> str:

@@ -91,15 +91,31 @@ def test_diary_text_follows_the_staff_template(day_calls):
 def test_summary_text_for_the_commanders(day_calls):
     text = report.summary_text(report.load(DAY))
     assert text.split("\n") == [
-        "เรียนผู้บังคับบัญชาเพื่อโปรดทราบ",
+        "เรียนผู้บังคับบัญชา",
+        "",
         "ขอรายงานสรุปผลการดำเนินการ ของ เจ้าหน้าที่ Outsource สะสาง Case ID ประจำวันที่ 9 พฤศจิกายน 2569",
         "จำนวน 7 Case ID",
         "1. ไม่ประสงค์ดำเนินคดี จำนวน 2 Case",
         "2. ประสงค์ดำเนินคดีต่อ จำนวน 2 Case",
         "3. ไม่สามารถติดต่อได้ (รวมถึง ไม่รับสาย, ปิดเครื่อง, ไม่มีหมายเลข, ปลายสายไม่รู้จัก ฯลฯ) จำนวน 2 Case",
         "4. ติดต่อได้ แต่ยังไม่ได้ข้อยุติ (ขอให้โทรกลับ, อื่นๆ) จำนวน 1 Case",  # so it adds up to 7
+        "",
+        "จึงเรียนมาเพื่อโปรดทราบ",
     ]
     assert day_calls[0].receipt_no not in text and "0811111111" not in text  # counts only
+
+
+def test_summary_of_a_day_without_calls_is_the_units_text_exactly(db):
+    assert report.summary_text(report.load(dt.date(2026, 11, 18))) == (
+        "เรียนผู้บังคับบัญชา\n"
+        "\n"
+        "ขอรายงานสรุปผลการดำเนินการ ของ เจ้าหน้าที่ Outsource สะสาง Case ID ประจำวันที่ 18 พฤศจิกายน 2569\n"
+        "จำนวน 0 Case ID\n"
+        "1. ไม่ประสงค์ดำเนินคดี จำนวน 0 Case\n"
+        "2. ประสงค์ดำเนินคดีต่อ จำนวน 0 Case\n"
+        "3. ไม่สามารถติดต่อได้ (รวมถึง ไม่รับสาย, ปิดเครื่อง, ไม่มีหมายเลข, ปลายสายไม่รู้จัก ฯลฯ) จำนวน 0 Case\n"
+        "\n"
+        "จึงเรียนมาเพื่อโปรดทราบ")
 
 
 def test_summary_without_open_cases_has_three_lines(imported, caller):
@@ -451,3 +467,21 @@ def test_bot_sends_links_to_the_word_files(client, line, day_calls, settings):
 def test_site_address_from_env(settings, line):
     settings.SITE_URL = "https://callcenter.example.org/"
     assert line_bot.site_url() == "https://callcenter.example.org"
+
+
+def test_page_updates_itself_when_a_call_is_recorded(client, caller, imported):
+    """The page asks for a stamp every few seconds; it changes as soon as a call of the day is recorded."""
+    client.force_login(caller)
+    page = client.get("/reports/daily/")
+    html = page.content.decode()
+    assert 'data-live-url="?format=stamp"' in html and "อัปเดตยอดอัตโนมัติ" in html
+    first = client.get("/reports/daily/", {"format": "stamp"})
+    assert first["Cache-Control"] == "no-store"
+    ensure_call_pool()
+    record_call(Case.objects.first(), caller, outcome=O.NOT_PROCEED)
+    second = client.get("/reports/daily/", {"format": "stamp"}).content
+    assert second != first.content
+    assert "จำนวน 1 Case ID" in client.get("/reports/daily/").content.decode()
+    # an earlier day does not change any more: no polling
+    old = client.get("/reports/daily/", {"date": "2026-01-05"}).content.decode()
+    assert "data-live-url" not in old
