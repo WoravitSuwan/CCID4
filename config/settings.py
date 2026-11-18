@@ -193,6 +193,8 @@ LINE_TIMEOUT = env_int("LINE_TIMEOUT", 15)
 # the system's public address for links in LINE messages, e.g. https://callcenter.example.org
 # (empty: taken from the address LINE and administrators use)
 SITE_URL = env("SITE_URL", "")
+# web pages also check whether the daily LINE summary is due (works without the Celery worker)
+LINE_WEB_CHECK = env_bool("LINE_WEB_CHECK", True)
 TEMPLATES_DOCX_DIR = BASE_DIR / "templates_docx"
 
 LOGGING = {

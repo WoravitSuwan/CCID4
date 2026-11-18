@@ -303,14 +303,68 @@ def test_daily_push_once_after_the_set_time(line, day_calls):
     setting(line_enabled=True)
     assert line_bot.send_if_due(at(DAY, 17, 59)) == "not due"
     assert line_bot.send_if_due(at(DAY, 18, 5)) == "sent"
-    assert SystemSetting.get().line_last_sent == DAY
-    assert line_bot.send_if_due(at(DAY, 18, 10)) == "not due"  # once a day
+    s = SystemSetting.get()
+    assert s.line_last_sent_at == at(DAY, 18, 5) and "ส่งแล้ว (7 Case)" in s.line_last_result
+    assert s.line_checked_at == at(DAY, 18, 5)
+    assert line_bot.send_if_due(at(DAY, 18, 10)) == "not due"  # once per send time
     pushes = [x for x in line if x[1] == "/message/push"]
     assert len(pushes) == 1
-    # a day without calls: nothing sent (saves the quota)
+    # the next day, at the time again
+    assert line_bot.send_if_due(at(DAY + dt.timedelta(days=1), 18, 1)) == "sent"  # (one call that day)
+    # a day without calls: nothing sent (saves the quota), and the page says why
     quiet = DAY + dt.timedelta(days=5)
     assert line_bot.send_if_due(at(quiet, 18, 5)) == "no calls"
+    assert "ยังไม่มีการบันทึกผลการโทร" in SystemSetting.get().line_last_result
+    assert len([x for x in line if x[1] == "/message/push"]) == 2
+
+
+def test_time_moved_later_the_same_day_sends_again(line, day_calls):
+    """What happened on 18 Nov: sent (or skipped) at 10:41, then the time was changed to 16:30 - it must still
+    go out at 16:30."""
+    setting(line_group_id="Cgroup1", line_enabled=True, line_send_time=dt.time(10, 41))
+    assert line_bot.send_if_due(at(DAY, 10, 45)) == "sent"
+    setting(line_send_time=dt.time(16, 30))
+    assert line_bot.send_if_due(at(DAY, 16, 0)) == "not due"
+    assert line_bot.send_if_due(at(DAY, 16, 31)) == "sent"
+    assert len([x for x in line if x[1] == "/message/push"]) == 2
+
+
+def test_two_checkers_at_once_send_one_message(line, day_calls, monkeypatch):
+    """The worker and a web page may check at the same moment: only one of them sends."""
+    setting(line_group_id="Cgroup1", line_enabled=True, line_send_time=dt.time(16, 30))
+    real_due = line_bot.due
+    monkeypatch.setattr(line_bot, "due", lambda now=None: DAY)  # both see it due ...
+    assert line_bot.send_if_due(at(DAY, 16, 31)) == "sent"
+    assert line_bot.send_if_due(at(DAY, 16, 31)) == "not due"  # ... the second finds it claimed
+    monkeypatch.setattr(line_bot, "due", real_due)
     assert len([x for x in line if x[1] == "/message/push"]) == 1
+
+
+def test_web_pages_check_when_no_worker_runs(client, caller, line, day_calls, settings, monkeypatch):
+    import threading
+
+    settings.LINE_WEB_CHECK = True
+    setting(line_group_id="Cgroup1", line_enabled=True, line_send_time=dt.time(0, 0))
+    monkeypatch.setattr(line_bot, "_last_web_check", 0.0)
+    started = []
+    monkeypatch.setattr("apps.core.background.start_thread", lambda f, *a: started.append(f))
+    client.force_login(caller)
+    client.get("/reports/daily/", {"format": "stamp"})
+    assert started == [line_bot.send_if_due]
+    client.get("/reports/daily/", {"format": "stamp"})
+    assert len(started) == 1  # at most once a minute
+    assert threading.active_count() >= 1
+
+
+def test_settings_page_shows_the_automatic_send(client, admin_user, line, day_calls):
+    setting(line_group_id="Cgroup1", line_enabled=True, line_send_time=dt.time(16, 30))
+    client.force_login(admin_user)
+    html = client.get("/settings/line/").content.decode()
+    assert "ส่งครั้งต่อไป" in html and "ยังไม่เคยส่งอัตโนมัติ" in html
+    assert "งานเบื้องหลัง (worker) อาจไม่ได้ทำงาน" in html  # nothing has checked yet
+    line_bot.send_if_due()
+    html = client.get("/settings/line/").content.decode()
+    assert "worker) อาจไม่ได้ทำงาน" not in html
 
 
 def test_daily_push_error_is_shown_and_retried(line, day_calls, monkeypatch, client, admin_user):
@@ -322,7 +376,7 @@ def test_daily_push_error_is_shown_and_retried(line, day_calls, monkeypatch, cli
     monkeypatch.setattr(line_bot, "push", down)
     assert line_bot.send_if_due(at(DAY, 18, 5)).startswith("error")
     s = SystemSetting.get()
-    assert s.line_last_sent is None and "timeout" in s.line_last_error
+    assert s.line_last_sent_at is None and "timeout" in s.line_last_error and "ส่งไม่สำเร็จ" in s.line_last_result
     client.force_login(admin_user)
     assert "timeout" in client.get("/settings/line/").content.decode()
     monkeypatch.undo()

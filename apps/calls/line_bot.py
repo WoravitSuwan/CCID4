@@ -206,39 +206,105 @@ def send_day(day: dt.date) -> int:
     return report.load(day).counts["total"]
 
 
+def scheduled_at(now: dt.datetime | None = None) -> dt.datetime:
+    """Today's send time."""
+    now = timezone.localtime(now)
+    return timezone.make_aware(dt.datetime.combine(now.date(), SystemSetting.get().line_send_time),
+                               timezone.get_current_timezone())
+
+
 def due(now: dt.datetime | None = None) -> dt.date | None:
-    """The day whose summary should be pushed now, or None."""
+    """The day whose summary should be pushed now, or None. Once per send time: if the time is moved later
+    in the day after a send, it is sent again at the new time."""
     s = SystemSetting.get()
     if not (s.line_enabled and configured() and s.line_group_id):
         return None
     now = timezone.localtime(now)
-    if now.time() < s.line_send_time or s.line_last_sent == now.date():
+    at = scheduled_at(now)
+    if now < at or (s.line_last_sent_at and s.line_last_sent_at >= at):
         return None
     return now.date()
 
 
 def send_if_due(now: dt.datetime | None = None) -> str:
-    """Run every few minutes (Celery beat, or cron with manage.py send_line_report --if-due)."""
+    """Run every few minutes: by Celery beat (Docker), cron (manage.py send_line_report --if-due), and by the
+    web pages themselves as a fallback. Whoever comes first sends; the others see it done (no double send)."""
+    from django.db.models import Q
+
     from apps.core.audit import log as audit
     from apps.core.models import AuditAction
 
+    now = timezone.localtime(now)
+    SystemSetting.objects.filter(pk=SystemSetting.get().pk).update(line_checked_at=now)
     day = due(now)
     if day is None:
         return "not due"
+    at = scheduled_at(now)
     s = SystemSetting.get()
+    # claim this send time (one process only)
+    claimed = SystemSetting.objects.filter(pk=s.pk).filter(
+        Q(line_last_sent_at__isnull=True) | Q(line_last_sent_at__lt=at)).update(line_last_sent_at=now)
+    if not claimed:
+        return "not due"
+    stamp = f"{now:%d/%m %H:%M}"
     if s.line_skip_empty and not report.load(day).rows:
-        SystemSetting.objects.filter(pk=s.pk).update(line_last_sent=day, line_last_error="")
+        SystemSetting.objects.filter(pk=s.pk).update(
+            line_last_result=f"{stamp} ไม่ได้ส่ง: วันนี้ยังไม่มีการบันทึกผลการโทร (ตั้งไว้ไม่ส่งในวันที่ไม่มีการโทร)",
+            line_last_error="")
         return "no calls"
     try:
         total = send_day(day)
     except LineError as exc:
-        SystemSetting.objects.filter(pk=s.pk).update(line_last_error=f"{timezone.localtime():%d/%m %H:%M} {exc}")
+        # give the time back so the next run tries again
+        SystemSetting.objects.filter(pk=s.pk).update(line_last_sent_at=s.line_last_sent_at,
+                                                     line_last_error=f"{stamp} {exc}",
+                                                     line_last_result=f"{stamp} ส่งไม่สำเร็จ: {exc}")
         log.warning("LINE daily summary not sent: %s", exc)
         return f"error: {exc}"
-    SystemSetting.objects.filter(pk=s.pk).update(line_last_sent=day, line_last_error="")
+    SystemSetting.objects.filter(pk=s.pk).update(line_last_error="",
+                                                 line_last_result=f"{stamp} ส่งแล้ว ({total:,} Case)")
     audit(None, AuditAction.EXPORT, None, f"ส่งสรุปผลประจำวัน {report.file_day(day)} เข้ากลุ่ม LINE "
                                           f"({total:,} Case, อัตโนมัติ)")
     return "sent"
+
+
+def auto_status(now: dt.datetime | None = None) -> dict:
+    """For the settings and daily pages: next send time, what happened last, and whether anything is checking."""
+    s = SystemSetting.get()
+    now = timezone.localtime(now)
+    at = scheduled_at(now)
+    done_today = bool(s.line_last_sent_at and s.line_last_sent_at >= at)
+    nxt = at if now < at or not done_today else at + dt.timedelta(days=1)
+    if now >= at and not done_today:
+        nxt = None  # due now: the next check sends it
+    stale = s.line_enabled and (not s.line_checked_at or now - s.line_checked_at > dt.timedelta(minutes=15))
+    return {"enabled": s.line_enabled, "ready": configured() and bool(s.line_group_id), "next": nxt,
+            "due_now": s.line_enabled and nxt is None, "result": s.line_last_result, "checked": s.line_checked_at,
+            "stale": stale, "time": s.line_send_time}
+
+
+_last_web_check = 0.0
+
+
+def check_from_web() -> None:
+    """Fallback when no background worker runs: any page visit (the daily page asks every 10 s) checks, at most
+    once a minute per web process, and sends in a thread so the page does not wait."""
+    import threading
+    import time
+
+    global _last_web_check
+    if time.monotonic() - _last_web_check < 60:
+        return
+    _last_web_check = time.monotonic()
+    try:
+        if due() is None:
+            return
+    except Exception:  # the database is not ready (first start, migrations): try again later
+        return
+    from apps.core.background import start_thread
+
+    if threading.active_count() < 50:
+        start_thread(send_if_due)
 
 
 # --------------------------------------------------------------------------- webhook

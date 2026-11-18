@@ -33,4 +33,9 @@ class LoginRequiredMiddleware:
                 and not request.path.startswith(OUTSOURCE_PREFIXES)
                 and not any(p.match(request.path) for p in OUTSOURCE_PATTERNS)):
             return redirect("calls_queue")
-        return self.get_response(request)
+        response = self.get_response(request)
+        if settings.LINE_WEB_CHECK:
+            from apps.calls.line_bot import check_from_web
+
+            check_from_web()  # the LINE daily summary, if its time has come (when no worker runs)
+        return response

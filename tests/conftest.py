@@ -11,6 +11,7 @@ SAMPLE = ROOT / "sample_data"
 def _media(tmp_path, settings):
     settings.MEDIA_ROOT = tmp_path / "media"
     settings.CELERY_TASK_ALWAYS_EAGER = True
+    settings.LINE_WEB_CHECK = False  # tested on its own (it starts a thread)
     settings.STORAGES = {
         "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},

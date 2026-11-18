@@ -565,6 +565,7 @@ def line(request):
             return redirect("settings_line")
     return render(request, "settings/line.html", {
         "form": form, "s": s, "tab": "line", "configured": line_bot.configured(),
+        "auto": line_bot.auto_status(),
         "keys_form": LineKeysForm(), "from_env": line_bot.from_env(), "site_url": line_bot.site_url(),
         "has_secret": bool(s.line_channel_secret), "has_token": bool(s.line_access_token),
         "webhook_url": request.build_absolute_uri(reverse("line_webhook")),

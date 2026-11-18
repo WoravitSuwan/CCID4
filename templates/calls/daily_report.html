@@ -58,6 +58,7 @@
       <a class="btn btn-ghost text-slate-500" href="{% url 'settings_line' %}">{% icon "chat" "h-4 w-4" %} ตั้งค่าบอท LINE</a>
       {% endif %}
     </div>
+    {% if auto and line_ready %}<p class="mt-2 text-xs text-slate-500">บอทส่งเข้ากลุ่มเองทุกวันเวลา {{ auto.time|time:"H:i" }} น.{% if auto.result %} · ล่าสุด: {{ auto.result }}{% endif %}</p>{% endif %}
   </section>
 
   <section class="card flex flex-col">

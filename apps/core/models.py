@@ -83,7 +83,10 @@ class SystemSetting(models.Model):
     line_group_name = models.CharField(max_length=200, blank=True, editable=False)
     line_pending_group_id = models.CharField(max_length=64, blank=True, editable=False)
     line_pending_group_name = models.CharField(max_length=200, blank=True, editable=False)
-    line_last_sent = models.DateField("ส่งอัตโนมัติล่าสุด (วันที่ของข้อมูล)", null=True, blank=True, editable=False)
+    # the automatic send: when it was last done (or skipped), what happened, and when it was last checked
+    line_last_sent_at = models.DateTimeField(null=True, blank=True, editable=False)
+    line_last_result = models.CharField(max_length=300, blank=True, editable=False)
+    line_checked_at = models.DateTimeField(null=True, blank=True, editable=False)
     line_last_error = models.TextField(blank=True, editable=False)
 
     class Meta:

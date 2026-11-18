@@ -806,6 +806,7 @@ def daily_report(request):
         "date_text": thai_date_full(day, thai_digits=False),
         "line_ready": line_bot.configured() and bool(s.line_group_id), "line_group": s.line_group_name,
         "line_files": s.line_send_files and bool(line_bot.site_url()),
+        "auto": line_bot.auto_status() if s.line_enabled else None,
         "query": request.GET.urlencode(),
     })
 
