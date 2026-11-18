@@ -41,6 +41,7 @@ from .services import (
     check_attachments,
     ensure_call_pool,
     parse_receipt_list,
+    previous_outcome,
     record_call,
     save_attachments,
 )
@@ -461,7 +462,9 @@ def call_case(request, pk):
         raise PermissionDenied
     phones = case_phones(case)
     now = timezone.localtime().replace(second=0, microsecond=0)
-    form = CallForm(request.POST or None, initial={"called_at": now, "phone": phones[0] if phones else ""})
+    previous, previous_from = previous_outcome(case)  # ticked already: the staff only change it if it is new
+    initial = {"called_at": now, "phone": phones[0] if phones else "", "outcome": previous}
+    form = CallForm(request.POST or None, initial=initial)
     files = request.FILES.getlist("attachments") if request.method == "POST" else []
     valid = request.method == "POST" and form.is_valid()
     file_problems = check_attachments(files) if valid else []
@@ -494,6 +497,7 @@ def call_case(request, pk):
     if request.method == "GET" and not busy_with:  # mark "I have this case open" for the others
         CallAssignment.objects.filter(pk=assignment.pk).update(opened_by=request.user, opened_at=timezone.now())
     return render(request, "calls/call.html", {
+        "previous": previous if not form.is_bound else None, "previous_from": previous_from,
         "busy_with": busy_with, "busy_since": assignment.opened_at if busy_with else None,
         "case": case, "form": form, "phones": phones, "assignment": assignment,
         "attempts": case.calls.select_related("created_by").prefetch_related("attachments__uploaded_by"),

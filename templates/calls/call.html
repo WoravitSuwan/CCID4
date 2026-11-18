@@ -127,6 +127,7 @@
   <form method="post" enctype="multipart/form-data" class="card lg:col-span-3" id="call-form">{% csrf_token %}
     <div class="card-header">{% icon "pencil" "h-5 w-5 text-slate-400" %}<h2>บันทึกผลการโทร ครั้งที่ {{ attempts|length|add:1 }}</h2></div>
     {% if form.non_field_errors %}<div class="alert alert-error mb-4">{{ form.non_field_errors }}</div>{% endif %}
+    {% if previous %}<div class="mb-3 flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900 ring-1 ring-sky-200">{% icon "info" "mt-0.5 h-4 w-4 shrink-0" %}<span>ติ๊กผลไว้ให้ตาม{{ previous_from }} ถ้าครั้งนี้ผลต่างไป ให้เลือกใหม่ก่อนบันทึก</span></div>{% endif %}
 
     <div class="mb-2 text-sm font-medium text-emerald-700">ติดต่อได้</div>
     <div class="grid gap-2 sm:grid-cols-2">

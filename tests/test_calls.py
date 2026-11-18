@@ -273,3 +273,49 @@ def test_appointment_date_is_optional(client, imported, caller):
     assert CallAttempt.objects.filter(case=case, appointment_at__isnull=False).count() == 1
     page = client.get(f"/calls/{case.pk}/").content.decode()
     assert "ยังไม่กำหนดวัน" in page and 'class="appt-chip"' in page and "outcome-card" in page
+
+
+@pytest.mark.parametrize("log, expected", [
+    ("ไม่ประสงค์ดำเนินคดี วันที่ 9 พ.ย. 2569 เวลา 09.27 น.", "not_proceed"),
+    ("ไม่ประสง์ดำเนินคดี", "not_proceed"),
+    ("ประสงค์ดำเนินคดี วันที่ 12 พ.ย. 2569", "appointed"),
+    ("ครั้งที่ 1 ไม่สามารถติดต่อได้ (ปิดเครื่อง) 9 ตค 68\nครั้งที่ 2 ไม่สามารถติดต่อได้ (ไม่รับสาย) 10 ตค 68", "no_answer"),
+    ("ครั้งที่ 1 ไม่สามารถติดต่อได้ (ไมรับสาย)", "no_answer"),
+    ("ครั้งที่ 1 ไม่สามารถติดต่อได้ (ปิดเคื่อง)", "off"),
+    ("ครั้งที่ 1 ไม่สามารถติดต่อได้ (สายไม่ว่าง)", "busy"),
+    ("ครั้งที่ 1 ไม่สามารถติดต่อได้ (เลขหมายระงับการใช้บริการ)", "wrong"),
+    ("ครั้งที่ 1 ไม่สามารถติดต่อได้ (ไม่มีหมายเลขที่เรียก)", "wrong"),
+    ("ครั้งที่ 1 ติดต่อแล้ว (ปลายสายแจ้งว่าไม่รู้จักผู้เสียหาย)", "unknown_person"),
+    ("ครั้งที่ 1 ติดต่อแล้ว ขอตัดสินใจ 3 วัน แล้วจะติดต่อกลับ", None),  # unclear: nothing ticked
+    ("9 พ.ย. 2569 เวลา 10.00 น.", None),  # a date only
+    ("", None),
+])
+def test_result_read_from_the_register_contact_log(log, expected):
+    from apps.calls.services import outcome_from_log
+
+    assert outcome_from_log(log) == expected
+
+
+def test_call_page_ticks_the_previous_result(client, imported, caller):
+    from django.utils import timezone
+
+    from apps.registry.models import Case
+
+    a, b, c = Case.objects.not_final().order_by("receipt_no")[:3]
+    Case.objects.filter(pk=a.pk).update(contact_log="ไม่ประสงค์ดำเนินคดี วันที่ 28 ต.ค. 2569")
+    Case.objects.filter(pk=b.pk).update(contact_log="9 พ.ย. 2569 เวลา 10.00 น.")
+    Case.objects.filter(pk=c.pk).update(contact_log="ไม่ประสงค์ดำเนินคดี")
+    client.force_login(caller)
+    page = client.get(f"/calls/{a.pk}/")
+    html = page.content.decode()
+    assert page.context["form"]["outcome"].value() == "not_proceed"
+    assert 'value="not_proceed" class="h-4 w-4 shrink-0 text-emerald-600" checked' in html
+    assert "ติ๊กผลไว้ให้ตามบันทึกการติดต่อในไฟล์ทะเบียน" in html
+    none = client.get(f"/calls/{b.pk}/")
+    assert none.context["form"]["outcome"].value() is None and "ติ๊กผลไว้ให้" not in none.content.decode()
+    # a call in the system wins over the file
+    now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
+    client.post(f"/calls/{c.pk}/", {"outcome": "busy", "called_at": now})
+    again = client.get(f"/calls/{c.pk}/")
+    assert again.context["form"]["outcome"].value() == "busy"
+    assert "ผลการโทรครั้งที่ 1 ในระบบ" in again.content.decode()

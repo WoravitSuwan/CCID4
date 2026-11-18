@@ -93,6 +93,41 @@ def contact_log_with_calls(case: Case) -> str:
     return "\n".join(lines)
 
 
+# words in the register's contact log -> the matching call result (checked in this order)
+_LOG_OUTCOMES = [
+    (re.compile(r"ไม่\s*ประสง"), CallOutcome.NOT_PROCEED),
+    (re.compile(r"ไม่\s*รู้จัก"), CallOutcome.UNKNOWN_PERSON),
+    (re.compile(r"ประสง"), CallOutcome.APPOINTED),
+    (re.compile(r"ปิด\s*เ?ค?ร?ื่?อง"), CallOutcome.OFF),
+    (re.compile(r"สาย\s*ไม่\s*ว่าง"), CallOutcome.BUSY),
+    (re.compile(r"ฝาก\s*ข้อความ"), CallOutcome.VOICEMAIL),
+    (re.compile(r"ไม่?\s*รับ\s*สาย|ตัด\s*สาย"), CallOutcome.NO_ANSWER),
+    (re.compile(r"เลขหมาย|หมายเล|ระงับ|ไม่มี\s*เลข|ไม่มี\s*หมาย|เบอร์\s*ไม่ถูก"), CallOutcome.WRONG),
+]
+
+
+def outcome_from_log(text: str) -> str | None:
+    """The result written in the latest line of the register's contact log, e.g.
+    'ครั้งที่ 2 ไม่สามารถติดต่อได้ (ปิดเครื่อง) 9 ตค 68' -> off; None when it says no result (only a date)."""
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    if not lines:
+        return None
+    for pattern, outcome in _LOG_OUTCOMES:
+        if pattern.search(lines[-1]):
+            return outcome
+    return None
+
+
+def previous_outcome(case: Case) -> tuple[str | None, str]:
+    """The result to tick before the staff choose: the last call in this system, or else the register's
+    contact log. Returns (outcome, where it came from)."""
+    last = CallAttempt.objects.filter(case=case).order_by("-called_at", "-number").first()
+    if last:
+        return last.outcome, f"ผลการโทรครั้งที่ {last.number} ในระบบ"
+    found = outcome_from_log(case.contact_log)
+    return (found, "บันทึกการติดต่อในไฟล์ทะเบียน") if found else (None, "")
+
+
 def check_attachments(files) -> list[str]:
     """Problems with uploaded files (empty list = all fine)."""
     from django.conf import settings
