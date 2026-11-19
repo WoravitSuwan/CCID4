@@ -8,6 +8,12 @@
   </div>
   <div class="ml-auto flex flex-wrap gap-2">
     <a class="btn btn-primary" href="{% url 'daily_report' %}">{% icon "clipboard" "h-4 w-4" %} สรุปผลวันนี้ / ข้อความลงบันทึกประจำวัน</a>
+    {% if line_ready %}
+    <form method="post" action="{% url 'daily_report' %}" onsubmit="return confirm('ส่งสรุปผลวันนี้เข้ากลุ่ม LINE ตอนนี้?\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
+      <button class="btn btn-success">{% icon "chat" "h-4 w-4" %} ส่งสรุปเข้า LINE</button></form>
+    {% else %}
+    <a class="btn" href="{% url 'daily_report' %}#line" title="ตั้งเวลาส่งอัตโนมัติ / ดูว่าทำไมยังส่งไม่ได้">{% icon "chat" "h-4 w-4" %} LINE</a>
+    {% endif %}
     {% if can_manage %}
     <a class="btn" href="{% url 'calls_export' %}">{% icon "download" "h-4 w-4" %} ส่งออกผลการโทร (Excel)</a>
     <a class="btn" href="{% url 'calls_assign' %}">{% icon "users" "h-4 w-4" %} กำหนดผู้รับผิดชอบ (ไม่บังคับ)</a>

@@ -134,7 +134,7 @@ def test_page_texts_and_word_files(client, caller, day_calls):
     assert page.status_code == 200
     html = page.content.decode()
     assert "วันนี้( 9 พ.ย.69)" in html and "จำนวน 7 Case ID" in html and 'data-copy="#t-diary"' in html
-    assert "ส่งเข้ากลุ่ม LINE" not in html  # LINE is not set up
+    assert "ยังส่งไม่ได้: ยังไม่ได้ใส่รหัสเชื่อมต่อ LINE" in html and "แจ้งผู้ดูแลระบบ" in html  # not set up
     diary = client.get("/reports/daily/", {"date": "2026-11-09", "format": "diary"})
     assert "%E0%B8%A5%E0%B8%87%E0%B8%9A%E0%B8%B1%E0%B8%99%E0%B8%97%E0%B8%B6%E0%B8%81" in diary["Content-Disposition"]
     assert "9.11.2569.docx" in diary["Content-Disposition"]
@@ -198,7 +198,8 @@ def test_page_with_bad_or_future_dates(client, caller, imported):
 def test_call_staff_send_to_line_too(client, caller, line, day_calls):
     setting(line_group_id="Cgroup1")
     client.force_login(caller)
-    assert "ส่งเข้ากลุ่ม LINE" in client.get("/reports/daily/", {"date": "2026-11-09"}).content.decode()
+    html = client.get("/reports/daily/", {"date": "2026-11-09"}).content.decode()
+    assert "ส่งสรุปผลวันที่ 9 พ.ย. 2569 ตอนนี้" in html and "ยังส่งไม่ได้" not in html
     resp = client.post("/reports/daily/?date=2026-11-09")
     assert resp.status_code == 302 and line[-1][1] == "/message/push"
     assert "จำนวน 7 Case ID" in line[-1][2]["messages"][0]["text"]
@@ -391,7 +392,7 @@ def test_admin_sends_from_the_daily_page(client, admin_user, line, day_calls):
     client.force_login(admin_user)
     assert "ตั้งค่าบอท LINE" in client.get("/reports/daily/").content.decode()  # no group yet
     setting(line_group_id="Cgroup1", line_group_name="กก.1 ห้องรายงาน")
-    assert "ส่งเข้ากลุ่ม LINE" in client.get("/reports/daily/").content.decode()
+    assert "ยังส่งไม่ได้" not in client.get("/reports/daily/").content.decode()
     resp = client.post("/reports/daily/?date=2026-11-09")
     assert resp.status_code == 302 and "date=2026-11-09" in resp["Location"]
     assert line[-1][1] == "/message/push"
@@ -539,3 +540,36 @@ def test_page_updates_itself_when_a_call_is_recorded(client, caller, imported):
     # an earlier day does not change any more: no polling
     old = client.get("/reports/daily/", {"date": "2026-01-05"}).content.decode()
     assert "data-live-url" not in old
+
+
+def test_call_staff_see_the_line_box_and_set_the_automatic_send(client, caller, line, day_calls):
+    """The box is always there for call staff: why it cannot send yet, the send button, the daily time."""
+    from apps.core.models import AuditLog
+
+    client.force_login(caller)
+    html = client.get("/reports/daily/").content.decode()
+    assert 'id="line"' in html and "ยังส่งไม่ได้: ยังไม่ได้ยืนยันกลุ่ม LINE" in html  # keys set, no group yet
+    assert "ส่งอัตโนมัติทุกวัน" in html and 'name="line_send_time"' in html
+    resp = client.post("/reports/daily/", {"action": "auto", "line_enabled": "on", "line_send_time": "16:30"})
+    assert resp.status_code == 302 and resp["Location"].endswith("#line")
+    s = SystemSetting.get()
+    assert s.line_enabled and s.line_send_time == dt.time(16, 30)
+    assert AuditLog.objects.filter(detail__contains="อัตโนมัติ: เปิด เวลา 16:30").exists()
+    client.post("/reports/daily/", {"action": "auto", "line_send_time": "16:30"})  # unticked: off
+    assert not SystemSetting.get().line_enabled
+    assert client.post("/reports/daily/", {"action": "auto", "line_send_time": "25:99"}).status_code == 302
+    assert SystemSetting.get().line_send_time == dt.time(16, 30)  # a wrong time changes nothing
+    # once the group is confirmed: send buttons on the daily page and on the call list
+    setting(line_group_id="Cgroup1")
+    assert "ส่งสรุปเข้า LINE" in client.get("/calls/").content.decode()
+    resp = client.post("/reports/daily/")
+    assert resp.status_code == 302 and line[-1][1] == "/message/push"
+
+
+def test_a_day_without_calls_can_be_sent_too(client, caller, line, imported):
+    setting(line_group_id="Cgroup1")
+    client.force_login(caller)
+    html = client.get("/reports/daily/", {"date": "2020-01-01"}).content.decode()
+    assert "disabled" not in html.split('id="line"')[1].split("</form>")[0]
+    client.post("/reports/daily/?date=2020-01-01")
+    assert "จำนวน 0 Case ID" in line[-1][2]["messages"][0]["text"]

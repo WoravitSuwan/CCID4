@@ -333,6 +333,12 @@ def _column_sort(sort: str) -> dict:
     return out
 
 
+def _line_ready() -> bool:
+    from . import line_bot
+
+    return line_bot.configured() and bool(SystemSetting.get().line_group_id)
+
+
 def queue(request):
     base = _queue(request)
     tab = request.GET.get("tab", "all")
@@ -374,6 +380,7 @@ def queue(request):
         "lock_minutes": OPEN_LOCK_MINUTES,
         "can_manage": perms.can_manage_calls(request.user),
         "can_issue": perms.can_issue_any(request.user),
+        "line_ready": _line_ready(),
     })
 
 
@@ -748,6 +755,18 @@ def status_report(request):
 
 
 # --------------------------------------------------------------------------- daily summary (สรุปผลประจำวัน)
+class LineAutoForm(forms.ModelForm):
+    """The automatic daily LINE send - call staff may change it too (keys and the group stay with admins)."""
+
+    class Meta:
+        model = SystemSetting
+        fields = ["line_enabled", "line_send_time"]
+        labels = {"line_enabled": "ส่งอัตโนมัติทุกวัน", "line_send_time": "เวลา"}
+        widgets = {"line_send_time": forms.TimeInput(attrs={"type": "time", "class": "input w-auto py-1.5"},
+                                                      format="%H:%M"),
+                   "line_enabled": forms.CheckboxInput(attrs={"class": "check"})}
+
+
 def daily_report(request):
     """สรุปผลประจำวัน + ข้อความลงบันทึกประจำวัน for one day: copy, Word files, and (admins) send to LINE."""
     import tempfile
@@ -768,6 +787,19 @@ def daily_report(request):
     if request.method == "POST":
         if not (perms.is_admin(request.user) or perms.is_outsource(request.user)):
             raise PermissionDenied("ไม่มีสิทธิ์ส่งข้อความเข้า LINE")
+        back = f"{reverse('daily_report')}?date={day.isoformat()}"
+        if request.POST.get("action") == "auto":  # the automatic daily send: on/off and the time
+            setting = SystemSetting.get()
+            form = LineAutoForm(request.POST, instance=setting)
+            if form.is_valid():
+                form.save()
+                state = (f"เปิด เวลา {form.cleaned_data['line_send_time']:%H:%M} น."
+                         if form.cleaned_data["line_enabled"] else "ปิด")
+                log(request, AuditAction.SETTINGS, setting, f"ส่งสรุปผลประจำวันเข้า LINE อัตโนมัติ: {state}")
+                messages.success(request, f"บันทึกแล้ว: ส่งอัตโนมัติ{state}")
+            else:
+                messages.error(request, "เวลาส่งไม่ถูกต้อง")
+            return redirect(back + "#line")
         try:
             total = line_bot.send_day(day)
         except line_bot.LineError as exc:
@@ -776,7 +808,7 @@ def daily_report(request):
             log(request, AuditAction.EXPORT, None, f"ส่งสรุปผลประจำวัน {report.file_day(day)} เข้ากลุ่ม LINE "
                                                    f"({total:,} Case)")
             messages.success(request, f"ส่งสรุปผลวันที่ {thai_date_full(day, thai_digits=False)} เข้ากลุ่ม LINE แล้ว")
-        return redirect(f"{reverse('daily_report')}?date={day.isoformat()}")
+        return redirect(back + "#line")
 
     fmt = request.GET.get("format", "")
     if fmt == "stamp":  # the open page asks every few seconds whether a call was recorded since
@@ -806,7 +838,10 @@ def daily_report(request):
         "date_text": thai_date_full(day, thai_digits=False),
         "line_ready": line_bot.configured() and bool(s.line_group_id), "line_group": s.line_group_name,
         "line_files": s.line_send_files and bool(line_bot.site_url()),
-        "auto": line_bot.auto_status() if s.line_enabled else None,
+        "auto": line_bot.auto_status(), "auto_form": LineAutoForm(instance=s),
+        "line_problem": ("" if line_bot.configured() and s.line_group_id
+                         else "ยังไม่ได้ใส่รหัสเชื่อมต่อ LINE" if not line_bot.configured()
+                         else "ยังไม่ได้ยืนยันกลุ่ม LINE (เชิญบอทเข้ากลุ่ม แล้วผู้ดูแลระบบกด \"ใช้กลุ่มนี้\")"),
         "query": request.GET.urlencode(),
     })
 
