@@ -54,6 +54,9 @@
       {% if auto.enabled %}ส่งครั้งต่อไป: {% if auto.due_now %}ถึงเวลาแล้ว (ภายในไม่กี่นาที){% elif auto.next %}{{ auto.next|thai_date:"datetime" }}{% endif %}{% else %}ปิดอยู่{% endif %}
       {% if auto.result %} · ล่าสุด: {{ auto.result }}{% endif %}
     </span>
+    {% if auto.enabled and not line_problem %}
+    <span class="w-full text-xs {% if auto.worker_ok %}text-emerald-700{% else %}text-amber-700{% endif %}">{% if auto.worker_ok %}✓ เซิร์ฟเวอร์ส่งเองตามเวลา แม้ปิดคอมทุกเครื่อง{% else %}⚠ งานส่งอัตโนมัติบนเซิร์ฟเวอร์ไม่ได้ทำงาน: ตอนนี้จะส่งได้เฉพาะเมื่อมีคนเปิดหน้าเว็บของระบบอยู่ · แจ้งผู้ดูแลเซิร์ฟเวอร์{% endif %}</span>
+    {% endif %}
   </form>
 </section>
 

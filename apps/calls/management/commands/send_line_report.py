@@ -23,7 +23,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         if opts["if_due"]:
-            self.stdout.write(line_bot.send_if_due())
+            self.stdout.write(line_bot.send_if_due(worker=True))
             return
         try:
             day = dt.date.fromisoformat(opts["date"]) if opts["date"] else timezone.localdate()

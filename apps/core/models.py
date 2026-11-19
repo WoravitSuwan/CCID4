@@ -87,6 +87,8 @@ class SystemSetting(models.Model):
     line_last_sent_at = models.DateTimeField(null=True, blank=True, editable=False)
     line_last_result = models.CharField(max_length=300, blank=True, editable=False)
     line_checked_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # last check by the server's own background job (Celery worker, or cron): sends with every computer off
+    line_worker_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
     line_last_error = models.TextField(blank=True, editable=False)
 
     class Meta:

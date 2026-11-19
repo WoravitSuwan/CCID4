@@ -171,10 +171,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.core.tasks.cleanup_media",
         "schedule": 24 * 3600,
     },
-    # posts the daily summary to LINE once the set time has passed (does nothing while LINE is off)
+    # posts the daily summary to LINE once the set time has passed (does nothing while LINE is off);
+    # runs on the server, so it sends with every office computer switched off
     "line-daily-summary": {
         "task": "apps.calls.tasks.line_daily_summary",
-        "schedule": 5 * 60,
+        "schedule": 60,
     },
 }
 

@@ -93,7 +93,8 @@
         <div>ส่งครั้งต่อไป: {% if auto.due_now %}<b>ถึงเวลาแล้ว</b> ระบบจะส่งภายในไม่กี่นาที{% elif auto.next %}<b>{{ auto.next|thai_date:"datetime" }}</b>{% endif %}{% if not auto.ready %} <span class="text-amber-700">(ยังส่งไม่ได้: ยังไม่ได้ใส่รหัสหรือยังไม่ได้ยืนยันกลุ่ม)</span>{% endif %}</div>
         <div>ผลล่าสุด: {{ auto.result|default:"ยังไม่เคยส่งอัตโนมัติ" }}</div>
         <div class="text-xs text-slate-500">ระบบตรวจเวลาส่งล่าสุด: {% if auto.checked %}{{ auto.checked|thai_date:"datetime" }}{% else %}ยังไม่เคยตรวจ{% endif %}</div>
-        {% if auto.stale %}<div class="text-xs text-amber-700">ยังไม่มีการตรวจเวลาส่งในช่วง 15 นาทีที่ผ่านมา: งานเบื้องหลัง (worker) อาจไม่ได้ทำงาน ระบบจะตรวจแทนเมื่อมีคนเปิดหน้าเว็บ แต่ถ้าเวลาส่งไม่มีใครเปิดเว็บเลย ข้อความจะไปตอนมีคนเปิดครั้งถัดไป · ผู้ดูแลเซิร์ฟเวอร์ตรวจได้ด้วย <span class="font-mono">docker compose ps</span> (ต้องมี worker สถานะ running)</div>{% endif %}
+        {% if auto.worker_ok %}<div class="flex items-center gap-1.5 text-xs text-emerald-700">{% icon "check" "h-4 w-4" %} งานส่งอัตโนมัติบนเซิร์ฟเวอร์ทำงานอยู่ (ตรวจทุก 1 นาที ล่าสุด {{ auto.worker_seen|time:"H:i" }} น.) ส่งได้แม้ปิดคอมทุกเครื่อง</div>
+        {% else %}<div class="text-xs text-amber-700">งานส่งอัตโนมัติบนเซิร์ฟเวอร์ (worker) ไม่ได้ทำงาน{% if auto.worker_seen %} ตั้งแต่ {{ auto.worker_seen|thai_date:"datetime" }}{% endif %}: ตอนนี้ระบบส่งได้เฉพาะเมื่อมีคนเปิดหน้าเว็บของระบบอยู่ ถ้าปิดคอมทุกเครื่อง ข้อความจะไม่ไปตามเวลา · ผู้ดูแลเซิร์ฟเวอร์ตรวจด้วย <span class="font-mono">docker compose ps</span> (ต้องมี worker สถานะ running/Up) ถ้าไม่มีให้สั่ง <span class="font-mono">docker compose up -d</span></div>{% endif %}
       </div>
       {% endif %}
       {% if s.line_last_error %}<div class="rounded bg-rose-50 p-2 text-sm text-rose-800">ส่งอัตโนมัติไม่สำเร็จ: {{ s.line_last_error }}</div>{% endif %}

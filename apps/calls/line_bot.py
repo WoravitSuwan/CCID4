@@ -226,7 +226,7 @@ def due(now: dt.datetime | None = None) -> dt.date | None:
     return now.date()
 
 
-def send_if_due(now: dt.datetime | None = None) -> str:
+def send_if_due(now: dt.datetime | None = None, worker: bool = False) -> str:
     """Run every few minutes: by Celery beat (Docker), cron (manage.py send_line_report --if-due), and by the
     web pages themselves as a fallback. Whoever comes first sends; the others see it done (no double send)."""
     from django.db.models import Q
@@ -235,7 +235,8 @@ def send_if_due(now: dt.datetime | None = None) -> str:
     from apps.core.models import AuditAction
 
     now = timezone.localtime(now)
-    SystemSetting.objects.filter(pk=SystemSetting.get().pk).update(line_checked_at=now)
+    seen = {"line_checked_at": now} | ({"line_worker_seen_at": now} if worker else {})
+    SystemSetting.objects.filter(pk=SystemSetting.get().pk).update(**seen)
     day = due(now)
     if day is None:
         return "not due"
@@ -278,9 +279,11 @@ def auto_status(now: dt.datetime | None = None) -> dict:
     if now >= at and not done_today:
         nxt = None  # due now: the next check sends it
     stale = s.line_enabled and (not s.line_checked_at or now - s.line_checked_at > dt.timedelta(minutes=15))
+    # the server's own job checks every minute; without it, sending needs a page of the system open somewhere
+    worker_ok = bool(s.line_worker_seen_at and now - s.line_worker_seen_at <= dt.timedelta(minutes=10))
     return {"enabled": s.line_enabled, "ready": configured() and bool(s.line_group_id), "next": nxt,
             "due_now": s.line_enabled and nxt is None, "result": s.line_last_result, "checked": s.line_checked_at,
-            "stale": stale, "time": s.line_send_time}
+            "stale": stale, "time": s.line_send_time, "worker_ok": worker_ok, "worker_seen": s.line_worker_seen_at}
 
 
 _last_web_check = 0.0

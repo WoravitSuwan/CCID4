@@ -362,10 +362,22 @@ def test_settings_page_shows_the_automatic_send(client, admin_user, line, day_ca
     client.force_login(admin_user)
     html = client.get("/settings/line/").content.decode()
     assert "ส่งครั้งต่อไป" in html and "ยังไม่เคยส่งอัตโนมัติ" in html
-    assert "งานเบื้องหลัง (worker) อาจไม่ได้ทำงาน" in html  # nothing has checked yet
-    line_bot.send_if_due()
+    assert "งานส่งอัตโนมัติบนเซิร์ฟเวอร์ (worker) ไม่ได้ทำงาน" in html  # nothing has checked yet
+    line_bot.send_if_due()  # a page of the system checking does not count: the computers could be off
+    assert "(worker) ไม่ได้ทำงาน" in client.get("/settings/line/").content.decode()
+    from apps.calls.tasks import line_daily_summary
+    line_daily_summary()  # the server's own job (Celery beat, every minute)
     html = client.get("/settings/line/").content.decode()
-    assert "worker) อาจไม่ได้ทำงาน" not in html
+    assert "ไม่ได้ทำงาน" not in html and "ส่งได้แม้ปิดคอมทุกเครื่อง" in html
+    assert "เซิร์ฟเวอร์ส่งเองตามเวลา แม้ปิดคอมทุกเครื่อง" in client.get("/reports/daily/").content.decode()
+
+
+def test_cron_command_counts_as_the_server_job(line, day_calls):
+    from django.core.management import call_command
+
+    setting(line_group_id="Cgroup1", line_enabled=True)
+    call_command("send_line_report", "--if-due")
+    assert line_bot.auto_status()["worker_ok"]
 
 
 def test_daily_push_error_is_shown_and_retried(line, day_calls, monkeypatch, client, admin_user):
