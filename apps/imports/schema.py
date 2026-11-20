@@ -88,6 +88,8 @@ UPDATE_COLUMNS = [
     ("status_name", "สถานะ", True),
     ("victim_phone", "เบอร์โทรศัพท์ผู้เสียหาย", False),
     ("bank_ref", "เลขอ้างอิงธนาคาร", False),
+    # not in the big system's file: present in the unit's own register when staff record calls there
+    ("contact_log", "บันทึกการติดต่อ", False),
 ]
 
 COLUMNS = {

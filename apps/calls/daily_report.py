@@ -47,6 +47,11 @@ class Row:
         return self.attempt.case
 
     @property
+    def from_file(self) -> bool:
+        """Written in the Excel register (บันทึกการติดต่อ), not recorded in this system."""
+        return getattr(self.attempt, "from_file", False)
+
+    @property
     def name(self) -> str:
         case = self.case
         return case.victim_name or (case.complainant.full_name if case.complainant_id else "") or "-"
@@ -99,9 +104,29 @@ def load(day: dt.date, caller=None) -> Day:
         first_at.setdefault(a.case_id, a.called_at)
         last[a.case_id] = a
         calls[a.case_id] = calls.get(a.case_id, 0) + 1
-    rows = [Row(a, GROUP_OF.get(a.outcome, OTHER), calls[cid]) for cid, a in last.items()]
+    if caller is None:  # calls written in the Excel register for that day (the system's own calls come first)
+        for fc in _file_contacts(day).exclude(case_id__in=list(last)):
+            a = CallAttempt(case=fc.case, number=fc.number or 0, called_at=fc.called_at, outcome=fc.outcome,
+                            note=fc.line, phone="")
+            a.from_file = True
+            first_at.setdefault(fc.case_id, a.called_at)
+            last[fc.case_id] = a
+            calls[fc.case_id] = calls.get(fc.case_id, 0) + 1
+    rows = [Row(a, _group(a), calls[cid]) for cid, a in last.items()]
     rows.sort(key=lambda r: (first_at[r.case.pk], r.case.receipt_no))
     return Day(day, rows, caller)
+
+
+def _group(a) -> str:
+    if getattr(a, "from_file", False) and not a.outcome:
+        return UNREACHED  # a date with no result written: counted as not reached, as on the call list
+    return GROUP_OF.get(a.outcome, OTHER)
+
+
+def _file_contacts(day: dt.date):
+    from .models import FileContact
+
+    return FileContact.objects.filter(day=day).select_related("case__complainant").order_by("time", "pk")
 
 
 # --------------------------------------------------------------------------- texts
@@ -163,7 +188,9 @@ def stamp(day: dt.date, caller=None) -> str:
     if caller is not None:
         qs = qs.filter(created_by=caller)
     agg = qs.aggregate(n=Count("pk"), last=Max("pk"), at=Max("created_at"))
-    return f"{agg['n']}-{agg['last'] or 0}-{agg['at'].timestamp() if agg['at'] else 0}"
+    files = _file_contacts(day).aggregate(n=Count("pk"), last=Max("pk")) if caller is None else {"n": 0, "last": 0}
+    return (f"{agg['n']}-{agg['last'] or 0}-{agg['at'].timestamp() if agg['at'] else 0}"
+            f"-{files['n']}-{files['last'] or 0}")
 
 
 def file_day(day: dt.date) -> str:
@@ -186,6 +213,8 @@ def log_line(a: CallAttempt) -> str:
     """บันทึกการติดต่อ of one call, in the register's words:
     'ไม่ประสงค์ดำเนินคดี วันที่ 9 พ.ย. 2569 เวลา 09.27 น.',
     'ครั้งที่ 1 ไม่สามารถติดต่อได้ (ไม่รับสาย) วันที่ 12 พ.ย. 2569 เวลา 15.54 น.'"""
+    if getattr(a, "from_file", False):
+        return a.note  # the file's own words
     group = GROUP_OF.get(a.outcome, OTHER)
     label = a.get_outcome_display()
     if group == NOT_WANT:

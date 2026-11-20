@@ -506,7 +506,8 @@ def _same_person(a, b) -> bool:
 
 def _diff_update(analysis: Analysis):
     """Weekly file: what changes for each case already here (only fields the file has, only non-empty values,
-    never the unit or the contact log), and which new cases of our unit are added."""
+    never the unit), and which new cases of our unit are added. The contact log only when the file has that column
+    (the unit's register, where staff write their calls; the big system's file has none)."""
     existing = _existing(Case, analysis.rows.keys(), select_related=("status",))
     present = set(analysis.present)
     labels = field_labels(ImportKind.REGISTER)
@@ -543,6 +544,8 @@ def _diff_update(analysis: Analysis):
                 if f == "investigator_raw" and _same_person(v[f], obj.investigator_raw):
                     continue  # only the rank differs
                 changes[f] = v[f]
+        if "contact_log" in present and v["contact_log"] and _norm_cmp(v["contact_log"]) != _norm_cmp(obj.contact_log):
+            changes["contact_log"] = v["contact_log"]
         if "report_day" in present and v["report_date"] and v["report_date"] != obj.report_date:
             changes["report_date"] = v["report_date"]
         if "damage_amount" in present and v["damage_amount"] is not None \
@@ -799,8 +802,15 @@ def commit(batch: ImportBatch, progress=None) -> Analysis:
             _apply_register(batch, analysis)
             batch_removed = _remove_other_unit_cases(analysis)
         linked = relink_cases()
+        file_contacts = None
+        if batch.kind != ImportKind.COMPLAINANTS:  # calls written in the register's contact log, by their date
+            from apps.calls.file_log import rebuild
+
+            file_contacts = rebuild()
         store_analysis(batch, analysis)
         batch.summary["linked"] = linked
+        if file_contacts is not None:
+            batch.summary["file_contacts"] = file_contacts
         if batch.kind == ImportKind.REGISTER:
             batch.summary["removed"] = batch_removed
         batch.status = BatchStatus.DONE

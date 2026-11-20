@@ -192,3 +192,33 @@ class CallAttachment(models.Model):
 
 IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
 INLINE_EXTENSIONS = IMAGE_EXTENSIONS | {"pdf", "mp3", "m4a", "wav", "ogg", "mp4"}
+
+
+class FileContact(models.Model):
+    """One dated line of a case's "บันทึกการติดต่อ" from the Excel register: a call made and written down outside
+    this system. Rebuilt from the contact log after every import, so the daily summary and the statistics count
+    those calls on the day written in the file."""
+
+    case = models.ForeignKey("registry.Case", on_delete=models.CASCADE, related_name="file_contacts")
+    day = models.DateField(db_index=True)
+    time = models.TimeField(null=True, blank=True)
+    number = models.PositiveIntegerField(null=True, blank=True)  # "ครั้งที่ 2"
+    outcome = models.CharField(max_length=30, choices=CallOutcome.choices, blank=True)  # "" = no clear result
+    line = models.TextField()
+
+    class Meta:
+        ordering = ["day", "time", "pk"]
+        verbose_name = "บันทึกการติดต่อจากไฟล์"
+        verbose_name_plural = "บันทึกการติดต่อจากไฟล์"
+
+    def __str__(self):
+        return f"{self.case_id} {self.day} {self.line[:40]}"
+
+    @property
+    def called_at(self) -> dt.datetime:
+        return timezone.make_aware(dt.datetime.combine(self.day, self.time or dt.time(0, 0)),
+                                   timezone.get_current_timezone())
+
+    @property
+    def reached(self) -> bool:
+        return self.outcome in REACHED

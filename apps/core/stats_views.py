@@ -171,6 +171,17 @@ def _progress(start, end, days):
     }
 
 
+def _file_calls(calls, start, end) -> list:
+    """FileContact rows in the period, leaving out a case's day already counted from calls in this system."""
+    from django.utils import timezone
+
+    from apps.calls.models import FileContact
+
+    in_system = {(cid, timezone.localdate(at)) for cid, at in calls.values_list("case_id", "called_at")}
+    return [f for f in FileContact.objects.filter(day__gte=start, day__lte=end).only("case_id", "day", "outcome")
+            if (f.case_id, f.day) not in in_system]
+
+
 def _collect(start, end):
     from apps.calls import funnel
     from apps.calls.models import REACHED, CallAssignment, CallAttempt, CallOutcome
@@ -183,12 +194,16 @@ def _collect(start, end):
     real_summonses = Summons.objects.all()
     summonses = real_summonses.filter(created_at__date__gte=start, created_at__date__lte=end)
     ems = real_summonses.filter(ems_at__date__gte=start, ems_at__date__lte=end)
-    n_calls, n_reached = calls.count(), reached.count()
+    files = _file_calls(calls, start, end)  # calls written in the Excel register, by the date in the file
+    n_calls = calls.count() + len(files)
+    n_reached = reached.count() + sum(1 for f in files if f.reached)
     period = {
         "calls": n_calls, "reached": n_reached, "not_reached": n_calls - n_reached,
         "reach_rate": round(n_reached / n_calls * 100) if n_calls else 0,
-        "cases_called": calls.values("case_id").distinct().count(),
-        "appointed": calls.filter(outcome=CallOutcome.APPOINTED).count(),
+        "cases_called": len(set(calls.values_list("case_id", flat=True)) | {f.case_id for f in files}),
+        "appointed": calls.filter(outcome=CallOutcome.APPOINTED).count()
+        + sum(1 for f in files if f.outcome == CallOutcome.APPOINTED),
+        "from_file": len(files),
         "summonses": summonses.count(), "ems": ems.count(),
     }
     pool = CallAssignment.objects.all()
@@ -209,12 +224,20 @@ def _collect(start, end):
     summons_by_day = _by_day(summonses, "created_at")
     ems_by_day = _by_day(ems, "ems_at")
     appointed_by_day = _by_day(calls.filter(outcome=CallOutcome.APPOINTED), "called_at")
+    for f in files:
+        target = reached_by_day if f.reached else not_reached_by_day
+        target[f.day] = target.get(f.day, 0) + 1
+        if f.outcome == CallOutcome.APPOINTED:
+            appointed_by_day[f.day] = appointed_by_day.get(f.day, 0) + 1
     daily = [{"date": d, "calls": reached_by_day.get(d, 0) + not_reached_by_day.get(d, 0),
               "reached": reached_by_day.get(d, 0), "not_reached": not_reached_by_day.get(d, 0),
               "appointed": appointed_by_day.get(d, 0), "summonses": summons_by_day.get(d, 0),
               "ems": ems_by_day.get(d, 0)} for d in days]
 
     outcome_counts = dict(calls.values_list("outcome").annotate(n=Count("pk")).values_list("outcome", "n"))
+    for f in files:
+        if f.outcome:
+            outcome_counts[f.outcome] = outcome_counts.get(f.outcome, 0) + 1
     top = max(outcome_counts.values() or [0])
     outcomes = [{"label": c.label, "n": outcome_counts.get(c.value, 0), "reached": c in REACHED,
                  "pct": round(outcome_counts.get(c.value, 0) / top * 100) if top else 0}
@@ -231,11 +254,17 @@ def _collect(start, end):
         staff.setdefault(row["created_by"], {})["summonses"] = row["n"]
     for row in ems.values("ems_by").annotate(n=Count("pk")):
         staff.setdefault(row["ems_by"], {})["ems"] = row["n"]
-    users = {u.pk: u for u in User.objects.filter(pk__in=[k for k in staff if k])}
+    if files:
+        staff["file"] = {"calls": len(files), "reached": sum(1 for f in files if f.reached),
+                         "appointed": sum(1 for f in files if f.outcome == CallOutcome.APPOINTED),
+                         "cases": len({f.case_id for f in files})}
+    users = {u.pk: u for u in User.objects.filter(pk__in=[k for k in staff if k and k != "file"])}
     people = []
     for pk, vals in staff.items():
         u = users.get(pk)
-        row = {"name": u.display_name() if u else "(ไม่ทราบผู้ใช้)", "calls": 0, "reached": 0, "appointed": 0,
+        name = ("บันทึกในไฟล์ Excel (ไม่ระบุผู้โทร)" if pk == "file"
+                else u.display_name() if u else "(ไม่ทราบผู้ใช้)")
+        row = {"name": name, "calls": 0, "reached": 0, "appointed": 0,
                "cases": 0, "summonses": 0, "ems": 0, **vals}
         row["rate"] = round(row["reached"] / row["calls"] * 100) if row["calls"] else 0
         people.append(row)

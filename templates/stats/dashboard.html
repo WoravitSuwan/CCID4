@@ -69,7 +69,7 @@
 
 <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">ในช่วงที่เลือก</h2>
 <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
-  <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ period.calls|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.cases_called|intcomma }} คดี</div></div>
+  <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ period.calls|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.cases_called|intcomma }} คดี{% if period.from_file %} · รวมจากไฟล์ Excel {{ period.from_file|intcomma }}{% endif %}</div></div>
   <div class="stat block"><div class="stat-label">ติดต่อได้</div><div class="stat-value"><span data-countup>{{ period.reached|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.reach_rate }}% ของการโทร</div></div>
   <div class="stat block"><div class="stat-label">ติดต่อไม่ได้</div><div class="stat-value"><span data-countup>{{ period.not_reached|intcomma }}</span></div></div>
   <div class="stat block"><div class="stat-label">นัดเข้าพบ พงส.</div><div class="stat-value"><span data-countup>{{ period.appointed|intcomma }}</span></div></div>

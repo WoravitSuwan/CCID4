@@ -825,6 +825,7 @@ def daily_report(request):
         "d": d, "day": day, "today": today, "counts": d.counts, "caller": caller,
         "callers": User.objects.filter(pk__in=report.caller_ids(day)).order_by("first_name", "username"),
         "period_text": report.period_text(d), "stamp": report.stamp(day, caller), "live": day == today,
+        "from_file": sum(r.from_file for r in d.rows),
         "now": timezone.localtime(),
         "diary": report.diary_text(d), "summary": report.summary_text(d),
         "groups": [(g, report.GROUP_SHORT[g], d.of(g)) for g in report.GROUP_LABEL],

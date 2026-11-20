@@ -62,6 +62,7 @@
 
 <div id="daily-live" data-stamp="{{ stamp }}"{% if live %} data-live-url="?{% if query %}{{ query }}&{% endif %}format=stamp"{% endif %}>
 {% if live %}<div class="mb-2 flex items-center gap-2 text-xs text-slate-500" aria-live="polite"><span class="live-dot"></span> อัปเดตยอดอัตโนมัติเมื่อมีการบันทึกผลการโทร · ล่าสุด <span class="tabular-nums">{{ now|time:"H:i:s" }}</span> น.</div>{% endif %}
+{% if from_file %}<p class="mb-2 text-xs text-slate-500">รวมผลการโทรที่บันทึกในไฟล์ Excel (บันทึกการติดต่อ) ตามวันเวลาที่เขียนในไฟล์ {{ from_file|intcomma }} คดี{% if caller %} · เลือกผู้โทรอยู่: ผลจากไฟล์ไม่ระบุผู้โทร จึงไม่นับ{% endif %}</p>{% endif %}
 <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
   <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ counts.total|intcomma }}</span> <span class="text-sm font-normal text-slate-400">Case ID</span></div></div>
   <div class="stat block"><div class="stat-label">1. ไม่ประสงค์ดำเนินคดี</div><div class="stat-value text-slate-700"><span data-countup>{{ counts.not_want|intcomma }}</span></div></div>
@@ -121,8 +122,8 @@
           <td data-label="เลขรับแจ้ง"><a class="font-mono" href="{% url 'call_case' r.case.pk %}">{{ r.case.receipt_no }}</a></td>
           <td data-label="ผู้เสียหาย">{{ r.name }}</td>
           <td data-label="เบอร์โทร" class="whitespace-nowrap font-mono">{{ r.phone }}</td>
-          <td data-label="ผล">{{ r.attempt.get_outcome_display }}{% if r.calls > 1 %} <span class="text-xs text-slate-400">(โทร {{ r.calls }} ครั้ง)</span>{% endif %}</td>
-          <td data-label="ผู้โทร">{% if r.attempt.created_by %}{{ r.attempt.created_by.display_name }}{% else %}-{% endif %}</td>
+          <td data-label="ผล">{% if r.from_file %}<span class="badge badge-blue mr-1" title="บันทึกในไฟล์ Excel (บันทึกการติดต่อ) แล้วอัปโหลดเข้าระบบ">จากไฟล์ Excel</span>{{ r.attempt.note }}{% else %}{{ r.attempt.get_outcome_display }}{% endif %}{% if r.calls > 1 %} <span class="text-xs text-slate-400">(โทร {{ r.calls }} ครั้ง)</span>{% endif %}</td>
+          <td data-label="ผู้โทร">{% if r.attempt.created_by %}{{ r.attempt.created_by.display_name }}{% elif r.from_file %}<span class="text-slate-400">(ในไฟล์)</span>{% else %}-{% endif %}</td>
           <td data-label="เวลา" class="whitespace-nowrap tabular-nums">{{ r.attempt.called_at|time:"H:i" }} น.</td>
         </tr>
       {% endfor %}

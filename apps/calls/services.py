@@ -107,13 +107,15 @@ _LOG_OUTCOMES = [
 
 
 def outcome_from_log(text: str) -> str | None:
-    """The result written in the latest line of the register's contact log, e.g.
+    """The result written in the latest entry of the register's contact log, e.g.
     'ครั้งที่ 2 ไม่สามารถติดต่อได้ (ปิดเครื่อง) 9 ตค 68' -> off; None when it says no result (only a date)."""
-    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
-    if not lines:
+    from .file_log import segments
+
+    parts = segments(text)  # one entry per call (the register often keeps them on one line)
+    if not parts:
         return None
     for pattern, outcome in _LOG_OUTCOMES:
-        if pattern.search(lines[-1]):
+        if pattern.search(parts[-1]):
             return outcome
     return None
 
