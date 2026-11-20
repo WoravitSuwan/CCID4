@@ -768,9 +768,7 @@ class LineAutoForm(forms.ModelForm):
 
 
 def daily_report(request):
-    """สรุปผลประจำวัน + ข้อความลงบันทึกประจำวัน for one day: copy, Word files, and (admins) send to LINE."""
-    import tempfile
-
+    """สรุปผลประจำวัน + ข้อความลงบันทึกประจำวัน for one day: copy, text files, send to LINE."""
     from apps.core.params import date_param
     from apps.core.thai_format import thai_date_full
 
@@ -816,13 +814,9 @@ def daily_report(request):
         resp["Cache-Control"] = "no-store"
         return resp
     if fmt in ("diary", "summary"):
-        name = report.file_name("ลงบันทึกประจำวัน" if fmt == "diary" else "สรุปข้อมูลคดี", d)
-        with tempfile.TemporaryDirectory() as tmp:
-            write = report.write_diary_docx if fmt == "diary" else report.write_summary_docx
-            body = write(d, Path(tmp) / "out.docx").read_bytes()
+        name = report.file_name(report.FILE_STEM[fmt], d)
         log(request, AuditAction.EXPORT, None, f"ดาวน์โหลด {name} ({d.counts['total']:,} Case)")
-        resp = HttpResponse(
-            body, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        resp = HttpResponse(report.text_file(fmt, d), content_type="text/plain; charset=utf-8")
         resp["Content-Disposition"] = content_disposition(name)
         return resp
 
@@ -867,9 +861,8 @@ def line_webhook(request):
 
 
 def line_file(request, token):
-    """A Word file linked from a LINE message: no login (the link is signed and expires), every download logged."""
-    import tempfile
-
+    """A text file (.txt) linked from a LINE message: no login (the link is signed and expires), every
+    download logged."""
     from django.core import signing
 
     from . import daily_report as report
@@ -883,13 +876,9 @@ def line_file(request, token):
     except (signing.BadSignature, ValueError):
         raise Http404 from None
     d = report.load(day)
-    name = report.file_name(line_bot.FILE_KINDS[kind], d)
-    with tempfile.TemporaryDirectory() as tmp:
-        write = report.write_diary_docx if kind == "diary" else report.write_summary_docx
-        body = write(d, Path(tmp) / "out.docx").read_bytes()
+    name = report.file_name(report.FILE_STEM[kind], d)
     log(request, AuditAction.DOWNLOAD, None, f"ดาวน์โหลด {name} ผ่านลิงก์ใน LINE", user=None)
-    resp = HttpResponse(
-        body, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    resp = HttpResponse(report.text_file(kind, d), content_type="text/plain; charset=utf-8")
     resp["Content-Disposition"] = content_disposition(name)
     resp["Cache-Control"] = "no-store"
     return resp

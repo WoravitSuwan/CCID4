@@ -168,7 +168,7 @@ def read_file_token(token: str) -> tuple[dt.date, str]:
 
 
 def files_text(d) -> str:
-    """The message with the download links of the day's Word files."""
+    """The message with the download links of the day's text files (.txt)."""
     from django.urls import reverse
 
     from apps.core.thai_format import thai_date_full

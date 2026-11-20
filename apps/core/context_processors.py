@@ -38,6 +38,7 @@ def app_context(request):
     ctx = {
         **base,
         "perm_import": perms.can_import(user),
+        "perm_import_update": perms.can_import_update(user),
         "perm_export_register": perms.can_export_register(user),
         "perm_settings": perms.can_manage_settings(user),
         "perm_issue_any": perms.can_issue_any(user),

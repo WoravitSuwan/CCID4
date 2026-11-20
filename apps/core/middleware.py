@@ -8,7 +8,7 @@ from django.urls import reverse
 PUBLIC_PREFIXES = ("/accounts/login", "/static/", "/healthz", "/branding/", "/line/webhook/", "/line/file/")
 # Call staff (outsource) may only use the call pages - everything else redirects there.
 OUTSOURCE_PREFIXES = ("/calls/", "/accounts/", "/static/", "/healthz", "/summons/", "/exports/", "/branding/",
-                      "/stats/", "/reports/")
+                      "/stats/", "/reports/", "/imports/")  # imports: the weekly update file only (checked there)
 # other pages call staff may open: start issuing a summons for one of their cases, and the
 # postcode lookup used by the address form on the call page
 OUTSOURCE_PATTERNS = (re.compile(r"^/cases/\d+/issue/$"), re.compile(r"^/cases/postcode/$"))

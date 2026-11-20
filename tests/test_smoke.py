@@ -120,8 +120,10 @@ def test_every_page_opens_or_is_refused_for_outsource(world):
     client.force_login(world["caller"])
     assert crawl(client, world) == []
     # admin-only pages are not shown to call staff
-    for url in ("/settings/", "/settings/users/", "/settings/wipe/", "/cases/", "/imports/", "/settings/audit/"):
+    for url in ("/settings/", "/settings/users/", "/settings/wipe/", "/cases/", "/settings/audit/"):
         assert client.get(url).status_code in (302, 403), url
+    # the import page opens for them, with the weekly update file only
+    assert client.get("/imports/").context["update_only"]
 
 
 def test_every_page_needs_login(world):

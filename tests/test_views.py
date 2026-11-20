@@ -42,10 +42,11 @@ def test_role_permissions(client, setup_signers):
         assert client.get(url).status_code == 200, url
     client.logout()
     login(client, Role.OUTSOURCE)
-    for url in ("/imports/", "/settings/users/", "/cases/", "/"):
+    for url in ("/settings/users/", "/cases/", "/"):
         resp = client.get(url)
         assert resp.status_code == 302 and resp["Location"] == "/calls/", url
-    for url in ("/calls/", "/summons/", "/exports/", "/exports/new/"):  # call staff can issue and export
+    # call staff can issue, export, and load the weekly update file
+    for url in ("/calls/", "/summons/", "/exports/", "/exports/new/", "/imports/"):
         assert client.get(url).status_code == 200, url
     assert client.get("/calls/assign/").status_code == 403
 

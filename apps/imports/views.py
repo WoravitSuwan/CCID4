@@ -3,6 +3,7 @@ from pathlib import Path
 
 from django import forms
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -26,6 +27,12 @@ class UploadForm(StyledForm):
     kind = forms.ChoiceField(label="ประเภทไฟล์", choices=ImportKind.choices, widget=forms.RadioSelect)
     file = forms.FileField(label="ไฟล์ Excel (.xlsx)")
 
+    def __init__(self, *args, update_only=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if update_only:  # call staff: the weekly file from the big system only
+            self.fields["kind"].choices = [(ImportKind.UPDATE, ImportKind.UPDATE.label)]
+            self.fields["kind"].initial = ImportKind.UPDATE
+
     def clean_file(self):
         f = self.cleaned_data["file"]
         if not f.name.lower().endswith((".xlsx", ".xlsm")):
@@ -33,8 +40,12 @@ class UploadForm(StyledForm):
         return f
 
 
-def _batch(pk):
-    return get_object_or_404(ImportBatch, pk=pk)
+def _batch(request, pk):
+    """Call staff only see and use the weekly update files (the register and complainant files stay with admins)."""
+    batch = get_object_or_404(ImportBatch, pk=pk)
+    if not perms.can_import(request.user) and batch.kind != ImportKind.UPDATE:
+        raise PermissionDenied("นำเข้าไฟล์ประเภทนี้ได้เฉพาะผู้ดูแลระบบ")
+    return batch
 
 
 def _unusable(request, batch):
@@ -47,9 +58,10 @@ def _unusable(request, batch):
     return None
 
 
-@perms.require(perms.can_import)
+@perms.require(perms.can_import_update)
 def import_home(request):
-    form = UploadForm(request.POST or None, request.FILES or None)
+    update_only = not perms.can_import(request.user)
+    form = UploadForm(request.POST or None, request.FILES or None, update_only=update_only)
     if request.method == "POST" and form.is_valid():
         upload = form.cleaned_data["file"]
         batch = ImportBatch(kind=form.cleaned_data["kind"], original_filename=upload.name, created_by=request.user)
@@ -63,13 +75,16 @@ def import_home(request):
             messages.error(request, f"อ่านไฟล์ไม่ได้: {exc}")
             return redirect("import_home")
         return redirect("import_sheets", pk=batch.pk)
-    history = Paginator(ImportBatch.objects.select_related("created_by"), 20).get_page(request.GET.get("page"))
-    return render(request, "imports/home.html", {"form": form, "history": history})
+    batches = ImportBatch.objects.select_related("created_by")
+    if update_only:
+        batches = batches.filter(kind=ImportKind.UPDATE)
+    history = Paginator(batches, 20).get_page(request.GET.get("page"))
+    return render(request, "imports/home.html", {"form": form, "history": history, "update_only": update_only})
 
 
-@perms.require(perms.can_import)
+@perms.require(perms.can_import_update)
 def import_sheets(request, pk):
-    batch = _batch(pk)
+    batch = _batch(request, pk)
     if stop := _unusable(request, batch):
         return stop
     if request.method == "POST":
@@ -83,9 +98,9 @@ def import_sheets(request, pk):
     return render(request, "imports/sheets.html", {"batch": batch, "step": 2})
 
 
-@perms.require(perms.can_import)
+@perms.require(perms.can_import_update)
 def import_mapping(request, pk):
-    batch = _batch(pk)
+    batch = _batch(request, pk)
     if stop := _unusable(request, batch):
         return stop
     info = {s["name"]: s["headers"] for s in workbook_info(batch.file.path)}
@@ -123,9 +138,9 @@ def import_mapping(request, pk):
     })
 
 
-@perms.require(perms.can_import)
+@perms.require(perms.can_import_update)
 def import_preview(request, pk):
-    batch = _batch(pk)
+    batch = _batch(request, pk)
     if request.headers.get("HX-Request"):
         if not batch.is_running:
             response = HttpResponse("")
@@ -138,9 +153,9 @@ def import_preview(request, pk):
 
 
 @require_POST
-@perms.require(perms.can_import)
+@perms.require(perms.can_import_update)
 def import_confirm(request, pk):
-    batch = _batch(pk)
+    batch = _batch(request, pk)
     if batch.status != BatchStatus.ANALYZED:
         messages.error(request, "ไฟล์นี้ยังไม่พร้อมนำเข้า")
         return redirect("import_preview", pk=pk)
@@ -155,9 +170,9 @@ def import_confirm(request, pk):
 
 
 @require_POST
-@perms.require(perms.can_import)
+@perms.require(perms.can_import_update)
 def import_cancel(request, pk):
-    batch = _batch(pk)
+    batch = _batch(request, pk)
     if batch.status in (BatchStatus.UPLOADED, BatchStatus.ANALYZED, BatchStatus.FAILED):
         batch.status = BatchStatus.CANCELLED
         batch.save(update_fields=["status"])
@@ -167,9 +182,9 @@ def import_cancel(request, pk):
     return redirect("import_home")
 
 
-@perms.require(perms.can_import)
+@perms.require(perms.can_import_update)
 def import_issues_download(request, pk):
-    batch = _batch(pk)
+    batch = _batch(request, pk)
     wb = Workbook()
     ws = wb.active
     ws.title = "รายการปัญหา"

@@ -8,6 +8,7 @@
   </div>
   <div class="ml-auto flex flex-wrap gap-2">
     {% if pdf_ok %}<a class="btn btn-primary {% if not rows %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=pdf">{% icon "download" "h-4 w-4" %} ดาวน์โหลด PDF</a>{% endif %}
+    <a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} อัปเดตข้อมูลคดี (Excel)</a>
     <a class="btn {% if not pdf_ok %}btn-primary{% endif %} {% if not rows %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=xlsx">{% icon "download" "h-4 w-4" %} Excel</a>
   </div>
 </div>
@@ -17,7 +18,7 @@
   <div class="card text-sm text-slate-600">
     <div class="font-medium text-slate-800">ขั้นตอนทุกสัปดาห์</div>
     <ol class="mt-1 list-decimal space-y-0.5 pl-5">
-      <li>นำเข้าไฟล์จากระบบใหญ่ ที่ <a href="{% url 'import_home' %}">นำเข้าข้อมูล</a> → เลือก "อัปเดตจากระบบใหญ่ (ไฟล์รายสัปดาห์)" (ผู้ดูแลระบบ)</li>
+      <li>นำเข้าไฟล์จากระบบใหญ่ ที่ <a href="{% url 'import_home' %}">{% if perm_import %}นำเข้าข้อมูล{% else %}อัปเดตข้อมูลคดี (Excel){% endif %}</a> → "อัปเดตจากระบบใหญ่ (ไฟล์รายสัปดาห์)" (ผู้ดูแลระบบหรือเจ้าหน้าที่)</li>
       <li>ดาวน์โหลด PDF หน้านี้ ส่งให้ผู้แก้สถานะในระบบใหญ่</li>
       <li>สัปดาห์ถัดไปนำเข้าไฟล์ใหม่ คดีที่แก้แล้วเป็นสิ้นสุดจะหายจากรายการเอง</li>
     </ol>

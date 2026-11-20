@@ -31,6 +31,11 @@ def is_outsource(user) -> bool:
 can_import = can_export_register = can_manage_settings = can_manage_calls = is_admin
 
 
+def can_import_update(user) -> bool:
+    """The weekly file from the big system (updates cases, deletes nothing): call staff may load it too."""
+    return is_admin(user) or is_outsource(user)
+
+
 def can_issue_any(user) -> bool:
     return is_admin(user) or is_outsource(user)
 

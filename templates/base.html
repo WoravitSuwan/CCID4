@@ -31,6 +31,7 @@
       <a class="side-link {% if u == 'stats_dashboard' %}active{% endif %}" href="{% url 'stats_dashboard' %}">{% icon "calendar" %} สถิติ</a>
       <a class="side-link {% if u == 'daily_report' %}active{% endif %}" href="{% url 'daily_report' %}">{% icon "clipboard" %} สรุปผลประจำวัน</a>
       <a class="side-link {% if u == 'status_report' %}active{% endif %}" href="{% url 'status_report' %}">{% icon "document" %} แก้สถานะระบบใหญ่</a>
+      <a class="side-link {% if u and u|slice:":7" == "import_" %}active{% endif %}" href="{% url 'import_home' %}">{% icon "upload" %} อัปเดตข้อมูลคดี (Excel)</a>
       {% else %}
       <a class="side-link {% if u == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">{% icon "home" %} ภาพรวม</a>
       <a class="side-link {% if u == 'case_list' or u == 'case_detail' %}active{% endif %}" href="{% url 'case_list' %}?open=on">{% icon "cases" %} ทะเบียนคดี</a>

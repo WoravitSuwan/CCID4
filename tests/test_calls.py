@@ -65,7 +65,7 @@ def test_outsource_sees_every_open_case_without_assignment(client, imported, cal
     other = Case.objects.not_final().exclude(pk=mine.pk).first()
     assert client.get(f"/calls/{other.pk}/").status_code == 200
     # admin pages redirect back to the call list (summonses / exports are allowed: they issue too)
-    for url in ["/", "/cases/", f"/cases/{mine.pk}/", "/imports/", "/settings/users/"]:
+    for url in ["/", "/cases/", f"/cases/{mine.pk}/", "/settings/users/"]:
         resp = client.get(url)
         assert resp.status_code == 302 and resp["Location"] == "/calls/", url
     assert mine.complainant.national_id[-3:] not in client.get(f"/calls/{mine.pk}/").content.decode() or \

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from django.conf import settings
 from django.utils import timezone
@@ -173,8 +172,8 @@ def file_day(day: dt.date) -> str:
 
 
 def file_name(stem: str, d: Day) -> str:
-    """'ลงบันทึกประจำวัน 9.11.2569.docx'."""
-    return f"{stem} {file_day(d.day)}.docx"
+    """'ลงบันทึกประจำวัน 9.11.2569.txt'."""
+    return f"{stem} {file_day(d.day)}.txt"
 
 
 def _when(value: dt.datetime) -> str:
@@ -204,85 +203,34 @@ def log_line(a: CallAttempt) -> str:
     return text
 
 
-# --------------------------------------------------------------------------- Word files
-FONT = "TH SarabunPSK"
-
-
-def _document(margins_cm=(1.25, 1.0, 2.54, 2.54)):
-    """A4, TH SarabunPSK 16 (Thai text needs the complex-script font and size set too)."""
-    from docx import Document
-    from docx.oxml.ns import qn
-    from docx.shared import Cm, Pt
-
-    doc = Document()
-    left, right, top, bottom = margins_cm
-    for section in doc.sections:
-        section.page_height, section.page_width = Cm(29.7), Cm(21.0)
-        section.left_margin, section.right_margin = Cm(left), Cm(right)
-        section.top_margin, section.bottom_margin = Cm(top), Cm(bottom)
-    style = doc.styles["Normal"]
-    style.font.name, style.font.size = FONT, Pt(16)
-    rpr = style.element.get_or_add_rPr()
-    fonts = rpr.get_or_add_rFonts()
-    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
-        fonts.set(qn(attr), FONT)
-    size_cs = rpr.find(qn("w:szCs"))
-    if size_cs is None:
-        size_cs = rpr.makeelement(qn("w:szCs"), {})
-        rpr.append(size_cs)
-    size_cs.set(qn("w:val"), "32")
-    style.paragraph_format.space_after = Pt(0)
-    return doc
-
-
-def _run(paragraph, text: str, bold: bool = False, size: int | None = None):
-    from docx.oxml.ns import qn
-    from docx.shared import Pt
-
-    run = paragraph.add_run(text)
-    rpr = run._element.get_or_add_rPr()
-    if bold:
-        run.bold = True
-        rpr.append(rpr.makeelement(qn("w:bCs"), {}))
-    if size:
-        run.font.size = Pt(size)
-        rpr.append(rpr.makeelement(qn("w:szCs"), {qn("w:val"): str(size * 2)}))
-    return run
-
-
-def write_diary_docx(d: Day, path: Path) -> Path:
+# --------------------------------------------------------------------------- text files (.txt)
+def diary_file_text(d: Day) -> str:
     """ลงบันทึกประจำวัน: only the victims who do not want to proceed, one line each, a blank line between."""
-    doc = _document()
-    for r in d.not_want:
-        p = doc.add_paragraph()
-        _run(p, f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}")
-        doc.add_paragraph()
-    doc.save(path)
-    return Path(path)
+    return "\n\n".join(f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}"
+                       for r in d.not_want)
 
 
-def write_summary_docx(d: Day, path: Path) -> Path:
+def summary_file_text(d: Day) -> str:
     """สรุปข้อมูลคดีและบันทึกการติดต่อ: every case called that day, six lines each."""
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-
-    from apps.core.templatetags.thai import money
-
-    doc = _document(margins_cm=(1.5, 1.34, 1.5, 1.5))
-    title = doc.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(title, "สรุปข้อมูลคดีและบันทึกการติดต่อ", bold=True, size=20)
-    doc.add_paragraph()
+    blocks = ["สรุปข้อมูลคดีและบันทึกการติดต่อ"]
     for r in d.rows:
         case = r.case
-        amount = f"{money(case.damage_amount)} บาท" if case.damage_amount is not None else "-"
-        investigator = (case.investigator_raw or "").strip() or "-"
-        _run(doc.add_paragraph(), f"ผู้เสียหาย: {r.name}", bold=True)
-        for label, value in (("เลขรับแจ้ง", case.receipt_no), ("มูลค่าความเสียหาย", amount),
-                             ("พนักงานสอบสวน", investigator), ("เบอร์โทรศัพท์ผู้เสียหาย", r.phone),
-                             ("บันทึกการติดต่อ", log_line(r.attempt))):
-            p = doc.add_paragraph()
-            _run(p, f"- {label}: ", bold=True)
-            _run(p, value)
-        doc.add_paragraph()
-    doc.save(path)
-    return Path(path)
+        amount = f"{case.damage_amount:,.2f} บาท" if case.damage_amount is not None else "-"
+        blocks.append("\n".join([
+            f"ผู้เสียหาย: {r.name}",
+            f"- เลขรับแจ้ง: {case.receipt_no}",
+            f"- มูลค่าความเสียหาย: {amount}",
+            f"- พนักงานสอบสวน: {(case.investigator_raw or '').strip() or '-'}",
+            f"- เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}",
+            f"- บันทึกการติดต่อ: {log_line(r.attempt)}",
+        ]))
+    return "\n\n".join(blocks)
+
+
+FILE_TEXT = {"diary": diary_file_text, "summary": summary_file_text}
+FILE_STEM = {"diary": "ลงบันทึกประจำวัน", "summary": "สรุปข้อมูลคดี"}
+
+
+def text_file(kind: str, d: Day) -> bytes:
+    """UTF-8 with a BOM and Windows line endings: opens right in Notepad and pastes cleanly anywhere."""
+    return ("\ufeff" + FILE_TEXT[kind](d).replace("\n", "\r\n") + "\r\n").encode("utf-8")

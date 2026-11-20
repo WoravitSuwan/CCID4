@@ -38,10 +38,10 @@
       {% if line_problem %}
       <p class="text-sm text-amber-700">ยังส่งไม่ได้: {{ line_problem }}{% if perm_settings %} · <a href="{% url 'settings_line' %}">ไปตั้งค่าบอท LINE</a>{% else %} · แจ้งผู้ดูแลระบบ{% endif %}</p>
       {% else %}
-      <p class="text-sm text-slate-500">ส่งข้อความรายงานผู้บังคับบัญชา{% if line_files %} พร้อมลิงก์ไฟล์ Word{% endif %} เข้ากลุ่ม {{ line_group|default:"LINE" }}</p>
+      <p class="text-sm text-slate-500">ส่งข้อความรายงานผู้บังคับบัญชา{% if line_files %} พร้อมลิงก์ไฟล์ .txt{% endif %} เข้ากลุ่ม {{ line_group|default:"LINE" }}</p>
       {% endif %}
     </div>
-    <form method="post" class="w-full sm:w-auto" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE ตอนนี้?{% if line_files %}\n(พร้อมลิงก์ไฟล์ Word){% endif %}\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
+    <form method="post" class="w-full sm:w-auto" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE ตอนนี้?{% if line_files %}\n(พร้อมลิงก์ไฟล์ .txt){% endif %}\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
       <button class="btn btn-success w-full sm:w-auto" {% if line_problem %}disabled title="{{ line_problem }}"{% endif %}>{% icon "chat" "h-4 w-4" %} ส่งสรุปผลวันที่ {{ day|thai_date }} ตอนนี้</button>
     </form>
   </div>
@@ -80,7 +80,7 @@
     <textarea id="t-summary" class="input min-h-[11rem] flex-1 font-[inherit] leading-relaxed" rows="11" readonly>{{ summary }}</textarea>
     <div class="mt-3 flex flex-wrap gap-2">
       <button type="button" class="btn btn-primary" data-copy="#t-summary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
-      <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary">{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี (Word)</a>
+      <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary">{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี (.txt)</a>
     </div>
   </section>
 
@@ -94,7 +94,7 @@
     <textarea id="t-diary" class="input min-h-[11rem] flex-1 font-[inherit] leading-relaxed" rows="9" readonly>{{ diary }}</textarea>
     <div class="mt-3 flex flex-wrap gap-2">
       <button type="button" class="btn btn-primary" data-copy="#t-diary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
-      <a class="btn" href="?{% if query %}{{ query }}&{% endif %}format=diary">{% icon "download" "h-4 w-4" %} ลงบันทึกประจำวัน (Word)</a>
+      <a class="btn" href="?{% if query %}{{ query }}&{% endif %}format=diary">{% icon "download" "h-4 w-4" %} ลงบันทึกประจำวัน (.txt)</a>
     </div>
     {% else %}
     <div class="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">

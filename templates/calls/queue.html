@@ -14,6 +14,7 @@
     {% else %}
     <a class="btn" href="{% url 'daily_report' %}#line" title="ตั้งเวลาส่งอัตโนมัติ / ดูว่าทำไมยังส่งไม่ได้">{% icon "chat" "h-4 w-4" %} LINE</a>
     {% endif %}
+    {% if is_outsource %}<a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} อัปเดตข้อมูลคดี (Excel)</a>{% endif %}
     {% if can_manage %}
     <a class="btn" href="{% url 'calls_export' %}">{% icon "download" "h-4 w-4" %} ส่งออกผลการโทร (Excel)</a>
     <a class="btn" href="{% url 'calls_assign' %}">{% icon "users" "h-4 w-4" %} กำหนดผู้รับผิดชอบ (ไม่บังคับ)</a>

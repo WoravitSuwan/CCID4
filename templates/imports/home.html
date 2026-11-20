@@ -1,7 +1,14 @@
 {% extends "base.html" %}{% load thai humanize %}
-{% block title %}นำเข้าข้อมูล{% endblock %}
+{% block title %}{% if update_only %}อัปเดตข้อมูลคดี{% else %}นำเข้าข้อมูล{% endif %}{% endblock %}
 {% block content %}
+{% if update_only %}
+<div class="page-header"><div>
+  <h1>อัปเดตข้อมูลคดีจากระบบใหญ่</h1>
+  <p class="page-sub">อัปโหลดไฟล์ Excel (ชีต Grid) ที่ได้จากระบบใหญ่ ระบบจะอัปเดตสถานะและข้อมูลของคดีที่มีอยู่ เพิ่มคดีใหม่ของ กก.1 ไม่ลบคดีใด และไม่แตะบันทึกการติดต่อ</p>
+</div></div>
+{% else %}
 <h1 class="mb-4">นำเข้าข้อมูล</h1>
+{% endif %}
 <div class="grid gap-4 lg:grid-cols-3">
   <form method="post" enctype="multipart/form-data" class="card space-y-4">{% csrf_token %}
     <h2>1. อัปโหลดไฟล์</h2>
@@ -10,12 +17,20 @@
       {{ form.kind.errors }}
     </div>
     <div><label class="label">{{ form.file.label }}</label><input type="file" name="file" accept=".xlsx" class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-medium file:text-indigo-700 hover:file:bg-indigo-100" required>{{ form.file.errors }}</div>
+    {% if update_only %}
+    <ul class="list-disc pl-5 text-xs text-slate-500">
+      <li>ขั้นตอน: อัปโหลด → เลือกชีต → ตรวจคอลัมน์ → ดูตัวอย่างการเปลี่ยนแปลง → กดยืนยัน (ยังไม่มีอะไรเปลี่ยนจนกว่าจะกดยืนยัน)</li>
+      <li>นำเข้าซ้ำได้ ระบบอัปเดตของเดิมโดยใช้เลขรับแจ้ง ไม่สร้างซ้ำ</li>
+      <li>สถานะที่เจ้าหน้าที่แก้ในระบบนี้ จะคงไว้จนกว่าระบบใหญ่จะเปลี่ยนสถานะคดีนั้นเอง</li>
+    </ul>
+    {% else %}
     <ul class="list-disc pl-5 text-xs text-slate-500">
       <li>ข้อมูลผู้แจ้ง: ไฟล์ที่ส่งออกจากระบบรับแจ้งความออนไลน์ (ชีต Grid)</li>
       <li>ทะเบียนคดี: ไฟล์ทะเบียนของกอง เลือกได้ว่าจะนำเข้าชีตปีไหน</li>
       <li><b>อัปเดตจากระบบใหญ่ (รายสัปดาห์)</b>: ไฟล์ Grid จากระบบใหญ่ อัปเดตสถานะและข้อมูลของคดีที่มีอยู่ เพิ่มคดีใหม่ของ กก.1 ไม่ลบอะไร และไม่แตะบันทึกการติดต่อ</li>
       <li>นำเข้าซ้ำได้ ระบบจะอัปเดตของเดิมโดยใช้เลขรับแจ้ง ไม่สร้างซ้ำ</li>
     </ul>
+    {% endif %}
     <button class="btn btn-primary">ถัดไป</button>
   </form>
   <div class="card overflow-x-auto p-0 lg:col-span-2">

@@ -4,7 +4,6 @@ import datetime as dt
 import hashlib
 import hmac
 import json
-from io import BytesIO
 
 import pytest
 from django.utils import timezone
@@ -126,9 +125,14 @@ def test_summary_without_open_cases_has_three_lines(imported, caller):
     assert "จำนวน 1 Case ID" in text and "4." not in text
 
 
-def test_page_texts_and_word_files(client, caller, day_calls):
-    from docx import Document
+def lines_of(resp) -> list[str]:
+    """The lines of a downloaded .txt file (UTF-8 with a BOM, Windows line endings)."""
+    raw = resp.content
+    assert raw.startswith("\ufeff".encode()) and b"\r\n" in raw and resp["Content-Type"].startswith("text/plain")
+    return raw.decode("utf-8-sig").split("\r\n")
 
+
+def test_page_texts_and_text_files(client, caller, day_calls):
     client.force_login(caller)  # call staff use it every day
     page = client.get("/reports/daily/", {"date": "2026-11-09"})
     assert page.status_code == 200
@@ -137,18 +141,15 @@ def test_page_texts_and_word_files(client, caller, day_calls):
     assert "ยังส่งไม่ได้: ยังไม่ได้ใส่รหัสเชื่อมต่อ LINE" in html and "แจ้งผู้ดูแลระบบ" in html  # not set up
     diary = client.get("/reports/daily/", {"date": "2026-11-09", "format": "diary"})
     assert "%E0%B8%A5%E0%B8%87%E0%B8%9A%E0%B8%B1%E0%B8%99%E0%B8%97%E0%B8%B6%E0%B8%81" in diary["Content-Disposition"]
-    assert "9.11.2569.docx" in diary["Content-Disposition"]
-    # same layout as the file the staff made by hand: one line each, a blank line between, TH SarabunPSK 16
-    doc = Document(BytesIO(diary.content))
-    lines = [p.text for p in doc.paragraphs]
+    assert "9.11.2569.txt" in diary["Content-Disposition"]
+    # same layout as the file the staff made by hand: one line each, a blank line between
     c0, c1 = day_calls[0], day_calls[1]
-    assert lines == [
+    assert lines_of(diary) == [
         f"ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: {c0.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0811111111", "",
         f"ผู้เสียหาย: นายทดสอบ สอง เลขรับแจ้ง: {c1.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0899999999", ""]
-    assert doc.styles["Normal"].font.name == "TH SarabunPSK" and doc.styles["Normal"].font.size.pt == 16
     resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary"})
-    assert "9.11.2569.docx" in resp["Content-Disposition"]
-    summary = [p.text for p in Document(BytesIO(resp.content)).paragraphs]
+    assert "9.11.2569.txt" in resp["Content-Disposition"]
+    summary = lines_of(resp)
     assert summary[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ" and summary[1] == ""
     first = summary.index("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
     assert summary[2].startswith("ผู้เสียหาย: ")  # in the order first called (c[5] at 08:00)
@@ -162,13 +163,11 @@ def test_page_texts_and_word_files(client, caller, day_calls):
     assert mine["counts"]["total"] == 6 and mine["caller"] == caller
 
 
-def test_summary_word_file_has_only_the_cases_called_that_day(client, caller, day_calls):
+def test_summary_text_file_has_only_the_cases_called_that_day(client, caller, day_calls):
     """สรุปข้อมูลคดี is daily: calls of the day before or after are not in it."""
-    from docx import Document
-
     client.force_login(caller)
     resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary", "from": "2026-11-01"})
-    text = "\n".join(p.text for p in Document(BytesIO(resp.content)).paragraphs)
+    text = "\n".join(lines_of(resp))
     assert sum(line.startswith("ผู้เสียหาย:") for line in text.split("\n")) == 7
     assert day_calls[7].receipt_no not in text and day_calls[8].receipt_no not in text
     assert "วันที่ 8 พ.ย." not in text and "วันที่ 10 พ.ย." not in text
@@ -492,10 +491,8 @@ def test_only_admins_enter_keys(client, caller):
     assert resp.status_code in (302, 403) and not line_bot.configured()
 
 
-def test_bot_sends_links_to_the_word_files(client, line, day_calls, settings):
-    """LINE does not let bots send Word files: the message carries signed links that expire."""
-    from docx import Document
-
+def test_bot_sends_links_to_the_text_files(client, line, day_calls, settings):
+    """LINE does not let bots send document files: the message carries signed links that expire."""
     setting(line_group_id="Cgroup1")
     line_bot.send_day(DAY)
     assert len(line[-1][2]["messages"]) == 1  # off by default
@@ -510,11 +507,11 @@ def test_bot_sends_links_to_the_word_files(client, line, day_calls, settings):
     links = [line.split(": ", 1)[1] for line in texts[1].split("\n")[1:]]
     client.logout()
     diary = client.get(links[0].replace("https://testserver", ""))  # no login needed
-    assert diary.status_code == 200 and "9.11.2569.docx" in diary["Content-Disposition"]
-    rows = [p.text for p in Document(BytesIO(diary.content)).paragraphs if p.text]
+    assert diary.status_code == 200 and "9.11.2569.txt" in diary["Content-Disposition"]
+    rows = [line for line in lines_of(diary) if line]
     assert len(rows) == 2 and rows[0].startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
     summary = client.get(links[1].replace("https://testserver", ""))
-    assert "สรุปข้อมูลคดี" in summary.content.decode("latin-1") or summary.status_code == 200
+    assert lines_of(summary)[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ"
     from apps.core.models import AuditLog
     assert AuditLog.objects.filter(detail__contains="ผ่านลิงก์ใน LINE").count() == 2
     # a changed link does not work; an old one has expired

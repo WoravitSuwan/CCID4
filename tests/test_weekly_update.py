@@ -176,3 +176,41 @@ def test_short_rank():
     assert report.short_rank("พันตำรวจโทหญิง") == "พ.ต.ท.หญิง"
     assert report.short_rank("ว่าที่พันตำรวจตรี") == "ว่าที่ พ.ต.ต."
     assert report.short_rank("") == ""
+
+
+def test_call_staff_load_the_weekly_file_only(tmp_path, cases, client):
+    """Call staff update the cases from the big system's file themselves; the register stays with admins."""
+    from apps.accounts.models import Role, User
+    from apps.imports.models import BatchStatus, ImportBatch
+    from tests.conftest import make_batch
+
+    a = cases[0]
+    staff = User.objects.create_user("caller8", password="pass12345", role=Role.OUTSOURCE)
+    client.force_login(staff)
+    page = client.get("/imports/")
+    assert page.status_code == 200 and page.context["update_only"]
+    assert [v for v, _ in page.context["form"].fields["kind"].choices] == [ImportKind.UPDATE]
+    assert "อัปเดตข้อมูลคดี (Excel)" in client.get("/calls/").content.decode()
+    # the whole wizard with the weekly file
+    path = grid_file(tmp_path, [row(a, **{"สถานะ": "สิ้นสุด"})])
+    with open(path, "rb") as fh:
+        resp = client.post("/imports/", {"kind": ImportKind.UPDATE, "file": fh})
+    batch = ImportBatch.objects.latest("pk")
+    assert resp["Location"] == f"/imports/{batch.pk}/sheets/" and batch.created_by == staff
+    client.post(f"/imports/{batch.pk}/sheets/", {"sheets": batch.available_sheets})
+    batch.refresh_from_db()
+    client.post(f"/imports/{batch.pk}/mapping/", {f"map_{k}": v for k, v in batch.mapping.items()})
+    batch.refresh_from_db()
+    assert batch.status == BatchStatus.ANALYZED, batch.error
+    client.post(f"/imports/{batch.pk}/confirm/")
+    batch.refresh_from_db()
+    a.refresh_from_db()
+    assert batch.status == BatchStatus.DONE and a.status.name == "สิ้นสุด"
+    # another kind of file: refused
+    with open(path, "rb") as fh:
+        refused = client.post("/imports/", {"kind": ImportKind.REGISTER, "file": fh})
+    assert refused.status_code == 200 and refused.context["form"].errors
+    register = make_batch(ImportKind.REGISTER, path)
+    assert client.get(f"/imports/{register.pk}/preview/").status_code == 403
+    assert client.post(f"/imports/{register.pk}/confirm/").status_code == 403
+    assert register not in client.get("/imports/").context["history"].object_list
