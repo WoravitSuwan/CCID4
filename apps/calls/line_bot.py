@@ -80,24 +80,47 @@ def _call(method: str, path: str, payload: dict | None = None) -> dict:
     return json.loads(body) if body.strip() else {}
 
 
-def _messages(texts: list) -> list[dict]:
-    out = []
-    for text in texts:
-        if isinstance(text, dict):  # a ready message (the files card)
-            out.append(text)
-            continue
-        while text:
-            out.append({"type": "text", "text": text[:MAX_TEXT]})
-            text = text[MAX_TEXT:]
-    return out[:5]  # LINE takes at most 5 messages per request
+def _pieces(text: str, limit: int = MAX_TEXT) -> list[str]:
+    """A long text in pieces of at most `limit` characters, cut between cases (blank lines), else between lines."""
+    if len(text) <= limit:
+        return [text]
+    out, cur = [], ""
+    for sep in ("\n\n", "\n"):
+        parts = text.split(sep)
+        if all(len(p) <= limit for p in parts):
+            for p in parts:
+                if cur and len(cur) + len(sep) + len(p) > limit:
+                    out.append(cur)
+                    cur = p
+                else:
+                    cur = f"{cur}{sep}{p}" if cur else p
+            return out + ([cur] if cur else [])
+    return [text[i:i + limit] for i in range(0, len(text), limit)]
 
 
-def push(to: str, texts: list[str]) -> None:
-    _call("POST", "/message/push", {"to": to, "messages": _messages(texts)})
+def _messages(texts: list[str]) -> list[dict]:
+    return [{"type": "text", "text": piece} for text in texts for piece in _pieces(text)]
 
 
-def reply(token: str, texts: list[str]) -> None:
-    _call("POST", "/message/reply", {"replyToken": token, "messages": _messages(texts)})
+PER_REQUEST = 5  # LINE takes at most 5 messages in one request
+
+
+def push(to: str, texts: list[str]) -> int:
+    """Send in order, 5 messages per request. Returns the number of requests (each one counts against the quota
+    once per member of the group)."""
+    msgs = _messages(texts)
+    for i in range(0, len(msgs), PER_REQUEST):
+        _call("POST", "/message/push", {"to": to, "messages": msgs[i:i + PER_REQUEST]})
+    return (len(msgs) + PER_REQUEST - 1) // PER_REQUEST
+
+
+def reply(token: str, texts: list[str], group: str = "") -> None:
+    """Answer a command (free); what does not fit in one answer follows as a push to the group."""
+    msgs = _messages(texts)
+    _call("POST", "/message/reply", {"replyToken": token, "messages": msgs[:PER_REQUEST]})
+    rest = msgs[PER_REQUEST:]
+    for i in range(0, len(rest), PER_REQUEST) if group else ():
+        _call("POST", "/message/push", {"to": group, "messages": rest[i:i + PER_REQUEST]})
 
 
 def group_name(group_id: str) -> str:
@@ -170,60 +193,20 @@ def read_file_token(token: str) -> tuple[dt.date, str]:
     return dt.date.fromisoformat(data["d"]), data["k"]
 
 
-def file_links(d) -> dict:
-    """{'summary': url, 'diary': url} for the day's two text files (signed, they expire)."""
-    from django.urls import reverse
-
-    base = site_url()
-    return {kind: f"{base}{reverse('line_file', args=[file_token(d.day, kind)])}" for kind in ("summary", "diary")}
-
-
-def files_message(d) -> dict:
-    """A card with two buttons, one per text file: LINE does not let a bot attach files to a message."""
+def texts_for(day: dt.date, with_texts: bool | None = None) -> list[str]:
+    """What the bot sends, as separate text messages: 1) the report for the commanders, and (unless turned off)
+    2) the ลงบันทึกประจำวัน text 3) the สรุปข้อมูลคดี text."""
     from apps.core.thai_format import thai_date_full
 
-    links = file_links(d)
-    until = timezone.localdate() + dt.timedelta(days=SystemSetting.get().line_link_days or 7)
-    day = thai_date_full(d.day, thai_digits=False)
-
-    def button(kind, label, style):
-        return {"type": "button", "style": style, "height": "sm",
-                "action": {"type": "uri", "label": label, "uri": links[kind]}}
-
-    return {
-        "type": "flex",
-        "altText": f"ไฟล์ประจำวันที่ {day}: สรุปข้อมูลคดี และ ลงบันทึกประจำวัน (.txt)",
-        "contents": {
-            "type": "bubble",
-            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                {"type": "text", "text": f"ไฟล์ประจำวันที่ {day}", "weight": "bold", "wrap": True},
-                {"type": "text", "text": f"กดเพื่อเปิด/ดาวน์โหลดไฟล์ .txt · ลิงก์ใช้ได้ถึง "
-                                         f"{thai_date_full(until, thai_digits=False)}",
-                 "size": "sm", "color": "#64748b", "wrap": True},
-            ]},
-            "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
-                button("summary", "📄 สรุปข้อมูลคดี", "primary"),
-                button("diary", "📄 ลงบันทึกประจำวัน", "secondary"),
-            ]},
-        },
-    }
-
-
-def files_text(d) -> str:
-    """The same links as plain text (the command line's --print)."""
-    links = file_links(d)
-    return "\n".join([f"สรุปข้อมูลคดี: {links['summary']}", f"ลงบันทึกประจำวัน: {links['diary']}"])
-
-
-def texts_for(day: dt.date, with_list: bool | None = None) -> list:
-    """What the bot sends: the summary text, the diary text if allowed, and the card with the two files."""
     s = SystemSetting.get()
     d = report.load(day)
     texts = [report.summary_text(d)]
-    if (s.line_include_list if with_list is None else with_list) and d.not_want:
-        texts.append(report.diary_text(d))
-    if s.line_send_files and site_url():
-        texts.append(files_message(d))
+    if s.line_send_files if with_texts is None else with_texts:
+        texts.append(report.diary_text(d) if d.not_want
+                     else f"ลงบันทึกประจำวัน: ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี{report.period_text(d)}")
+        texts.append(report.summary_file_text(d) if d.rows
+                     else f"สรุปข้อมูลคดีและบันทึกการติดต่อ: ไม่มีคดีที่โทรวันที่ "
+                          f"{thai_date_full(d.day, thai_digits=False)}")
     return texts
 
 
@@ -409,6 +392,6 @@ def handle_events(events: list[dict]) -> None:
                     continue
                 day = asked_day(text, timezone.localdate())
                 if day is not None:
-                    reply(token, texts_for(day))
+                    reply(token, texts_for(day), group=group)
         except LineError as exc:
             log.warning("LINE reply failed: %s", exc)

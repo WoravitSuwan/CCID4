@@ -66,16 +66,15 @@ class SystemSetting(models.Model):
     line_access_token = models.TextField(blank=True, editable=False)
     line_enabled = models.BooleanField(
         "ส่งสรุปผลประจำวันเข้ากลุ่ม LINE อัตโนมัติ", default=False,
-        help_text="ส่งเฉพาะตัวเลขสรุป (ไม่มีชื่อ เบอร์โทร) วันละครั้งตามเวลาที่ตั้งไว้")
+        help_text="วันละครั้งตามเวลาที่ตั้งไว้")
     line_send_time = models.TimeField("เวลาส่งอัตโนมัติ", default=dt.time(18, 0))
     line_skip_empty = models.BooleanField("ไม่ส่งในวันที่ไม่มีการโทร (ประหยัดโควตา)", default=True)
-    line_include_list = models.BooleanField(
-        "ส่งรายชื่อผู้ไม่ประสงค์ดำเนินคดี (ชื่อ เลขรับแจ้ง เบอร์โทร) ไปด้วย", default=False,
-        help_text="ข้อมูลส่วนบุคคลจะออกไปอยู่บนเซิร์ฟเวอร์ของ LINE - เปิดเมื่อผู้บังคับบัญชาอนุญาตแล้วเท่านั้น")
     line_send_files = models.BooleanField(
-        "ส่งไฟล์ .txt 2 ไฟล์ (สรุปข้อมูลคดี / ลงบันทึกประจำวัน) ไปพร้อมข้อความ", default=True,
-        help_text="LINE ไม่ให้บอทแนบไฟล์โดยตรง จึงส่งเป็นการ์ดมีปุ่มไฟล์ 2 ปุ่ม (ลิงก์ดาวน์โหลดที่หมดอายุเอง) "
-                  "ใครได้ลิงก์ก็เปิดได้โดยไม่ต้องเข้าระบบ (ไฟล์มีชื่อและเบอร์โทร)")
+        "ส่งข้อความ ลงบันทึกประจำวัน และ สรุปข้อมูลคดี ไปด้วย (รวม 3 ข้อความ)", default=True,
+        help_text="1) รายงานผู้บังคับบัญชา 2) ลงบันทึกประจำวัน 3) สรุปข้อมูลคดี · ข้อความ 2-3 มีชื่อ เลขรับแจ้ง "
+                  "เบอร์โทรผู้เสียหาย ซึ่งจะอยู่บนเซิร์ฟเวอร์ของ LINE · ข้อความที่ยาวเกิน 5,000 ตัวอักษร "
+                  "(LINE จำกัด) แบ่งเป็นหลายข้อความต่อกัน")
+    # links to the text files sent before (kept working until they expire)
     line_link_days = models.PositiveIntegerField("ลิงก์ไฟล์ใช้ได้ (วัน)", default=7,
                                                  validators=[MinValueValidator(1), MaxValueValidator(30)])
     line_site_url = models.CharField(max_length=200, blank=True, editable=False)  # for links in messages

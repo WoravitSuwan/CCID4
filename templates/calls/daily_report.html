@@ -38,11 +38,10 @@
       {% if line_problem %}
       <p class="text-sm text-amber-700">ยังส่งไม่ได้: {{ line_problem }}{% if perm_settings %} · <a href="{% url 'settings_line' %}">ไปตั้งค่าบอท LINE</a>{% else %} · แจ้งผู้ดูแลระบบ{% endif %}</p>
       {% else %}
-      <p class="text-sm text-slate-500">ส่งข้อความรายงานผู้บังคับบัญชา{% if line_files %} พร้อมไฟล์ สรุปข้อมูลคดี และ ลงบันทึกประจำวัน (.txt){% endif %} เข้ากลุ่ม {{ line_group|default:"LINE" }}</p>
-      {% if files_waiting %}<p class="text-xs text-amber-700">ไฟล์ .txt จะแนบไปได้เมื่อระบบรู้ที่อยู่เว็บของตัวเอง: พิมพ์อะไรก็ได้ในกลุ่ม LINE 1 ครั้ง หรือเปิดหน้านี้ผ่านที่อยู่ https ของระบบ</p>{% endif %}
+      <p class="text-sm text-slate-500">{% if line_files %}ส่ง 3 ข้อความ: รายงานผู้บังคับบัญชา · ลงบันทึกประจำวัน · สรุปข้อมูลคดี{% else %}ส่งข้อความรายงานผู้บังคับบัญชา{% endif %} เข้ากลุ่ม {{ line_group|default:"LINE" }}</p>
       {% endif %}
     </div>
-    <form method="post" class="w-full sm:w-auto" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE ตอนนี้?{% if line_files %}\n(พร้อมไฟล์ สรุปข้อมูลคดี และ ลงบันทึกประจำวัน){% endif %}\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
+    <form method="post" class="w-full sm:w-auto" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE ตอนนี้?{% if line_files %}\n(3 ข้อความ: รายงาน / ลงบันทึกประจำวัน / สรุปข้อมูลคดี){% endif %}\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
       <button class="btn btn-success w-full sm:w-auto" {% if line_problem %}disabled title="{{ line_problem }}"{% endif %}>{% icon "chat" "h-4 w-4" %} ส่งสรุปผลวันที่ {{ day|thai_date }} ตอนนี้</button>
     </form>
   </div>

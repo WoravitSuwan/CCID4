@@ -266,8 +266,8 @@ def test_group_is_used_only_after_an_admin_confirms_it(client, admin_user, line,
     method, path, payload = line[-1]
     assert path == "/message/reply" and payload["replyToken"] == "r3"
     assert "จำนวน 7 Case ID" in payload["messages"][0]["text"]
-    assert [m["type"] for m in payload["messages"]] == ["text", "flex"]  # the counts, then the files card
-    assert day_calls[0].receipt_no not in str(payload)  # no names in the chat
+    assert len(payload["messages"]) == 3 and payload["messages"][0]["text"].startswith("เรียนผู้บังคับบัญชา")
+    assert day_calls[0].receipt_no not in payload["messages"][0]["text"]  # the report itself: counts only
     # the bot is removed from the group
     signed(client, {"events": [{"type": "leave", "source": {"type": "group", "groupId": "Cgroup1"}}]})
     s.refresh_from_db()
@@ -287,16 +287,48 @@ def test_group_found_by_a_message_when_the_join_was_missed(client, line):
     assert SystemSetting.get().line_pending_group_id == "Cgroup2"
 
 
-def test_push_sends_counts_and_the_list_only_when_allowed(line, day_calls):
+def test_push_sends_three_text_messages(line, day_calls):
+    """1) the report for the commanders 2) ลงบันทึกประจำวัน 3) สรุปข้อมูลคดี - all as text, in one request."""
     setting(line_group_id="Cgroup1")
+    assert SystemSetting.get().line_send_files  # on by default
     assert line_bot.send_day(DAY) == 7
     method, path, payload = line[-1]
-    assert path == "/message/push" and payload["to"] == "Cgroup1" and len(payload["messages"]) == 1
-    assert day_calls[0].receipt_no not in json.dumps(payload, ensure_ascii=False)
-    setting(line_include_list=True)
+    assert path == "/message/push" and payload["to"] == "Cgroup1"
+    report_msg, diary_msg, cases_msg = [m["text"] for m in payload["messages"]]
+    assert report_msg.startswith("เรียนผู้บังคับบัญชา") and day_calls[0].receipt_no not in report_msg
+    assert diary_msg.startswith("วันนี้( 9 พ.ย.69)") and day_calls[0].receipt_no in diary_msg
+    assert cases_msg.startswith("สรุปข้อมูลคดีและบันทึกการติดต่อ") and cases_msg.count("\nผู้เสียหาย: ") == 7
+    assert len([x for x in line if x[1] == "/message/push"]) == 1  # one request: one quota count per member
+    # turned off: the report only
+    setting(line_send_files=False)
     line_bot.send_day(DAY)
-    texts = [m["text"] for m in line[-1][2]["messages"]]
-    assert len(texts) == 2 and day_calls[0].receipt_no in texts[1]
+    assert len(line[-1][2]["messages"]) == 1
+
+
+def test_long_texts_are_split_between_cases(line, imported, caller):
+    """LINE takes 5,000 characters per message and 5 messages per request: a busy day goes out in order,
+    cut between cases, over more than one request."""
+    from apps.calls.services import ensure_call_pool, record_call
+
+    setting(line_group_id="Cgroup1")
+    ensure_call_pool()
+    cases = list(Case.objects.all()[:60])
+    for i, c in enumerate(cases):
+        Case.objects.filter(pk=c.pk).update(victim_name="นางสาวทดสอบ " + "ยาวมาก" * 15)
+        c.refresh_from_db()
+        record_call(c, caller, outcome=O.NOT_PROCEED, called_at=at(DAY, 8, i % 60))
+    line_bot.send_day(DAY)
+    pushes = [x[2]["messages"] for x in line if x[1] == "/message/push"]
+    msgs = [m["text"] for batch in pushes for m in batch]
+    assert all(len(m) <= 5000 for m in msgs) and all(len(batch) <= 5 for batch in pushes)
+    assert len(pushes) >= 2 and msgs[0].startswith("เรียนผู้บังคับบัญชา")
+    texts = line_bot.texts_for(DAY)
+    pieces = [line_bot._pieces(t) for t in texts]
+    assert msgs == [p for ps in pieces for p in ps]  # in order
+    for text, ps in zip(texts, pieces, strict=True):  # nothing lost: the pieces join back into the text
+        assert text in ("\n\n".join(ps), "\n".join(ps))
+    cases = pieces[2]
+    assert len(cases) >= 2 and all(p.startswith(("สรุปข้อมูลคดี", "ผู้เสียหาย: ")) for p in cases)  # cut between cases
 
 
 def test_daily_push_once_after_the_set_time(line, day_calls):
@@ -417,10 +449,10 @@ def test_line_settings_page(client, admin_user, settings, line):
     html = client.get("/settings/line/").content.decode()
     assert "http://testserver/line/webhook/" in html and "ส่งอัตโนมัติ" in html
     resp = client.post("/settings/line/", {"action": "save", "line_enabled": "on", "line_send_time": "17:30",
-                                           "line_link_days": "7", "line_skip_empty": "on"})
+                                           "line_skip_empty": "on"})
     assert resp.status_code == 302
     s = SystemSetting.get()
-    assert s.line_enabled and s.line_send_time == dt.time(17, 30) and not s.line_include_list
+    assert s.line_enabled and s.line_send_time == dt.time(17, 30) and not s.line_send_files
     settings.LINE_CHANNEL_ACCESS_TOKEN = ""
     assert "ยังไม่ได้เชื่อมต่อ LINE" in client.get("/settings/line/").content.decode()
 
@@ -493,40 +525,18 @@ def test_only_admins_enter_keys(client, caller):
     assert resp.status_code in (302, 403) and not line_bot.configured()
 
 
-def test_bot_sends_the_two_text_files_with_the_message(client, line, day_calls, settings):
-    """LINE does not let bots attach files: a card with two buttons (signed links that expire) follows the text."""
-    setting(line_group_id="Cgroup1")
-    assert SystemSetting.get().line_send_files  # on by default
-    line_bot.send_day(DAY)
-    assert len(line[-1][2]["messages"]) == 1  # the system's address is not known yet: text only
-    signed(client, {"events": []})  # LINE's request tells the system its public address
-    assert SystemSetting.get().line_site_url == "https://testserver"
-    line_bot.send_day(DAY)
-    text, card = line[-1][2]["messages"]
-    assert text["type"] == "text" and card["type"] == "flex" and "สรุปข้อมูลคดี" in card["altText"]
-    buttons = card["contents"]["footer"]["contents"]
-    assert [b["action"]["label"] for b in buttons] == ["📄 สรุปข้อมูลคดี", "📄 ลงบันทึกประจำวัน"]
-    assert all(len(b["action"]["label"]) <= 20 for b in buttons)  # LINE's limit for a button label
-    links = [b["action"]["uri"] for b in buttons]
-    assert all(u.startswith("https://testserver/line/file/") for u in links)
-    assert day_calls[0].receipt_no not in str(line[-1][2])  # names only inside the files
-    client.logout()
-    summary = client.get(links[0].replace("https://testserver", ""))  # no login needed
-    assert lines_of(summary)[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ"
-    diary = client.get(links[1].replace("https://testserver", ""))
+def test_links_sent_before_still_open_until_they_expire(client, line, day_calls):
+    """Messages sent earlier carried links to the text files: they keep working until they expire."""
+    link = f"/line/file/{line_bot.file_token(DAY, 'diary')}/"
+    diary = client.get(link)  # no login needed
     assert diary.status_code == 200 and "9.11.2569.txt" in diary["Content-Disposition"]
-    rows = [line for line in lines_of(diary) if line]
+    rows = [ln for ln in lines_of(diary) if ln]
     assert len(rows) == 2 and rows[0].startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
-    # the files are there every day, even with nobody who does not want to proceed
-    quiet = DAY + dt.timedelta(days=30)
-    line_bot.send_day(quiet)
-    empty = client.get(line[-1][2]["messages"][1]["contents"]["footer"]["contents"][1]["action"]["uri"]
-                       .replace("https://testserver", ""))
-    assert lines_of(empty)[0].startswith("ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี")
+    summary = client.get(f"/line/file/{line_bot.file_token(DAY, 'summary')}/")
+    assert lines_of(summary)[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ"
     from apps.core.models import AuditLog
-    assert AuditLog.objects.filter(detail__contains="ผ่านลิงก์ใน LINE").count() == 3
-    # a changed link does not work; an old one has expired
-    assert client.get(links[0].replace("https://testserver", "")[:-3] + "xx/").status_code == 404
+    assert AuditLog.objects.filter(detail__contains="ผ่านลิงก์ใน LINE").count() == 2
+    assert client.get(link[:-4] + "xx/").status_code == 404  # changed: refused
     import time
 
     from django.core import signing

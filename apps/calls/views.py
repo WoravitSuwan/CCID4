@@ -833,8 +833,7 @@ def daily_report(request):
         "prev_day": day - dt.timedelta(days=1), "next_day": day + dt.timedelta(days=1) if day < today else None,
         "date_text": thai_date_full(day, thai_digits=False),
         "line_ready": line_bot.configured() and bool(s.line_group_id), "line_group": s.line_group_name,
-        "line_files": s.line_send_files and bool(line_bot.site_url()),
-        "files_waiting": s.line_send_files and not line_bot.site_url(),
+        "line_files": s.line_send_files,
         "auto": line_bot.auto_status(), "auto_form": LineAutoForm(instance=s),
         "line_problem": ("" if line_bot.configured() and s.line_group_id
                          else "ยังไม่ได้ใส่รหัสเชื่อมต่อ LINE" if not line_bot.configured()
