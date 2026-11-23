@@ -781,6 +781,7 @@ def daily_report(request):
     caller_id = request.GET.get("caller", "")
     caller = User.objects.filter(pk=caller_id).first() if caller_id.isdigit() else None
     d = report.load(day, caller)
+    line_bot.remember_site(request)  # the address for the file links the bot sends
 
     if request.method == "POST":
         if not (perms.is_admin(request.user) or perms.is_outsource(request.user)):
@@ -833,6 +834,7 @@ def daily_report(request):
         "date_text": thai_date_full(day, thai_digits=False),
         "line_ready": line_bot.configured() and bool(s.line_group_id), "line_group": s.line_group_name,
         "line_files": s.line_send_files and bool(line_bot.site_url()),
+        "files_waiting": s.line_send_files and not line_bot.site_url(),
         "auto": line_bot.auto_status(), "auto_form": LineAutoForm(instance=s),
         "line_problem": ("" if line_bot.configured() and s.line_group_id
                          else "ยังไม่ได้ใส่รหัสเชื่อมต่อ LINE" if not line_bot.configured()

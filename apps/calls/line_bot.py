@@ -80,9 +80,12 @@ def _call(method: str, path: str, payload: dict | None = None) -> dict:
     return json.loads(body) if body.strip() else {}
 
 
-def _messages(texts: list[str]) -> list[dict]:
+def _messages(texts: list) -> list[dict]:
     out = []
     for text in texts:
+        if isinstance(text, dict):  # a ready message (the files card)
+            out.append(text)
+            continue
         while text:
             out.append({"type": "text", "text": text[:MAX_TEXT]})
             text = text[MAX_TEXT:]
@@ -167,31 +170,60 @@ def read_file_token(token: str) -> tuple[dt.date, str]:
     return dt.date.fromisoformat(data["d"]), data["k"]
 
 
-def files_text(d) -> str:
-    """The message with the download links of the day's text files (.txt)."""
+def file_links(d) -> dict:
+    """{'summary': url, 'diary': url} for the day's two text files (signed, they expire)."""
     from django.urls import reverse
 
+    base = site_url()
+    return {kind: f"{base}{reverse('line_file', args=[file_token(d.day, kind)])}" for kind in ("summary", "diary")}
+
+
+def files_message(d) -> dict:
+    """A card with two buttons, one per text file: LINE does not let a bot attach files to a message."""
     from apps.core.thai_format import thai_date_full
 
-    base = site_url()
+    links = file_links(d)
     until = timezone.localdate() + dt.timedelta(days=SystemSetting.get().line_link_days or 7)
-    lines = [f"ไฟล์ประจำวันที่ {thai_date_full(d.day, thai_digits=False)} (ลิงก์ใช้ได้ถึง "
-             f"{thai_date_full(until, thai_digits=False)})"]
-    for kind, label in FILE_KINDS.items():
-        if kind == "diary" and not d.not_want:
-            continue
-        lines.append(f"{label}: {base}{reverse('line_file', args=[file_token(d.day, kind)])}")
-    return "\n".join(lines)
+    day = thai_date_full(d.day, thai_digits=False)
+
+    def button(kind, label, style):
+        return {"type": "button", "style": style, "height": "sm",
+                "action": {"type": "uri", "label": label, "uri": links[kind]}}
+
+    return {
+        "type": "flex",
+        "altText": f"ไฟล์ประจำวันที่ {day}: สรุปข้อมูลคดี และ ลงบันทึกประจำวัน (.txt)",
+        "contents": {
+            "type": "bubble",
+            "body": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                {"type": "text", "text": f"ไฟล์ประจำวันที่ {day}", "weight": "bold", "wrap": True},
+                {"type": "text", "text": f"กดเพื่อเปิด/ดาวน์โหลดไฟล์ .txt · ลิงก์ใช้ได้ถึง "
+                                         f"{thai_date_full(until, thai_digits=False)}",
+                 "size": "sm", "color": "#64748b", "wrap": True},
+            ]},
+            "footer": {"type": "box", "layout": "vertical", "spacing": "sm", "contents": [
+                button("summary", "📄 สรุปข้อมูลคดี", "primary"),
+                button("diary", "📄 ลงบันทึกประจำวัน", "secondary"),
+            ]},
+        },
+    }
 
 
-def texts_for(day: dt.date, with_list: bool | None = None) -> list[str]:
+def files_text(d) -> str:
+    """The same links as plain text (the command line's --print)."""
+    links = file_links(d)
+    return "\n".join([f"สรุปข้อมูลคดี: {links['summary']}", f"ลงบันทึกประจำวัน: {links['diary']}"])
+
+
+def texts_for(day: dt.date, with_list: bool | None = None) -> list:
+    """What the bot sends: the summary text, the diary text if allowed, and the card with the two files."""
     s = SystemSetting.get()
     d = report.load(day)
     texts = [report.summary_text(d)]
     if (s.line_include_list if with_list is None else with_list) and d.not_want:
         texts.append(report.diary_text(d))
-    if s.line_send_files and d.rows and site_url():
-        texts.append(files_text(d))
+    if s.line_send_files and site_url():
+        texts.append(files_message(d))
     return texts
 
 

@@ -235,6 +235,8 @@ def log_line(a: CallAttempt) -> str:
 # --------------------------------------------------------------------------- text files (.txt)
 def diary_file_text(d: Day) -> str:
     """ลงบันทึกประจำวัน: only the victims who do not want to proceed, one line each, a blank line between."""
+    if not d.not_want:
+        return f"ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี{period_text(d)}"
     return "\n\n".join(f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}"
                        for r in d.not_want)
 

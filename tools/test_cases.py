@@ -212,9 +212,9 @@ CASES = [
          "test_daily_report.py::test_call_staff_see_the_line_box_and_set_the_automatic_send"),
         ("เจ้าหน้าที่กดส่งเข้า LINE ได้", OUT, "ตั้งบอทแล้ว เจ้าหน้าที่ outsource กด ส่งเข้ากลุ่ม LINE ในหน้าสรุปผลประจำวัน",
          "ข้อความสรุปเข้ากลุ่ม", "test_daily_report.py::test_call_staff_send_to_line_too"),
-        ("ลิงก์ไฟล์ .txt ในข้อความ LINE", A, "เปิด \"ส่งลิงก์ไฟล์ข้อความ .txt\" แล้วส่งเข้ากลุ่ม กดลิงก์ทั้ง 2 อัน",
+        ("ไฟล์ .txt 2 ไฟล์ไปพร้อมข้อความ LINE", ALL, "ส่งสรุปเข้ากลุ่ม แล้วกดปุ่ม สรุปข้อมูลคดี และ ลงบันทึกประจำวัน ในการ์ดใต้ข้อความ",
          "ดาวน์โหลดไฟล์ลงบันทึกประจำวัน (เฉพาะไม่ประสงค์ฯ) และสรุปข้อมูลคดีได้โดยไม่ต้องเข้าระบบ ลิงก์ที่ถูกแก้เปิดไม่ได้ "
-         "ลิงก์เกินกำหนดขึ้นว่าหมดอายุ", "test_daily_report.py::test_bot_sends_links_to_the_text_files"),
+         "ลิงก์เกินกำหนดขึ้นว่าหมดอายุ", "test_daily_report.py::test_bot_sends_the_two_text_files_with_the_message"),
         ("ปิด LINE โดยค่าเริ่มต้น", A, "ยังไม่ใส่รหัสเชื่อมต่อ แล้วเปิด ตั้งค่า > บอท LINE",
          "ขึ้นขั้นตอนการตั้งค่า ระบบไม่ติดต่อ LINE เลย", "test_daily_report.py::test_line_is_off_without_settings"),
         ("ใส่รหัสเชื่อมต่อที่หน้าเว็บ", A, "ใส่ Channel secret และ access token แล้วกด บันทึกและทดสอบการเชื่อมต่อ",

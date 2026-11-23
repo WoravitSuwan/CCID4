@@ -30,7 +30,9 @@ class Command(BaseCommand):
         except ValueError as exc:
             raise CommandError("วันที่ต้องเป็นรูปแบบ YYYY-MM-DD") from exc
         if opts["print"]:
-            self.stdout.write("\n\n".join(line_bot.texts_for(day)))
+            d = line_bot.report.load(day)
+            self.stdout.write("\n\n".join(t if isinstance(t, str) else line_bot.files_text(d)
+                                            for t in line_bot.texts_for(day)))
             return
         try:
             total = line_bot.send_day(day)

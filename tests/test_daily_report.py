@@ -265,7 +265,9 @@ def test_group_is_used_only_after_an_admin_confirms_it(client, admin_user, line,
                                 "source": {"type": "group", "groupId": "Cgroup1"}}]})
     method, path, payload = line[-1]
     assert path == "/message/reply" and payload["replyToken"] == "r3"
-    assert "จำนวน 7 Case ID" in payload["messages"][0]["text"] and len(payload["messages"]) == 1  # no names
+    assert "จำนวน 7 Case ID" in payload["messages"][0]["text"]
+    assert [m["type"] for m in payload["messages"]] == ["text", "flex"]  # the counts, then the files card
+    assert day_calls[0].receipt_no not in str(payload)  # no names in the chat
     # the bot is removed from the group
     signed(client, {"events": [{"type": "leave", "source": {"type": "group", "groupId": "Cgroup1"}}]})
     s.refresh_from_db()
@@ -491,29 +493,38 @@ def test_only_admins_enter_keys(client, caller):
     assert resp.status_code in (302, 403) and not line_bot.configured()
 
 
-def test_bot_sends_links_to_the_text_files(client, line, day_calls, settings):
-    """LINE does not let bots send document files: the message carries signed links that expire."""
+def test_bot_sends_the_two_text_files_with_the_message(client, line, day_calls, settings):
+    """LINE does not let bots attach files: a card with two buttons (signed links that expire) follows the text."""
     setting(line_group_id="Cgroup1")
+    assert SystemSetting.get().line_send_files  # on by default
     line_bot.send_day(DAY)
-    assert len(line[-1][2]["messages"]) == 1  # off by default
-    setting(line_send_files=True, line_link_days=7)
+    assert len(line[-1][2]["messages"]) == 1  # the system's address is not known yet: text only
     signed(client, {"events": []})  # LINE's request tells the system its public address
     assert SystemSetting.get().line_site_url == "https://testserver"
     line_bot.send_day(DAY)
-    texts = [m["text"] for m in line[-1][2]["messages"]]
-    assert len(texts) == 2 and "ลงบันทึกประจำวัน: https://testserver/line/file/" in texts[1]
-    assert "สรุปข้อมูลคดี: https://testserver/line/file/" in texts[1]
-    assert day_calls[0].receipt_no not in "".join(texts)  # names only inside the files
-    links = [line.split(": ", 1)[1] for line in texts[1].split("\n")[1:]]
+    text, card = line[-1][2]["messages"]
+    assert text["type"] == "text" and card["type"] == "flex" and "สรุปข้อมูลคดี" in card["altText"]
+    buttons = card["contents"]["footer"]["contents"]
+    assert [b["action"]["label"] for b in buttons] == ["📄 สรุปข้อมูลคดี", "📄 ลงบันทึกประจำวัน"]
+    assert all(len(b["action"]["label"]) <= 20 for b in buttons)  # LINE's limit for a button label
+    links = [b["action"]["uri"] for b in buttons]
+    assert all(u.startswith("https://testserver/line/file/") for u in links)
+    assert day_calls[0].receipt_no not in str(line[-1][2])  # names only inside the files
     client.logout()
-    diary = client.get(links[0].replace("https://testserver", ""))  # no login needed
+    summary = client.get(links[0].replace("https://testserver", ""))  # no login needed
+    assert lines_of(summary)[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ"
+    diary = client.get(links[1].replace("https://testserver", ""))
     assert diary.status_code == 200 and "9.11.2569.txt" in diary["Content-Disposition"]
     rows = [line for line in lines_of(diary) if line]
     assert len(rows) == 2 and rows[0].startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
-    summary = client.get(links[1].replace("https://testserver", ""))
-    assert lines_of(summary)[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ"
+    # the files are there every day, even with nobody who does not want to proceed
+    quiet = DAY + dt.timedelta(days=30)
+    line_bot.send_day(quiet)
+    empty = client.get(line[-1][2]["messages"][1]["contents"]["footer"]["contents"][1]["action"]["uri"]
+                       .replace("https://testserver", ""))
+    assert lines_of(empty)[0].startswith("ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี")
     from apps.core.models import AuditLog
-    assert AuditLog.objects.filter(detail__contains="ผ่านลิงก์ใน LINE").count() == 2
+    assert AuditLog.objects.filter(detail__contains="ผ่านลิงก์ใน LINE").count() == 3
     # a changed link does not work; an old one has expired
     assert client.get(links[0].replace("https://testserver", "")[:-3] + "xx/").status_code == 404
     import time
