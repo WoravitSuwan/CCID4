@@ -106,6 +106,11 @@
   .table thead th { @apply sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur; }
   .table td { @apply border-b border-slate-100 px-3 py-2.5 align-top; }
   .table-tight th, .table-tight td { padding-left: .55rem; padding-right: .55rem; }  /* many columns: fits 1366 px */
+  @media (min-width: 768px) and (max-width: 1439px) {  /* laptops and zoomed screens: still no sideways scrolling */
+    .table-tight th, .table-tight td { padding-left: .4rem; padding-right: .4rem; }
+    .table-tight td { font-size: .8125rem; }
+    .table-tight td .badge { font-size: .6875rem; padding-left: .45rem; padding-right: .45rem; }
+  }
   .table tbody tr { @apply transition-colors hover:bg-indigo-50/40; }
   .table tbody tr.cursor-pointer td:first-child { box-shadow: inset 0 0 0 rgb(79 70 229); transition: box-shadow .2s ease; }
   .table tbody tr.cursor-pointer:hover td:first-child { box-shadow: inset 3px 0 0 rgb(79 70 229); }

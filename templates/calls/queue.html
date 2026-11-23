@@ -118,7 +118,7 @@
       <th class="th-plain hidden whitespace-nowrap 2xl:table-cell">ประเภทคดี</th>
       <th class="text-right">{% include "calls/_col_head.html" with label="มูลค่า (บาท)" c=col.damage filter="damage" groups=f.damage_groups active=f.active.damage %}</th>
       <th>{% include "calls/_col_head.html" with label="สถานะคดี" c=col.status filter="state" groups=f.state_groups active=f.active.state %}</th>
-      <th>{% include "calls/_col_head.html" with label="โทร (ครั้ง)" c=col.calls filter="" %}</th>
+      <th>{% include "calls/_col_head.html" with label="โทร" c=col.calls filter="" %}</th>
       <th>{% include "calls/_col_head.html" with label="ผลการโทรล่าสุด" c=col.last filter="result" groups=f.result_groups active=f.active.result %}</th>
       <th class="th-plain"></th></tr></thead>
     <tbody>

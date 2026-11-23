@@ -131,13 +131,16 @@ def _apply_filters(request, qs, damage=True):
     years = _year(request)
     if years:
         qs = qs.filter(case__report_year__in=years)
+    # the status column has two kinds of choice: ยังไม่สิ้นสุด / สิ้นสุดแล้ว, and the register's statuses.
+    # Within a kind: any of them; both kinds ticked: both must hold ("ยังไม่สิ้นสุด" + "อายัดบัญชี" = the
+    # อายัดบัญชี cases still open), so a status ticked next to ยังไม่สิ้นสุด narrows the list instead of vanishing.
     states = _state(request)
-    if states:
-        any_of = Q()
-        for value in states:
-            any_of |= (funnel.OPEN_CASE if value == "open" else ~funnel.OPEN_CASE if value == "final"
-                       else Q(case__status_id=int(value[1:])))
-        qs = qs.filter(any_of)
+    finality = [v for v in states if v in ("open", "final")]
+    if len(finality) == 1:  # both ticked: every case
+        qs = qs.filter(funnel.OPEN_CASE) if finality[0] == "open" else qs.exclude(funnel.OPEN_CASE)
+    status_ids = [int(v[1:]) for v in states if v.startswith("s")]
+    if status_ids:
+        qs = qs.filter(case__status_id__in=status_ids)
     if not damage:  # (for the counts shown next to each range)
         return qs
     ranges = _ranges(request)

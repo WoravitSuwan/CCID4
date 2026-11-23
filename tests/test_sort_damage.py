@@ -278,3 +278,21 @@ def test_damage_ranges_to_tick(client, admin_user, amounts):
     assert only_big["f"]["active"]["damage"] and ("มูลค่า 50,000 – 99,999" in dict(only_big["f"]["chips"]))
     html = client.get("/calls/").content.decode()
     assert 'name="drange" value="1m" form="list-filters"' in html
+
+
+def test_open_and_a_register_status_together_mean_both(client, admin_user, imported):
+    """ยังไม่สิ้นสุด + อายัดบัญชี = อายัดบัญชี cases still open (not every open case)."""
+    from apps.calls import funnel
+    from apps.calls.models import CallAssignment
+    from apps.registry.models import Status
+
+    client.force_login(admin_user)
+    client.get("/calls/")
+    st = Status.objects.filter(case__isnull=False, is_final=False).first()
+    both = client.get("/calls/", {"tab": "all", "state": ["open", f"s{st.pk}"]}).context
+    listed = {a.case_id for a in both["page"].paginator.object_list}
+    expected = set(CallAssignment.objects.filter(funnel.OPEN_CASE, case__status=st).values_list("case_id", flat=True))
+    assert listed == expected and all(Case.objects.get(pk=pk).status_id == st.pk for pk in listed)
+    # ยังไม่สิ้นสุด + สิ้นสุดแล้ว: every case
+    every = client.get("/calls/", {"tab": "all", "state": ["open", "final"]}).context
+    assert every["counts"]["all"] == Case.objects.count()
