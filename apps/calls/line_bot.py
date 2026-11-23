@@ -195,15 +195,14 @@ def read_file_token(token: str) -> tuple[dt.date, str]:
 
 def texts_for(day: dt.date, with_texts: bool | None = None) -> list[str]:
     """What the bot sends, as separate text messages: 1) the report for the commanders, and (unless turned off)
-    2) the ลงบันทึกประจำวัน text 3) the สรุปข้อมูลคดี text."""
+    2) ลงบันทึกประจำวัน 3) สรุปข้อมูลคดี - both exactly as the unit's own files."""
     from apps.core.thai_format import thai_date_full
 
     s = SystemSetting.get()
     d = report.load(day)
     texts = [report.summary_text(d)]
     if s.line_send_files if with_texts is None else with_texts:
-        texts.append(report.diary_text(d) if d.not_want
-                     else f"ลงบันทึกประจำวัน: ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี{report.period_text(d)}")
+        texts.append(report.diary_file_text(d))  # as the unit's ลงบันทึกประจำวัน file: the list only
         texts.append(report.summary_file_text(d) if d.rows
                      else f"สรุปข้อมูลคดีและบันทึกการติดต่อ: ไม่มีคดีที่โทรวันที่ "
                           f"{thai_date_full(d.day, thai_digits=False)}")

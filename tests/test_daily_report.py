@@ -296,7 +296,8 @@ def test_push_sends_three_text_messages(line, day_calls):
     assert path == "/message/push" and payload["to"] == "Cgroup1"
     report_msg, diary_msg, cases_msg = [m["text"] for m in payload["messages"]]
     assert report_msg.startswith("เรียนผู้บังคับบัญชา") and day_calls[0].receipt_no not in report_msg
-    assert diary_msg.startswith("วันนี้( 9 พ.ย.69)") and day_calls[0].receipt_no in diary_msg
+    assert diary_msg == report.diary_file_text(report.load(DAY))  # as the unit's file: the list only
+    assert diary_msg.startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: ") and "วันนี้(" not in diary_msg
     assert cases_msg.startswith("สรุปข้อมูลคดีและบันทึกการติดต่อ") and cases_msg.count("\nผู้เสียหาย: ") == 7
     assert len([x for x in line if x[1] == "/message/push"]) == 1  # one request: one quota count per member
     # turned off: the report only
