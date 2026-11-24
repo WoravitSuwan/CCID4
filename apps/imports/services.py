@@ -182,6 +182,8 @@ class Analysis:
     changes_by_key: dict = field(default_factory=dict)  # key -> {field: new value}
     status_changes: Counter = field(default_factory=Counter)  # (old, new) -> n
     looks_like_update: bool = False  # a big-system file picked as "ทะเบียนคดี"
+    contact_only: bool = False  # the unit's own register loaded as an update: only its contact log is taken
+    contact_unknown: int = 0  # rows of such a file whose case is not in the system (not added)
     ranks: dict = field(default_factory=dict)  # investigator key -> full rank written by the big system
     remove_count: int = 0  # cases of another unit already in the system, removed on import
     remove_calls: int = 0
@@ -506,10 +508,27 @@ def _same_person(a, b) -> bool:
 
 def _diff_update(analysis: Analysis):
     """Weekly file: what changes for each case already here (only fields the file has, only non-empty values,
-    never the unit), and which new cases of our unit are added. The contact log only when the file has that column
-    (the unit's register, where staff write their calls; the big system's file has none)."""
+    never the unit), and which new cases of our unit are added.
+    A file with a contact log column is the unit's own register, where staff write their calls (the big system's
+    file has none): from it only the contact log is taken. Its statuses and other columns are older than the big
+    system's and would undo the weekly update (สิ้นสุด back to อายัดบัญชี), and it adds no cases."""
     existing = _existing(Case, analysis.rows.keys(), select_related=("status",))
     present = set(analysis.present)
+    if "contact_log" in present:
+        analysis.contact_only = True
+        for key, prow in analysis.rows.items():
+            obj = existing.get(key)
+            if obj is None:
+                analysis.contact_unknown += 1
+                continue
+            log = prow.values["contact_log"]
+            if log and _norm_cmp(log) != _norm_cmp(obj.contact_log):
+                analysis.updated_keys.append(key)
+                analysis.changes_by_key[key] = {"contact_log": log}
+                analysis.change_counts["บันทึกการติดต่อ"] += 1
+            else:
+                analysis.unchanged += 1
+        return
     labels = field_labels(ImportKind.REGISTER)
     labels.update({"report_date": "วันที่รับแจ้ง", "status_name": "สถานะ"})
     statuses = set(Status.objects.values_list("name", flat=True))
@@ -544,8 +563,6 @@ def _diff_update(analysis: Analysis):
                 if f == "investigator_raw" and _same_person(v[f], obj.investigator_raw):
                     continue  # only the rank differs
                 changes[f] = v[f]
-        if "contact_log" in present and v["contact_log"] and _norm_cmp(v["contact_log"]) != _norm_cmp(obj.contact_log):
-            changes["contact_log"] = v["contact_log"]
         if "report_day" in present and v["report_date"] and v["report_date"] != obj.report_date:
             changes["report_date"] = v["report_date"]
         if "damage_amount" in present and v["damage_amount"] is not None \
@@ -607,6 +624,7 @@ def summary_dict(analysis: Analysis) -> dict:
         "remove_calls": analysis.remove_calls,
         "kept_with_summons": analysis.kept_with_summons,
         "looks_like_update": analysis.looks_like_update,
+        "contact_only": analysis.contact_only, "contact_unknown": analysis.contact_unknown,
         "matched": len(analysis.rows) - len(analysis.new_keys) if analysis.kind == ImportKind.UPDATE else None,
         "status_changes": [f"{old} → {new}: {n:,} คดี" for (old, new), n in analysis.status_changes.most_common()],
         "to_final": sum(n for (old, new), n in analysis.status_changes.items() if new in FINAL_BY_DEFAULT),

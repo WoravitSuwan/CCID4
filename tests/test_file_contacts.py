@@ -168,3 +168,24 @@ def test_excel_date_cells(text, day, time):
     assert (entry["day"], entry["time"], entry["outcome"]) == (day, time, "")
     d = report.Day(day)
     assert d.counts["total"] == 0  # (sanity: an empty day)
+
+
+def test_the_units_register_never_undoes_the_big_systems_update(tmp_path, four):
+    """The register's statuses are older than the weekly file: only its contact log is taken, no case added."""
+    from apps.registry.models import Status
+
+    a, b = four[:2]
+    final = Status.objects.get(name="สิ้นสุด")
+    Case.objects.filter(pk=a.pk).update(status=final, victim_name="ชื่อจากระบบใหญ่")
+    batch = load(tmp_path, [
+        {"เลขรับแจ้ง": a.receipt_no, "ผู้เสียหาย": "ชื่อเก่าในทะเบียน", "สถานะ": "อายัดบัญชี",
+         "บันทึกการติดต่อ": "ไม่ประสงค์ดำเนินคดี วันที่ 20 พ.ย. 2569 เวลา 09.27 น."},
+        {"เลขรับแจ้ง": "L69999999999", "ผู้เสียหาย": "คดีที่ไม่มีในระบบ", "หน่วยที่รับผิดชอบ": "กก.1 บก.สอท.4",
+         "สถานะ": "อายัดบัญชี", "บันทึกการติดต่อ": "ประสงค์ดำเนินคดี 20 พ.ย. 69"},
+    ])
+    a.refresh_from_db()
+    s = batch.summary
+    assert s["contact_only"] and s["updated"] == 1 and s["contact_unknown"] == 1 and s["new"] == 0
+    assert a.status == final and a.victim_name == "ชื่อจากระบบใหญ่"  # untouched
+    assert "ไม่ประสงค์ดำเนินคดี วันที่ 20 พ.ย. 2569" in a.contact_log
+    assert not Case.objects.filter(receipt_no="L69999999999").exists()
