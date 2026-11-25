@@ -75,18 +75,19 @@ def test_one_caller_only(day_calls, admin_user, caller):
     assert report.caller_ids(DAY) == {admin_user.pk, caller.pk}
 
 
-def test_diary_text_follows_the_staff_template(day_calls):
-    text = report.diary_text(report.load(DAY))
-    lines = text.split("\n")
-    assert lines[0].startswith("วันนี้( 9 พ.ย.69) พนักงานสอบสวน กก.1บก.สอท.4  ได้ทำการโทรศัพท์ติดต่อผู้เสียหาย")
-    assert "Thaipoliceonline.com/สายด่วน 1441" in lines[0]
-    assert lines[1] == "พบว่ามีผู้เสียหายไม่ประสงค์พบพนักงานสอบสวนและไม่ประสงค์ดำเนินคดี ดังนี้"
-    assert lines[2] == ""
+def test_diary_text_follows_the_units_format(day_calls):
+    """ไม่ประสงค์ดำเนินคดี จำนวน n Case ดังนี้ / per investigator: "<name> จำนวน n Case" and their victims -
+    the same text on the page, in the .txt file and in LINE."""
+    d = report.load(DAY)
+    text = report.diary_text(d)
     c0, c1 = day_calls[0], day_calls[1]
-    assert lines[3] == f"1. ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: {c0.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0811111111"
-    assert lines[4] == f"2. ผู้เสียหาย: นายทดสอบ สอง เลขรับแจ้ง: {c1.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0899999999"
-    assert lines[-1] == "จึงลงบันทึกไว้เป็นหลักฐาน เพื่อที่จะดำเนินการในส่วนที่เกี่ยวข้องต่อไป"
+    assert text.split("\n") == [
+        "ไม่ประสงค์ดำเนินคดี จำนวน 2 Case ดังนี้", "",
+        "หญิงสุดา รักษ์ดี จำนวน 2 Case",
+        f"ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: {c0.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0811111111",
+        f"ผู้เสียหาย: นายทดสอบ สอง เลขรับแจ้ง: {c1.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0899999999"]
     assert "{" not in text and day_calls[2].receipt_no not in text  # only the not-want cases
+    assert report.diary_file_text(d) == text
 
 
 def test_summary_text_for_the_commanders(day_calls):
@@ -139,7 +140,7 @@ def test_page_texts_and_text_files(client, caller, day_calls):
     page = client.get("/reports/daily/", {"date": "2026-11-09"})
     assert page.status_code == 200
     html = page.content.decode()
-    assert "วันนี้( 9 พ.ย.69)" in html and "จำนวน 7 Case ID" in html and 'data-copy="#t-diary"' in html
+    assert "ไม่ประสงค์ดำเนินคดี จำนวน 2 Case ดังนี้" in html and "จำนวน 7 Case ID" in html and 'data-copy="#t-diary"' in html
     assert "ยังส่งไม่ได้: ยังไม่ได้ใส่รหัสเชื่อมต่อ LINE" in html and "แจ้งผู้ดูแลระบบ" in html  # not set up
     diary = client.get("/reports/daily/", {"date": "2026-11-09", "format": "diary"})
     assert "%E0%B8%A5%E0%B8%87%E0%B8%9A%E0%B8%B1%E0%B8%99%E0%B8%97%E0%B8%B6%E0%B8%81" in diary["Content-Disposition"]

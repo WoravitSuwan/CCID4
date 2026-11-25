@@ -141,7 +141,8 @@ def test_diary_wording_can_be_changed_and_locked_too(client, imported, caller):
     record_call(case, caller, outcome=CallOutcome.NOT_PROCEED, phone="0811111111")
     client.force_login(caller)
     page = client.get("/reports/daily/")
-    assert page.context["diary"].startswith("วันนี้(") and case.receipt_no in page.context["diary"]
+    assert page.context["diary"].startswith("ไม่ประสงค์ดำเนินคดี จำนวน 1 Case ดังนี้\n\n")
+    assert case.receipt_no in page.context["diary"]
     assert page.context["diary"] == report.diary_text(report.load(timezone.localdate()), report.DEFAULT_DIARY_TEMPLATE)
     client.post("/reports/daily/", {"action": "template_unlock", "which": "diary"})
     s = SystemSetting.get()
@@ -158,11 +159,11 @@ def test_diary_wording_can_be_changed_and_locked_too(client, imported, caller):
     diary = client.get("/reports/daily/").context["diary"]
     assert diary.startswith("บันทึกประจำวัน ") and "\nไม่ประสงค์ 1 ราย\n" in diary and case.receipt_no in diary
     assert diary.endswith("ลงชื่อ ................") and "{" not in diary
-    # the LINE message about ไม่ประสงค์ดำเนินคดี stays as it was
+    # the LINE message and the .txt file are the same text
     from apps.calls import line_bot
-    assert line_bot.texts_for(timezone.localdate(), with_texts=True)[1].startswith("ไม่ประสงค์ดำเนินคดี จำนวน 1 Case")
+    assert line_bot.texts_for(timezone.localdate(), with_texts=True)[1] == diary
     client.post("/reports/daily/", {"action": "template_reset", "which": "diary"})
-    assert client.get("/reports/daily/").context["diary"].startswith("วันนี้(")
+    assert client.get("/reports/daily/").context["diary"].startswith("ไม่ประสงค์ดำเนินคดี จำนวน 1 Case ดังนี้")
 
 
 def test_diary_wording_can_be_opened_on_a_day_with_nobody_listed(client, imported, caller):

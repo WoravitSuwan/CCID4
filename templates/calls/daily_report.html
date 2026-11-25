@@ -100,7 +100,7 @@
     <div class="msg-card-head">
       <span class="msg-card-icon bg-slate-100 text-slate-600">{% icon "pencil" "h-5 w-5" %}</span>
       <div class="min-w-0 flex-1"><h2 class="text-base font-semibold text-slate-800">ข้อความลงบันทึกประจำวัน</h2>
-        <span class="text-xs text-slate-500">รายชื่อผู้ที่ไม่ประสงค์ดำเนินคดีของวันนี้ ({{ counts.not_want|intcomma }} ราย)</span></div>
+        <span class="text-xs text-slate-500">ไม่ประสงค์ดำเนินคดี {{ counts.not_want|intcomma }} ราย แยกตามพนักงานสอบสวน · ใช้ข้อความเดียวกันนี้ส่งเข้า LINE</span></div>
       {% if diary_template.locked %}<span class="lock-badge" title="แก้รูปแบบได้หลังกดปลดล็อก">{% icon "lock" "h-3.5 w-3.5" %} ล็อกรูปแบบแล้ว</span>
       {% else %}<span class="lock-badge is-open">{% icon "lock-open" "h-3.5 w-3.5" %} กำลังแก้รูปแบบ</span>{% endif %}
     </div>

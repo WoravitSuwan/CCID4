@@ -163,16 +163,9 @@ DEFAULT_SUMMARY_TEMPLATE = "\n".join([
     "",
     "จึงเรียนมาเพื่อโปรดทราบ",
 ])
-DEFAULT_DIARY_TEMPLATE = "\n".join([
-    "วันนี้( {วันที่สั้น}) พนักงานสอบสวน {หน่วย}  ได้ทำการโทรศัพท์ติดต่อผู้เสียหายที่แจ้งความออนไลน์ "
-    "ผ่านระบบ Thaipoliceonline.com/สายด่วน 1441 เพื่อมาให้ถ้อยคำเพิ่มเติมพร้อมนำพยานหลักฐานที่เกี่ยวข้องกับคดี"
-    "มามอบให้กับพนักงานสอบสวน",
-    "พบว่ามีผู้เสียหายไม่ประสงค์พบพนักงานสอบสวนและไม่ประสงค์ดำเนินคดี ดังนี้",
-    "",
-    "{รายชื่อ}",
-    "",
-    "จึงลงบันทึกไว้เป็นหลักฐาน เพื่อที่จะดำเนินการในส่วนที่เกี่ยวข้องต่อไป",
-])
+# ลงบันทึกประจำวัน: the total, then one block per investigator (their count, then their victims one a line)
+DEFAULT_DIARY_TEMPLATE = "ไม่ประสงค์ดำเนินคดี จำนวน {จำนวน} Case ดังนี้\n\n{รายชื่อแยกพนักงานสอบสวน}"
+NOBODY_NOT_WANT = "ไม่ประสงค์ดำเนินคดี จำนวน 0 Case"
 SUMMARY_FIELDS = {  # placeholder -> what it becomes (shown next to the editor)
     "วันที่": "วันที่ เช่น 25 พฤศจิกายน 2569",
     "ผู้โทร": "เจ้าหน้าที่ Outsource (มีชื่อเมื่อเลือกผู้โทร)",
@@ -298,7 +291,10 @@ def summary_text(d: Day, template: str | None = None) -> str:
 
 
 def diary_text(d: Day, template: str | None = None) -> str:
-    """ลงบันทึกประจำวัน: the victims called that day who said they do not want to proceed."""
+    """ลงบันทึกประจำวัน: the victims called that day who said they do not want to proceed - on the page, in the
+    .txt file and in the LINE message, all from the one wording (which can be changed on the page)."""
+    if not d.not_want:
+        return NOBODY_NOT_WANT  # nobody to list: no "ดังนี้" followed by nothing
     return render(template if template is not None else wording_state("diary")["text"], diary_values(d))
 
 
@@ -375,19 +371,13 @@ def by_investigator(rows: list[Row]) -> list[tuple[str, list[Row]]]:
 
 
 def diary_file_text(d: Day) -> str:
-    """ไม่ประสงค์ดำเนินคดี: the total, then one block per investigator with their count and their victims, one
-    line each:
+    """ลงบันทึกประจำวัน as sent to LINE and saved as .txt (the same text as on the page):
         ไม่ประสงค์ดำเนินคดี จำนวน 9 Case ดังนี้
 
         พ.ต.ต.สมชาย ใจดี จำนวน 3 Case
         ผู้เสียหาย: … เลขรับแจ้ง: … เบอร์โทรศัพท์ผู้เสียหาย: …
     """
-    rows = d.not_want
-    parts = [f"ไม่ประสงค์ดำเนินคดี จำนวน {len(rows):,} Case" + (" ดังนี้" if rows else "")]
-    for name, group in by_investigator(rows):
-        parts.append("\n".join([f"{name} จำนวน {len(group):,} Case"] + [
-            f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}" for r in group]))
-    return "\n\n".join(parts)
+    return diary_text(d)
 
 
 SUMMARY_FILE_TITLE = "สรุปข้อมูลคดีและบันทึกการติดต่อ"
