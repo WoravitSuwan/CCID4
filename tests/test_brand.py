@@ -81,3 +81,13 @@ def test_animated_emblem_line_button_and_sankey_tones(client, admin_user, import
     css = (Path(settings.BASE_DIR) / "static" / "css" / "app.css").read_text()
     # band colours are built in the template, so they must survive Tailwind's clean-up
     assert ".sk-stop-good{" in css and ".sk-stop-drop{" in css and "prefers-reduced-motion" in css
+
+
+def test_login_points_line_up_and_rise_in(client, db):
+    html = client.get("/accounts/login/").content.decode()
+    assert html.count('class="login-point"') == 4 and html.count('class="login-point-text"') == 4
+    assert "ใช้งานภายในหน่วยงานเท่านั้น</span></li>" in html  # the fourth point, laid out like the others
+    css = (Path(settings.BASE_DIR) / "static" / "css" / "app.css").read_text()
+    assert ".login-point{display:flex;align-items:flex-start" in css and "@keyframes point-in" in css
+    assert "translateY(8px)" in css and "cubic-bezier(.22,1,.36,1)" in css
+    assert ".login-point{animation:none!important;opacity:1" in css  # reduced motion: shown at once
