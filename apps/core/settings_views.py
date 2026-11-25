@@ -403,9 +403,10 @@ def logo_content_type(data: bytes) -> str:
 
 class SystemForm(StyledModelForm):
     logo = forms.FileField(label="โลโก้หน่วย (PNG / JPG / WebP ไม่เกิน 2 MB)", required=False,
-                           help_text="แสดงที่แถบเมนู หน้าเข้าสู่ระบบ และไอคอนแท็บเบราว์เซอร์ แนะนำรูปสี่เหลี่ยมจัตุรัส พื้นหลังโปร่งใส",
+                           help_text="ใช้แทนโลโก้ CCID4 ที่แถบเมนู หน้าเข้าสู่ระบบ และไอคอนแท็บเบราว์เซอร์ "
+                                     "แนะนำรูปสี่เหลี่ยมจัตุรัส พื้นหลังโปร่งใส",
                            widget=forms.ClearableFileInput(attrs={"accept": "image/png,image/jpeg,image/webp"}))
-    remove_logo = forms.BooleanField(label="ลบโลโก้ (กลับไปใช้ไอคอนเดิม)", required=False)
+    remove_logo = forms.BooleanField(label="ลบโลโก้ที่อัปโหลด (กลับไปใช้โลโก้ CCID4)", required=False)
 
     class Meta:
         model = SystemSetting

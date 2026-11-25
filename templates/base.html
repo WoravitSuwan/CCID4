@@ -3,26 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}ระบบออกหมายเรียก{% endblock %} · บก.สอท.4</title>
+  <title>{% block title %}ระบบออกหมายเรียก{% endblock %} · CCID4</title>
+  <meta name="theme-color" content="#0b1a36">
   <link rel="preload" href="{% static 'fonts/sarabun-thai-400-normal.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  {% if logo_version %}<link rel="icon" href="{% url 'branding_logo' %}?v={{ logo_version }}">{% endif %}
+  <link rel="icon" href="{{ brand_icon }}">
+  {% if not brand_custom %}<link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/brand/favicon-32.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/brand/apple-touch-icon.png' %}">{% endif %}
   <script src="{% static 'js/htmx.min.js' %}" defer></script>
   <script src="{% static 'js/ui.js' %}" defer></script>
 </head>
-<body class="h-full" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body class="h-full" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'{% if user.is_authenticated %} data-search-url="{% if is_outsource %}{% url 'calls_queue' %}?tab=all&amp;year=&amp;state=&amp;q={% else %}{% url 'case_list' %}?scope=all&amp;q={% endif %}"{% endif %}>
 {% if user.is_authenticated %}
 {% with u=request.resolver_match.url_name %}
 <div class="min-h-full lg:pl-64">
   <!-- sidebar -->
-  <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 text-white transition-transform lg:translate-x-0">
-    <div class="flex items-center gap-3 px-5 py-5">
-      {% if logo_version %}<img src="{% url 'branding_logo' %}?v={{ logo_version }}" alt="โลโก้หน่วย" class="h-11 w-11 shrink-0 rounded-lg bg-white object-contain p-0.5">{% else %}<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-400/30">{% icon "shield" "h-6 w-6" %}</div>{% endif %}
-      <div class="leading-tight">
-        <div class="text-sm font-semibold">ระบบออกหมายเรียก</div>
-        <div class="text-xs text-slate-400">กก.1 บก.สอท.4</div>
-      </div>
-    </div>
+  <aside id="sidebar" class="cmd-sidebar fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col text-white transition-transform duration-300 ease-out lg:translate-x-0">
+    <a href="{% if is_outsource %}{% url 'calls_queue' %}{% else %}{% url 'dashboard' %}{% endif %}" class="brand">
+      <span class="brand-mark"><img src="{{ brand_logo }}" alt="โลโก้ CCID4" width="48" height="48"></span>
+      <span class="leading-tight">
+        <span class="brand-name">CCID4</span>
+        <span class="brand-sub">ระบบออกหมายเรียก</span>
+        <span class="brand-sub text-slate-400">กก.1 บก.สอท.4</span>
+      </span>
+    </a>
+    <button type="button" class="cmd-open" data-cmd-open title="ค้นหาเมนูหรือคดี (Ctrl + K)">
+      {% icon "search" "h-4 w-4" %} <span class="flex-1 text-left">ค้นหาเร็ว…</span><kbd>Ctrl K</kbd>
+    </button>
     <nav class="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
       {% if is_outsource %}
       <a class="side-link {% if u and 'call' in u %}active{% endif %}" href="{% url 'calls_queue' %}">{% icon "phone" %} รายการที่ต้องโทร</a>
@@ -52,7 +59,7 @@
     </nav>
     <div class="border-t border-white/10 p-4">
       <div class="flex items-center gap-3">
-        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold">{{ user.display_name|slice:":1" }}</div>
+        <div class="user-avatar">{{ user.display_name|slice:":1" }}</div>
         <div class="min-w-0 flex-1 leading-tight">
           <div class="truncate text-sm font-medium">{{ user.display_name }}</div>
           <div class="text-xs text-slate-400">{{ user.role_label }}</div>
@@ -64,12 +71,14 @@
       </div>
     </div>
   </aside>
-  <div id="backdrop" class="fixed inset-0 z-30 hidden bg-slate-900/50 lg:hidden" onclick="toggleNav()"></div>
+  <div id="backdrop" class="fixed inset-0 z-30 hidden bg-slate-950/60 backdrop-blur-[1px] lg:hidden" onclick="toggleNav()"></div>
 
   <!-- mobile top bar -->
-  <div class="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-2.5 backdrop-blur lg:hidden">
-    <button class="btn btn-ghost btn-sm" onclick="toggleNav()" aria-label="เมนู">{% icon "menu" %}</button>
-    <span class="text-sm font-semibold">ระบบออกหมายเรียก บก.สอท.4</span>
+  <div class="mobile-bar sticky top-0 z-20 flex items-center gap-3 px-4 py-2 lg:hidden">
+    <button class="btn btn-ghost btn-sm text-white hover:bg-white/10 hover:text-white" onclick="toggleNav()" aria-label="เมนู">{% icon "menu" %}</button>
+    <img src="{{ brand_logo_small }}" alt="" class="h-8 w-8 object-contain drop-shadow" width="32" height="32">
+    <span class="leading-tight"><span class="block text-sm font-bold tracking-wider text-white">CCID4</span><span class="block text-[11px] text-slate-300">ระบบออกหมายเรียก · กก.1 บก.สอท.4</span></span>
+    <button type="button" class="btn btn-ghost btn-sm ml-auto text-white hover:bg-white/10 hover:text-white" data-cmd-open aria-label="ค้นหาเร็ว">{% icon "search" %}</button>
   </div>
 
   {% if demo_mode %}

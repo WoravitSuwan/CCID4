@@ -11,7 +11,7 @@
     {% if f.field.widget.input_type == 'checkbox' %}<label class="flex items-center gap-2 text-sm">{{ f }} {{ f.label }}</label>
     {% else %}<label class="label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{% endif %}
     {% if f.help_text %}<span class="helptext">{{ f.help_text }}</span>{% endif %}{{ f.errors }}
-    {% if f.name == "logo" and logo_version %}<div class="mt-2 flex items-center gap-2 text-xs text-slate-500"><img src="{% url 'branding_logo' %}?v={{ logo_version }}" alt="" class="h-12 w-12 rounded border border-slate-200 object-contain"> โลโก้ที่ใช้อยู่</div>{% endif %}
+    {% if f.name == "logo" %}<div class="mt-2 flex items-center gap-2 text-xs text-slate-500"><img src="{{ brand_logo }}" alt="" class="h-12 w-12 rounded border border-slate-200 bg-slate-900 object-contain p-0.5"> {% if brand_custom %}โลโก้ที่อัปโหลดไว้ (ใช้แทนโลโก้ CCID4){% else %}ตอนนี้ใช้โลโก้ CCID4 (ค่าเริ่มต้น){% endif %}</div>{% endif %}
   </div>
   {% endfor %}
   {% if suggestions %}<div class="rounded bg-blue-50 p-2 text-sm text-blue-900">ชื่อที่ใกล้เคียง: {% for s in suggestions %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %} (เลือกในช่อง "พนักงานสอบสวนที่ผูกไว้" ด้วยตนเอง)</div>{% endif %}

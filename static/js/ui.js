@@ -107,15 +107,33 @@
   document.addEventListener("htmx:beforeRequest", startBar);
   document.addEventListener("htmx:afterRequest", stopBar);
 
-  /* copy buttons: <button data-copy="#textarea-id"> (works on plain http too, where the clipboard API is missing) */
+  /* copy buttons: <button data-copy="#textarea-id">, or <button data-copy-text="L6800123456"> for a number
+     (works on plain http too, where the clipboard API is missing) */
   document.addEventListener("click", function (e) {
-    const btn = e.target.closest && e.target.closest("[data-copy]");
+    const btn = e.target.closest && e.target.closest("[data-copy], [data-copy-text]");
     if (!btn) return;
-    const src = document.querySelector(btn.getAttribute("data-copy"));
+    e.preventDefault();
+    e.stopPropagation();  // inside a clickable table row: copy only, do not open the case
+    let src = btn.hasAttribute("data-copy") ? document.querySelector(btn.getAttribute("data-copy")) : null;
+    if (btn.hasAttribute("data-copy-text")) {  // a hidden box to select from when the clipboard API is missing
+      src = document.createElement("textarea");
+      src.value = btn.getAttribute("data-copy-text");
+      src.setAttribute("readonly", "");
+      src.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(src);
+      setTimeout(function () { src.remove(); }, 0);
+    }
     if (!src) return;
     const text = "value" in src ? src.value : src.textContent;
-    const label = btn.querySelector("[data-copy-label]") || btn;
+    const label = btn.querySelector("[data-copy-label]") || (btn.hasAttribute("data-copy-text") ? null : btn);
     const done = function (ok) {
+      if (!label) {  // an icon button: a tick for a moment, the result in its tooltip
+        btn.classList.toggle("is-copied", ok);
+        btn.title = ok ? "คัดลอกแล้ว" : "คัดลอกไม่ได้";
+        clearTimeout(btn._copyTimer);
+        btn._copyTimer = setTimeout(function () { btn.classList.remove("is-copied"); btn.title = "คัดลอก"; }, 1600);
+        return;
+      }
       if (!label.dataset.text) label.dataset.text = label.textContent;
       label.textContent = ok ? "คัดลอกแล้ว ✓" : "คัดลอกไม่ได้ (เลือกข้อความแล้วกด Ctrl+C)";
       btn.classList.toggle("is-copied", ok);
@@ -182,6 +200,81 @@
   ["scroll", "resize"].forEach(function (ev) {
     window.addEventListener(ev, function () { document.querySelectorAll("[data-col-filter][open]").forEach(placePanel); }, true);
   });
+
+  /* keyboard: "/" jumps to the page's search box; Ctrl + K (or ⌘ K) opens the quick search */
+  function typing(el) {
+    return el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  }
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      openCmdk();
+      return;
+    }
+    if (e.key === "/" && !typing(document.activeElement) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const box = document.querySelector('main input[name="q"]');
+      if (box) { e.preventDefault(); box.focus(); box.select(); }
+    }
+  });
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("[data-cmd-open]")) { e.preventDefault(); openCmdk(); }
+  });
+
+  /* quick search: the menu's pages, and "search cases for ..." (Enter) */
+  function openCmdk() {
+    if (document.querySelector(".cmdk-backdrop")) return;
+    const links = Array.prototype.map.call(document.querySelectorAll("#sidebar a.side-link"), function (a) {
+      return { label: a.textContent.replace(/\s+/g, " ").trim(), href: a.getAttribute("href"), icon: a.querySelector("svg") };
+    });
+    const searchUrl = document.body.getAttribute("data-search-url");
+    const back = document.createElement("div");
+    back.className = "cmdk-backdrop";
+    back.innerHTML = '<div class="cmdk" role="dialog" aria-modal="true" aria-label="ค้นหาเร็ว">' +
+      '<input class="cmdk-input" type="text" placeholder="พิมพ์ชื่อเมนู หรือ เลขรับแจ้ง / ชื่อ / เบอร์ แล้วกด Enter" aria-label="ค้นหาเร็ว">' +
+      '<div class="cmdk-list" role="listbox"></div>' +
+      '<div class="cmdk-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> เลือก</span><span><kbd>Enter</kbd> เปิด</span><span><kbd>Esc</kbd> ปิด</span><span><kbd>/</kbd> ไปที่ช่องค้นหาของหน้า</span></div></div>';
+    document.body.appendChild(back);
+    const input = back.querySelector("input"), list = back.querySelector(".cmdk-list");
+    let items = [], active = 0;
+    function close() { back.remove(); document.removeEventListener("keydown", keys, true); }
+    function go(item) { if (!item) return; close(); startBar(); location.href = item.href; }
+    function render() {
+      const q = input.value.trim().toLowerCase();
+      items = links.filter(function (l) { return !q || l.label.toLowerCase().indexOf(q) >= 0; });
+      if (q && searchUrl) items.push({ label: "ค้นหาคดี “" + input.value.trim() + "”", href: searchUrl + encodeURIComponent(input.value.trim()), search: true });
+      active = Math.min(active, Math.max(items.length - 1, 0));
+      list.innerHTML = "";
+      items.forEach(function (it, i) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "cmdk-item" + (i === active ? " is-active" : "");
+        b.setAttribute("role", "option");
+        if (it.icon) b.appendChild(it.icon.cloneNode(true));
+        else b.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" d="m21 21-5.2-5.2M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/></svg>');
+        b.appendChild(document.createTextNode(it.label));
+        b.addEventListener("mouseenter", function () { active = i; mark(); });
+        b.addEventListener("click", function () { go(it); });
+        list.appendChild(b);
+      });
+      if (!items.length) list.innerHTML = '<div class="px-3 py-6 text-center text-sm text-slate-400">ไม่พบเมนู</div>';
+    }
+    function mark() {
+      Array.prototype.forEach.call(list.children, function (el, i) { el.classList.toggle("is-active", i === active); });
+      const el = list.children[active];
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    }
+    function keys(e) {
+      if (e.key === "Escape") { e.preventDefault(); close(); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(active + 1, items.length - 1); mark(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(active - 1, 0); mark(); }
+      else if (e.key === "Enter") { e.preventDefault(); go(items[active] || (items.length ? items[0] : null)); }
+    }
+    document.addEventListener("keydown", keys, true);
+    input.addEventListener("input", function () { active = 0; render(); });
+    back.addEventListener("mousedown", function (e) { if (e.target === back) close(); });
+    render();
+    input.focus();
+  }
 
   /* messages */
   function closeAlert(el) {

@@ -1,6 +1,6 @@
-{% load thai %}{# no <form> here: this cell sits inside the list's export form #}<div class="ems-cell min-w-[11rem]">
+{% load thai ui %}{# no <form> here: this cell sits inside the list's export form #}<div class="ems-cell min-w-[11rem]">
 {% if s.ems_number and not ems_error %}
-  <a href="{{ s.ems_tracking_url }}" target="_blank" rel="noopener noreferrer" class="font-mono text-sm font-medium" title="ติดตามพัสดุที่ไปรษณีย์ไทย">{{ s.ems_number }}</a>
+  <a href="{{ s.ems_tracking_url }}" target="_blank" rel="noopener noreferrer" class="font-mono text-sm font-medium" title="ติดตามพัสดุที่ไปรษณีย์ไทย">{{ s.ems_number }}</a>{% copy_btn s.ems_number "เลข EMS" %}
   <div class="text-[11px] text-slate-400">{{ s.ems_by.display_name|default:"-" }} · {{ s.ems_at|thai_date:"datetime" }}</div>
   <details class="text-[11px]"><summary class="cursor-pointer text-slate-400 hover:text-slate-700">แก้ / ลบ</summary>
     <div class="mt-1 flex gap-1">

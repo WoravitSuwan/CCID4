@@ -14,7 +14,7 @@
   <div class="space-y-5 lg:col-span-2">
     <div class="card">
       <div class="flex items-center gap-2">
-        <span class="font-mono text-lg font-semibold">{{ case.receipt_no }}</span>
+        <span class="font-mono text-lg font-semibold">{{ case.receipt_no }}</span>{% copy_btn case.receipt_no "เลขรับแจ้ง" %}
         {% if assignment.is_done %}<span class="badge badge-green">ติดต่อเสร็จแล้ว</span>{% endif %}
       </div>
       <div class="mt-1 text-xl font-semibold text-slate-900">{% if case.victim_name %}{{ case.victim_name }}{% elif case.complainant %}{{ case.complainant.full_name|default:"-" }}{% else %}-{% endif %}</div>

@@ -61,6 +61,15 @@ FALLBACK = ["status-teal", "status-orange", "status-pink", "status-lime"]
 
 
 @register.simple_tag
+def copy_btn(value, what="ข้อความ"):
+    """A small icon button that copies `value` (เลขรับแจ้ง, เลข EMS, เบอร์...) with a tick when done."""
+    if not value:
+        return ""
+    return format_html('<button type="button" class="copy-btn" data-copy-text="{}" title="คัดลอก{}" '
+                       'aria-label="คัดลอก{} {}">{}</button>', value, what, what, value, icon("clipboard"))
+
+
+@register.simple_tag
 def icon(name, css="h-5 w-5"):
     path = ICONS.get(name, ICONS["info"])
     return format_html(

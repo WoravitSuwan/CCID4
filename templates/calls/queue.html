@@ -125,7 +125,7 @@
     {% for a in page %}
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
         {% if can_issue %}<td data-label="เลือก"><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
-        <td class="whitespace-nowrap" data-label="เลขรับแจ้ง"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a>
+        <td class="whitespace-nowrap" data-label="เลขรับแจ้ง"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a>{% copy_btn a.case.receipt_no "เลขรับแจ้ง" %}
           {% with other=a|opened_by_other:user %}{% if other %}<span class="badge badge-amber mt-1" title="{{ other.display_name }} เปิดคดีนี้อยู่">{% icon "phone" "h-3 w-3" %} {{ other.first_name|default:other.username }} กำลังเปิดอยู่</span>{% endif %}{% endwith %}</td>
         <td class="whitespace-nowrap text-sm" data-label="วันที่รับแจ้ง">{{ a.case.report_date|thai_date }}</td>
         <td class="min-w-[9rem] max-w-[15rem]" data-label="ผู้เสียหาย"><div class="font-medium">{% if a.case.victim_name %}{{ a.case.victim_name }}{% elif a.case.complainant %}{{ a.case.complainant.full_name }}{% else %}-{% endif %}</div><div class="font-mono text-sm text-slate-700">{% if a.case.victim_phone %}{{ a.case.victim_phone }}{% elif a.case.complainant.phone %}{{ a.case.complainant.phone }}{% else %}-{% endif %}</div>{% if a.case.case_type %}<div class="truncate text-xs text-slate-400 2xl:hidden" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div>{% endif %}</td>

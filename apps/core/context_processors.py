@@ -26,8 +26,24 @@ def logo_version():
     return int(stamp.timestamp()) if stamp else None
 
 
+def brand(version) -> dict:
+    """The logo everywhere (menu, login, browser tab): the one uploaded in ตั้งค่า > ระบบ, else the CCID4 shield."""
+    from django.templatetags.static import static
+    from django.urls import reverse
+
+    if version:
+        url = f"{reverse('branding_logo')}?v={version}"
+        return {"brand_logo": url, "brand_logo_small": url, "brand_logo_big": url, "brand_icon": url,
+                "brand_custom": True}
+    return {"brand_logo": static("img/brand/ccid4-logo-128.png"),
+            "brand_logo_small": static("img/brand/ccid4-logo-64.png"),
+            "brand_logo_big": static("img/brand/ccid4-logo-256.png"),
+            "brand_icon": static("img/brand/favicon.ico"), "brand_custom": False}
+
+
 def app_context(request):
-    base = {"demo_mode": settings.DEMO_MODE, "logo_version": logo_version()}
+    version = logo_version()
+    base = {"demo_mode": settings.DEMO_MODE, "logo_version": version, **brand(version)}
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         if settings.DEMO_MODE:
