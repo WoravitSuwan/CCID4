@@ -36,7 +36,9 @@ from . import funnel
 from .models import OPEN_LOCK_MINUTES, REACHED, SHORT_LABELS, CallAssignment, CallAttachment, CallAttempt, CallOutcome
 from .services import (
     ALLOWED_EXTENSIONS,
+    NEED_CALL_MESSAGE,
     assign,
+    call_state,
     case_phones,
     check_attachments,
     ensure_call_pool,
@@ -465,6 +467,42 @@ def _next_case(request, current_pk):
     return next((pk for pk in order[start:] + order[:start] if pk in wanted), None)
 
 
+TRAIL_KEY, TRAIL_MAX = "calls_trail", 30  # the cases this user opened on the call page, in order (session)
+
+
+def _trail(request, pk, move: bool):
+    """The case opened before this one on the call page (for "ย้อนกลับคดีก่อนหน้า").
+    Opening a case already on the trail goes back to it: the cases after it come off."""
+    trail = [p for p in request.session.get(TRAIL_KEY, []) if isinstance(p, int)]
+    if move:
+        trail = trail[:trail.index(pk) + 1] if pk in trail else (trail + [pk])[-TRAIL_MAX:]
+        request.session[TRAIL_KEY] = trail
+    before = trail[:trail.index(pk)] if pk in trail else trail
+    for prev_pk in reversed(before):
+        prev = Case.objects.filter(pk=prev_pk).first()
+        if prev and perms.can_record_call(request.user, prev):
+            return prev
+    return None
+
+
+def call_next(request, pk):
+    """"ไปคดีถัดไป": only once this case has a call recorded (or another staff member has it open), so a case is
+    not skipped by mistake - checked here too, not only by the locked button."""
+    case = get_object_or_404(Case, pk=pk)
+    if not perms.can_record_call(request.user, case):
+        raise PermissionDenied
+    assignment = CallAssignment.objects.filter(case=case).select_related("opened_by").first()
+    busy_with = assignment.opened_by_other(request.user) if assignment else None
+    if call_state(case) is None and not busy_with:
+        return redirect(f"{reverse('call_case', args=[case.pk])}?need_call=1#call-form")
+    nxt = _next_case(request, case.pk)
+    if nxt:
+        return redirect("call_case", pk=nxt)
+    messages.info(request, "ไม่มีคดีที่ต้องโทรเหลือในรายการแล้ว")
+    back = request.session.get(LIST_KEY, "")
+    return redirect(f"{reverse('calls_queue')}?{back}" if back else "calls_queue")
+
+
 def call_case(request, pk):
     case = get_object_or_404(Case.objects.select_related("complainant", "status", "unit",
                                                          "investigator_alias__investigator"), pk=pk)
@@ -506,7 +544,11 @@ def call_case(request, pk):
     busy_with = assignment.opened_by_other(request.user)
     if request.method == "GET" and not busy_with:  # mark "I have this case open" for the others
         CallAssignment.objects.filter(pk=assignment.pk).update(opened_by=request.user, opened_at=timezone.now())
+    state = call_state(case)
     return render(request, "calls/call.html", {
+        "state": state, "prev_case": _trail(request, case.pk, move=request.method == "GET"),
+        "can_go_next": state is not None or bool(busy_with), "need_call": request.GET.get("need_call") == "1",
+        "need_call_message": NEED_CALL_MESSAGE,
         "previous": previous if not form.is_bound else None, "previous_from": previous_from,
         "busy_with": busy_with, "busy_since": assignment.opened_at if busy_with else None,
         "case": case, "form": form, "phones": phones, "assignment": assignment,
@@ -790,6 +832,10 @@ def daily_report(request):
         if not (perms.is_admin(request.user) or perms.is_outsource(request.user)):
             raise PermissionDenied("ไม่มีสิทธิ์ส่งข้อความเข้า LINE")
         back = f"{reverse('daily_report')}?date={day.isoformat()}"
+        if caller is not None:
+            back += f"&caller={caller.pk}"
+        if request.POST.get("action", "").startswith("template_"):
+            return _report_template_action(request, back)
         if request.POST.get("action") == "auto":  # the automatic daily send: on/off and the time
             setting = SystemSetting.get()
             form = LineAutoForm(request.POST, instance=setting)
@@ -825,7 +871,12 @@ def daily_report(request):
         return resp
 
     s = SystemSetting.get()
+    template = report.summary_template()
     return render(request, "calls/daily_report.html", {
+        "template": {"text": template, "locked": s.report_locked, "custom": template != report.DEFAULT_SUMMARY_TEMPLATE,
+                     "by": s.report_updated_by, "at": s.report_updated_at, "fields": report.SUMMARY_FIELDS,
+                     "values": report.summary_values(d), "standard": report.DEFAULT_SUMMARY_TEMPLATE,
+                     "draft": request.session.pop("report_draft", None)},
         "d": d, "day": day, "today": today, "counts": d.counts, "caller": caller,
         "callers": User.objects.filter(pk__in=report.caller_ids(day)).order_by("first_name", "username"),
         "period_text": report.period_text(d), "stamp": report.stamp(day, caller), "live": day == today,
@@ -843,6 +894,43 @@ def daily_report(request):
                          else "ยังไม่ได้ยืนยันกลุ่ม LINE (เชิญบอทเข้ากลุ่ม แล้วผู้ดูแลระบบกด \"ใช้กลุ่มนี้\")"),
         "query": request.GET.urlencode(),
     })
+
+
+def _report_template_action(request, back):
+    """Unlock the wording of the report for editing, save it (which locks it again), lock it unchanged, or go back
+    to the standard wording. Every change is in the audit log."""
+    from . import daily_report as report
+
+    s = SystemSetting.get()
+    action = request.POST["action"]
+    who = request.user.display_name()
+    if action == "template_unlock":
+        s.report_locked = False
+        s.report_updated_by, s.report_updated_at = who, timezone.now()
+        s.save(update_fields=["report_locked", "report_updated_by", "report_updated_at"])
+        log(request, AuditAction.SETTINGS, s, "ปลดล็อกรูปแบบข้อความรายงานผู้บังคับบัญชาเพื่อแก้ไข")
+        return redirect(back + "#report")
+    if action == "template_save":
+        text = request.POST.get("template", "").replace("\r\n", "\n").strip("\n")
+        problems = report.template_problems(text)
+        if problems:
+            messages.error(request, "ยังบันทึกรูปแบบข้อความไม่ได้: " + " · ".join(problems))
+            request.session["report_draft"] = text  # keep what was typed
+            return redirect(back + "#report")
+        s.report_template = "" if text == report.DEFAULT_SUMMARY_TEMPLATE else text
+        what = "บันทึกรูปแบบข้อความรายงานผู้บังคับบัญชาและล็อกแล้ว"
+    elif action == "template_reset":
+        s.report_template = ""
+        what = "คืนรูปแบบข้อความรายงานผู้บังคับบัญชาเป็นแบบมาตรฐานและล็อกแล้ว"
+    else:  # template_lock: keep the wording as it is
+        what = "ล็อกรูปแบบข้อความรายงานผู้บังคับบัญชา (ไม่ได้แก้)"
+    s.report_locked = True
+    s.report_updated_by, s.report_updated_at = who, timezone.now()
+    s.save(update_fields=["report_template", "report_locked", "report_updated_by", "report_updated_at"])
+    request.session.pop("report_draft", None)
+    log(request, AuditAction.SETTINGS, s, what)
+    messages.success(request, what)
+    return redirect(back + "#report")
 
 
 @csrf_exempt

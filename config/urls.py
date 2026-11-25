@@ -72,6 +72,7 @@ urlpatterns = [
     path("calls/export.xlsx", cv.export_calls, name="calls_export"),
     path("calls/<int:pk>/", cv.call_case, name="call_case"),
     path("calls/<int:pk>/reopen/", cv.reopen, name="call_reopen"),
+    path("calls/<int:pk>/next/", cv.call_next, name="call_next"),
     path("calls/<int:pk>/address/", cv.call_address_save, name="call_address_save"),
     path("calls/<int:pk>/status/", cv.call_status, name="call_status"),
     path("calls/<int:pk>/calls/<int:attempt_pk>/attach/", cv.call_attach, name="call_attach"),

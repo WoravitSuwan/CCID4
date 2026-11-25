@@ -69,17 +69,17 @@
 
 <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">ในช่วงที่เลือก</h2>
 <div class="stagger mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
-  <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ period.calls|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.cases_called|intcomma }} คดี{% if period.from_file %} · รวมจากไฟล์ Excel {{ period.from_file|intcomma }}{% endif %}</div></div>
-  <div class="stat block"><div class="stat-label">ติดต่อได้</div><div class="stat-value"><span data-countup>{{ period.reached|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.reach_rate }}% ของการโทร</div></div>
-  <div class="stat block"><div class="stat-label">ติดต่อไม่ได้</div><div class="stat-value"><span data-countup>{{ period.not_reached|intcomma }}</span></div></div>
-  <div class="stat block"><div class="stat-label">นัดเข้าพบ พงส.</div><div class="stat-value"><span data-countup>{{ period.appointed|intcomma }}</span></div></div>
-  <div class="stat block"><div class="stat-label">ออกหมายเรียก</div><div class="stat-value"><span data-countup>{{ period.summonses|intcomma }}</span></div></div>
-  <div class="stat block"><div class="stat-label">บันทึกเลข EMS</div><div class="stat-value"><span data-countup>{{ period.ems|intcomma }}</span></div></div>
+  <div class="stat kpi tone-navy block"><span class="kpi-icon">{% icon "phone" "h-5 w-5" %}</span><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ period.calls|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.cases_called|intcomma }} คดี{% if period.from_file %} · รวมจากไฟล์ Excel {{ period.from_file|intcomma }}{% endif %}</div></div>
+  <div class="stat kpi tone-good block"><span class="kpi-icon">{% icon "check-circle" "h-5 w-5" %}</span><div class="stat-label">ติดต่อได้</div><div class="stat-value"><span data-countup>{{ period.reached|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.reach_rate }}% ของการโทร</div></div>
+  <div class="stat kpi tone-drop block"><span class="kpi-icon">{% icon "alert" "h-5 w-5" %}</span><div class="stat-label">ติดต่อไม่ได้</div><div class="stat-value"><span data-countup>{{ period.not_reached|intcomma }}</span></div></div>
+  <div class="stat kpi tone-teal block"><span class="kpi-icon">{% icon "calendar" "h-5 w-5" %}</span><div class="stat-label">นัดเข้าพบ พงส.</div><div class="stat-value"><span data-countup>{{ period.appointed|intcomma }}</span></div></div>
+  <div class="stat kpi tone-gold block"><span class="kpi-icon">{% icon "document" "h-5 w-5" %}</span><div class="stat-label">ออกหมายเรียก</div><div class="stat-value"><span data-countup>{{ period.summonses|intcomma }}</span></div></div>
+  <div class="stat kpi tone-violet block"><span class="kpi-icon">{% icon "envelope" "h-5 w-5" %}</span><div class="stat-label">บันทึกเลข EMS</div><div class="stat-value"><span data-countup>{{ period.ems|intcomma }}</span></div></div>
 </div>
 
 <div class="mb-6 grid gap-5 xl:grid-cols-3">
   <div class="card xl:col-span-2">
-    <div class="card-header"><h2 id="t-calls">การโทรรายวัน (ครั้ง)</h2>
+    <div class="card-header">{% icon "chart" "h-5 w-5 text-slate-400" %}<h2 id="t-calls">การโทรรายวัน (ครั้ง)</h2>
       <div class="ml-auto flex items-center gap-4 text-xs text-slate-600">
         <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" style="background:var(--series-1)"></span>ติดต่อได้</span>
         <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" style="background:var(--series-2)"></span>ติดต่อไม่ได้</span>
@@ -87,12 +87,12 @@
     {% include "stats/_line_chart.html" with chart=calls_chart title_id="t-calls" %}
   </div>
   <div class="card">
-    <div class="card-header"><h2>ผลการโทรในช่วงนี้</h2></div>
+    <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ผลการโทรในช่วงนี้</h2></div>
     {% if outcomes %}
     <ul class="space-y-2.5 text-sm">
       {% for o in outcomes %}
       <li><div class="flex justify-between gap-2"><span class="truncate text-slate-700" title="{{ o.label }}">{{ o.label }}</span><span class="tabular-nums text-slate-900">{{ o.n|intcomma }}</span></div>
-        <div class="mt-1 h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full grow-x" style="width: {{ o.pct }}%; background: {% if o.reached %}var(--series-1){% else %}var(--series-2){% endif %}"></div></div></li>
+        <div class="bar-track"><div class="bar-fill grow-x {% if o.reached %}is-good{% else %}is-drop{% endif %}" style="width: {{ o.pct }}%; --i: {{ forloop.counter0 }}" title="{{ o.label }} {{ o.n|intcomma }} ครั้ง ({{ o.pct }}%)"></div></div></li>
       {% endfor %}
     </ul>
     <div class="mt-3 flex gap-4 text-xs text-slate-500"><span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" style="background:var(--series-1)"></span>ติดต่อได้</span><span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" style="background:var(--series-2)"></span>ติดต่อไม่ได้</span></div>
@@ -101,11 +101,11 @@
 </div>
 <div class="mb-6 grid gap-5 lg:grid-cols-2">
   <div class="card">
-    <div class="card-header"><h2 id="t-summons">หมายเรียกที่ออกรายวัน</h2></div>
+    <div class="card-header">{% icon "document" "h-5 w-5 text-slate-400" %}<h2 id="t-summons">หมายเรียกที่ออกรายวัน</h2></div>
     {% include "stats/_line_chart.html" with chart=summons_chart title_id="t-summons" %}
   </div>
   <div class="card">
-    <div class="card-header"><h2 id="t-ems">ส่งไปรษณีย์ (บันทึกเลข EMS) รายวัน</h2></div>
+    <div class="card-header">{% icon "envelope" "h-5 w-5 text-slate-400" %}<h2 id="t-ems">ส่งไปรษณีย์ (บันทึกเลข EMS) รายวัน</h2></div>
     {% include "stats/_line_chart.html" with chart=ems_chart title_id="t-ems" %}
   </div>
 </div>

@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.registry.models import Case, normalize_receipt_no
 
-from .models import CLOSING, CallAssignment, CallAttachment, CallAttempt, CallOutcome
+from .models import CLOSING, REACHED, CallAssignment, CallAttachment, CallAttempt, CallOutcome
 
 # What call staff may attach. No html/svg/scripts/executables: these could run in the browser or on a PC.
 ALLOWED_EXTENSIONS = {
@@ -128,6 +128,31 @@ def previous_outcome(case: Case) -> tuple[str | None, str]:
         return last.outcome, f"ผลการโทรครั้งที่ {last.number} ในระบบ"
     found = outcome_from_log(case.contact_log)
     return (found, "บันทึกการติดต่อในไฟล์ทะเบียน") if found else (None, "")
+
+
+NEED_CALL_MESSAGE = "ยังไม่มีการบันทึกการโทร กรุณาบันทึกการโทรก่อน"
+
+
+def call_state(case: Case) -> dict | None:
+    """Has this case been called, and how did the last call go? A call recorded in this system, or else one written
+    in the register's contact log (the call list counts both as โทรเสร็จสิ้น). None = never called: the staff
+    must record a call before moving on to the next case."""
+    from .models import SHORT_LABELS, FileContact
+
+    last = (CallAttempt.objects.filter(case=case).select_related("created_by")
+            .order_by("-called_at", "-number", "-pk").first())
+    if last:
+        return {"source": "system", "number": last.number, "at": last.called_at, "reached": last.reached,
+                "result": SHORT_LABELS.get(last.outcome, last.get_outcome_display()),
+                "by": last.created_by.display_name() if last.created_by else "-"}
+    if case.contact_log.strip():
+        fc = FileContact.objects.filter(case=case).order_by("-day", "-time", "-pk").first()
+        outcome = (fc.outcome if fc and fc.outcome else None) or outcome_from_log(case.contact_log)
+        return {"source": "file", "number": fc.number if fc else None, "at": fc.called_at if fc else None,
+                "reached": outcome in REACHED if outcome else None,
+                "result": SHORT_LABELS.get(outcome, "ดูบันทึกการติดต่อ") if outcome else "ดูบันทึกการติดต่อ",
+                "by": "บันทึกในไฟล์ทะเบียน"}
+    return None
 
 
 def check_attachments(files) -> list[str]:

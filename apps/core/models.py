@@ -89,6 +89,12 @@ class SystemSetting(models.Model):
     # last check by the server's own background job (Celery worker, or cron): sends with every computer off
     line_worker_seen_at = models.DateTimeField(null=True, blank=True, editable=False)
     line_last_error = models.TextField(blank=True, editable=False)
+    # the report for the commanders (สรุปผลประจำวัน): its wording can be changed on that page, then locked,
+    # so a new wording needs no new version of the system. Empty = the standard wording.
+    report_template = models.TextField("รูปแบบข้อความรายงานผู้บังคับบัญชา", blank=True, editable=False)
+    report_locked = models.BooleanField(default=True, editable=False)
+    report_updated_by = models.CharField(max_length=150, blank=True, editable=False)
+    report_updated_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "การตั้งค่าระบบ"

@@ -107,6 +107,23 @@
   document.addEventListener("htmx:beforeRequest", startBar);
   document.addEventListener("htmx:afterRequest", stopBar);
 
+  /* a short note at the bottom of the screen: ccidToast("…", "ok" | "warn") - classes toast-ok / toast-warn */
+  window.ccidToast = function (text, tone) {
+    let host = document.getElementById("toast-host");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "toast-host"; host.className = "toast-host"; host.setAttribute("aria-live", "polite");
+      document.body.appendChild(host);
+    }
+    const t = document.createElement("div");
+    t.className = "toast" + (tone ? " toast-" + tone : "");
+    t.setAttribute("role", tone === "warn" ? "alert" : "status");
+    t.textContent = text;
+    host.appendChild(t);
+    while (host.children.length > 3) host.firstChild.remove();
+    setTimeout(function () { t.classList.add("is-leaving"); setTimeout(function () { t.remove(); }, 300); }, 3200);
+  };
+
   /* copy buttons: <button data-copy="#textarea-id">, or <button data-copy-text="L6800123456"> for a number
      (works on plain http too, where the clipboard API is missing) */
   document.addEventListener("click", function (e) {
@@ -127,6 +144,8 @@
     const text = "value" in src ? src.value : src.textContent;
     const label = btn.querySelector("[data-copy-label]") || (btn.hasAttribute("data-copy-text") ? null : btn);
     const done = function (ok) {
+      if (ok && window.ccidToast) window.ccidToast(label === null
+        ? "คัดลอก " + text + " แล้ว" : "คัดลอกข้อความแล้ว วางต่อได้เลย (Ctrl+V)", "ok");
       if (!label) {  // an icon button: a tick for a moment, the result in its tooltip
         btn.classList.toggle("is-copied", ok);
         btn.title = ok ? "คัดลอกแล้ว" : "คัดลอกไม่ได้";
@@ -275,6 +294,58 @@
     render();
     input.focus();
   }
+
+  /* read-only message boxes are as tall as their text (nothing hidden below the fold of the box) */
+  window.ccidFit = function (root) {
+    (root || document).querySelectorAll("textarea.msg-box[readonly]").forEach(function (t) {
+      t.style.height = "auto";
+      t.style.height = (t.scrollHeight + 4) + "px";
+    });
+  };
+  document.addEventListener("DOMContentLoaded", function () { window.ccidFit(); });
+
+  /* the report wording editor (สรุปผลประจำวัน): insert {fields}, preview with today's numbers, flag unknown ones */
+  function setupTemplateEditor(form) {
+    if (form.dataset.ready) return;
+    form.dataset.ready = "1";
+    const area = form.querySelector("textarea[name=template]"), out = form.querySelector("#t-preview"),
+      problem = form.querySelector("#t-problem"), save = form.querySelector('[value="template_save"]');
+    const values = JSON.parse(form.querySelector("#t-values").textContent),
+      fields = JSON.parse(form.querySelector("#t-fields").textContent), re = /\{([^{}\n]*)\}/g;
+    function render() {
+      const text = area.value, unknown = new Set();
+      const lines = [];
+      text.replace(/\r\n/g, "\n").split("\n").forEach(function (line) {
+        const filled = line.replace(re, function (_, k) { if (!(k in fields)) unknown.add(k); return values[k] || ""; });
+        if (!filled.trim() && re.test(line) && !line.replace(re, "").trim()) return;
+        re.lastIndex = 0;
+        lines.push(filled.replace(/\s+$/, ""));
+      });
+      re.lastIndex = 0;
+      out.textContent = lines.join("\n").replace(/^\n+|\n+$/g, "");
+      const rest = text.replace(re, ""), msg = [];
+      if (unknown.size) msg.push("ไม่รู้จัก " + [...unknown].map(function (k) { return "{" + k + "}"; }).join(", "));
+      if (/[{}]/.test(rest)) msg.push("มีวงเล็บปีกกา { } ไม่ครบคู่");
+      if (!text.trim()) msg.push("ข้อความว่างเปล่า");
+      problem.textContent = msg.join(" · ");
+      problem.classList.toggle("hidden", !msg.length);
+      area.classList.toggle("is-invalid", !!msg.length);
+      if (save) save.disabled = !!msg.length;
+    }
+    form.querySelectorAll("[data-insert]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        const at = area.selectionStart, end = area.selectionEnd, v = b.dataset.insert;
+        area.value = area.value.slice(0, at) + v + area.value.slice(end);
+        area.focus(); area.selectionStart = area.selectionEnd = at + v.length;
+        render();
+      });
+    });
+    area.addEventListener("input", render);
+    render();
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("[data-template-editor]").forEach(setupTemplateEditor);
+  });
 
   /* the emblem tilts a little towards the mouse */
   if (!calm) {

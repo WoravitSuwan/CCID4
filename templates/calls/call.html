@@ -1,32 +1,66 @@
 {% extends "base.html" %}{% load thai ui %}
 {% block title %}โทร {{ case.receipt_no }}{% endblock %}
 {% block content %}
-<div class="mb-3 flex items-center gap-2 text-sm">
-  <a href="{% url 'calls_queue' %}{% if back_query %}?{{ back_query }}{% endif %}" class="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">{% icon "chevron-left" "h-4 w-4" %} รายการที่ต้องโทร</a>
-  {% if next_pk %}<a href="{% url 'call_case' next_pk %}" class="ml-auto inline-flex items-center gap-1 text-slate-500 hover:text-slate-800">ข้ามไปคดีถัดไป {% icon "chevron-right" "h-4 w-4" %}</a>{% endif %}
+<nav class="call-nav" aria-label="เลื่อนไปคดีอื่น">
+  <a href="{% url 'calls_queue' %}{% if back_query %}?{{ back_query }}{% endif %}" class="nav-link">{% icon "chevron-left" "h-4 w-4 nudge-l" %} รายการที่ต้องโทร</a>
+  {% if prev_case %}<a href="{% url 'call_case' prev_case.pk %}" class="nav-pill" data-prev-case title="กลับไปดู / แก้ไขคดีที่เปิดก่อนหน้านี้">{% icon "undo" "h-4 w-4" %} ย้อนกลับคดีก่อนหน้า <span class="font-mono text-xs text-slate-400">{{ prev_case.receipt_no }}</span></a>{% endif %}
+  {% if next_pk %}
+  {% if can_go_next %}
+  <a href="{% url 'call_next' case.pk %}" class="btn btn-command ml-auto" data-next-case>{% if state %}ไปคดีถัดไป{% else %}ข้ามไปคดีถัดไป{% endif %} {% icon "chevron-right" "h-4 w-4 nudge-r" %}</a>
+  {% else %}
+  <a href="{% url 'call_next' case.pk %}" class="btn btn-locked ml-auto" data-need-call title="{{ need_call_message }}">{% icon "lock" "h-4 w-4" %} ข้ามไปคดีถัดไป</a>
+  {% endif %}
+  {% endif %}
+</nav>
+
+{% if not can_go_next %}
+<div id="need-call" class="need-call {% if not need_call %}hidden{% endif %}" role="alert">
+  <span class="need-call-icon">{% icon "lock" "h-5 w-5" %}</span>
+  <div class="min-w-0 flex-1"><div class="font-semibold">{{ need_call_message }}</div>
+    <div class="text-sm opacity-80">คดีนี้ยังไม่เคยโทร เลือกผลการโทรด้านขวา แล้วกด "บันทึก แล้วไปคดีถัดไป"</div></div>
+  <a href="#call-form" class="btn btn-sm bg-white" data-go-record>{% icon "pencil" "h-4 w-4" %} ไปบันทึกผลการโทร</a>
 </div>
+{% endif %}
+{% if state %}
+<div class="called-banner" role="status">
+  <span class="called-icon">{% icon "check-circle" "h-6 w-6" %}</span>
+  <div class="min-w-0 flex-1">
+    <div class="font-semibold text-emerald-900">คดีนี้โทรแล้ว</div>
+    <div class="text-sm text-emerald-900/80">ผลล่าสุด{% if state.number %} (ครั้งที่ {{ state.number }}){% endif %}: <b>{{ state.result }}</b>{% if state.at %} · {{ state.at|thai_date:"datetime" }}{% endif %} · {{ state.by }}</div>
+  </div>
+  {% if attempts %}<a href="#call-{{ attempts.0.pk }}" class="hidden text-sm font-medium text-emerald-800 underline-offset-2 hover:underline sm:inline">ดูประวัติ</a>{% endif %}
+</div>
+{% endif %}
 
 {% if busy_with %}
-<div class="alert alert-warning mb-4">{% icon "alert" "h-5 w-5 shrink-0" %}<div><b>{{ busy_with.display_name }}</b> เปิดคดีนี้อยู่ (ตั้งแต่ {{ busy_since|thai_date:"datetime" }}) อาจกำลังโทรอยู่ — ตรวจประวัติการโทรก่อน เพื่อไม่ให้โทรซ้ำ{% if next_pk %} หรือ <a href="{% url 'call_case' next_pk %}">ข้ามไปคดีถัดไป</a>{% endif %}</div></div>
+<div class="alert alert-warning mb-4">{% icon "alert" "h-5 w-5 shrink-0" %}<div><b>{{ busy_with.display_name }}</b> เปิดคดีนี้อยู่ (ตั้งแต่ {{ busy_since|thai_date:"datetime" }}) อาจกำลังโทรอยู่ — ตรวจประวัติการโทรก่อน เพื่อไม่ให้โทรซ้ำ{% if next_pk %} หรือ <a href="{% url 'call_next' case.pk %}">ข้ามไปคดีถัดไป</a>{% endif %}</div></div>
 {% endif %}
 <div class="grid gap-5 lg:grid-cols-5">
   <!-- case info -->
   <div class="space-y-5 lg:col-span-2">
-    <div class="card">
-      <div class="flex items-center gap-2">
-        <span class="font-mono text-lg font-semibold">{{ case.receipt_no }}</span>{% copy_btn case.receipt_no "เลขรับแจ้ง" %}
-        {% if assignment.is_done %}<span class="badge badge-green">ติดต่อเสร็จแล้ว</span>{% endif %}
+    <div class="card dossier">
+      <div class="dossier-head">
+        <div class="min-w-0">
+          <div class="dossier-kicker">เลขรับแจ้ง</div>
+          <div class="flex items-center gap-1.5"><span class="font-mono text-lg font-semibold tracking-wide text-slate-900">{{ case.receipt_no }}</span>{% copy_btn case.receipt_no "เลขรับแจ้ง" %}</div>
+        </div>
+        <div class="ml-auto flex flex-col items-end gap-1">
+          {% if state %}<span class="state-pill is-called">{% icon "check-circle" "h-4 w-4" %} คดีนี้โทรแล้ว</span>
+          {% else %}<span class="state-pill is-pending">{% icon "clock" "h-4 w-4" %} ยังไม่บันทึกการโทร</span>{% endif %}
+          {% if assignment.is_done %}<span class="badge badge-green">ติดต่อเสร็จแล้ว</span>{% endif %}
+        </div>
       </div>
-      <div class="mt-1 text-xl font-semibold text-slate-900">{% if case.victim_name %}{{ case.victim_name }}{% elif case.complainant %}{{ case.complainant.full_name|default:"-" }}{% else %}-{% endif %}</div>
+      <div class="dossier-kicker mt-3">ผู้เสียหาย</div>
+      <div class="text-xl font-semibold text-slate-900">{% if case.victim_name %}{{ case.victim_name }}{% elif case.complainant %}{{ case.complainant.full_name|default:"-" }}{% else %}-{% endif %}</div>
       <div class="mt-4 space-y-2">
         {% for p in phones %}
         <div class="flex items-center gap-2">
-          <a href="tel:{{ p }}" class="btn btn-success flex-1 justify-start py-2.5 text-base">{% icon "phone" "h-5 w-5" %} <span class="font-mono tracking-wide">{{ p }}</span></a>
-          <button type="button" class="btn py-2.5" onclick="document.getElementById('id_phone').value='{{ p }}'" title="ใช้เบอร์นี้ในการบันทึก">เลือก</button>
+          <a href="tel:{{ p }}" class="btn btn-call flex-1 justify-start py-2.5 text-base"><span class="call-ring">{% icon "phone" "h-5 w-5" %}</span> <span class="font-mono tracking-wide">{{ p }}</span></a>
+          <button type="button" class="btn btn-pick py-2.5" data-pick-phone="{{ p }}" title="ใช้เบอร์นี้ในการบันทึก">{% icon "check" "h-4 w-4" %} เลือก</button>
         </div>
         {% empty %}<div class="alert alert-warning">{% icon "alert" "h-5 w-5" %} ไม่มีเบอร์โทรในข้อมูล</div>{% endfor %}
       </div>
-      <dl class="dl mt-5 border-t border-slate-100 pt-4">
+      <dl class="dl dl-case mt-5 border-t border-slate-100 pt-4">
         <dt>วันที่รับแจ้ง</dt><dd>{{ case.report_date|thai_date:"full" }}</dd>
         <dt>ประเภทคดี</dt><dd>{{ case.case_type|default:"-" }}</dd>
         <dt>มูลค่าความเสียหาย</dt><dd>{{ case.damage_amount|money }} บาท</dd>
@@ -36,15 +70,15 @@
         <dt>ผู้รับผิดชอบโทร</dt><dd>{{ assignment.assignee.display_name|default:"ยังไม่มี (คนที่โทรก่อนจะเป็นผู้รับผิดชอบ)" }}</dd>
       </dl>
       {% if can_change_status %}
-      <form method="post" action="{% url 'call_status' case.pk %}" class="mt-4 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200" id="status-form">{% csrf_token %}
-        <label class="label" for="status-select">เปลี่ยนสถานะคดี</label>
+      <form method="post" action="{% url 'call_status' case.pk %}" class="status-box" id="status-form">{% csrf_token %}
+        <label class="label flex items-center gap-1.5" for="status-select">{% icon "tag" "h-4 w-4 text-slate-400" %} เปลี่ยนสถานะคดี</label>
         <div class="flex flex-wrap gap-2">
-          <select name="status" id="status-select" class="input min-w-0 flex-1 py-1.5">
+          <select name="status" id="status-select" class="input min-w-0 flex-1">
             {% for st in statuses %}<option value="{{ st.pk }}" {% if st.pk == case.status_id %}selected{% endif %}>{{ st.name }}{% if st.is_final and 'สิ้นสุด' not in st.name %} (สิ้นสุด){% endif %}</option>{% endfor %}
           </select>
-          <button class="btn btn-sm">บันทึกสถานะ</button>
+          <button class="btn btn-primary">บันทึกสถานะ</button>
         </div>
-        <input type="text" name="note" id="status-note" class="input mt-2 py-1.5 text-sm" maxlength="300" placeholder="เหตุผล (ถ้ามี) เช่น ผู้เสียหายไม่ประสงค์ดำเนินคดีต่อ">
+        <input type="text" name="note" id="status-note" class="input mt-2 text-sm" maxlength="300" placeholder="เหตุผล (ถ้ามี) เช่น ผู้เสียหายไม่ประสงค์ดำเนินคดีต่อ">
         {% if case.status_manual_at %}<div class="mt-1 text-xs text-slate-500">แก้ล่าสุดโดย {{ case.status_manual_by.display_name|default:"-" }} ({{ case.status_manual_at|thai_date:"datetime" }})</div>{% endif %}
       </form>
       {% endif %}
@@ -124,28 +158,31 @@
   </div>
 
   <!-- record form -->
-  <form method="post" enctype="multipart/form-data" class="card lg:col-span-3" id="call-form">{% csrf_token %}
-    <div class="card-header">{% icon "pencil" "h-5 w-5 text-slate-400" %}<h2>บันทึกผลการโทร ครั้งที่ {{ attempts|length|add:1 }}</h2></div>
+  <form method="post" enctype="multipart/form-data" class="card record-panel scroll-mt-4 lg:col-span-3" id="call-form">{% csrf_token %}
+    <div class="card-header">{% icon "pencil" "h-5 w-5 text-slate-400" %}<h2>บันทึกผลการโทร ครั้งที่ {{ attempts|length|add:1 }}</h2>
+      {% if not state %}<span class="ml-auto text-xs font-medium text-amber-700">ต้องบันทึกก่อนไปคดีถัดไป</span>{% endif %}</div>
     {% if form.non_field_errors %}<div class="alert alert-error mb-4">{{ form.non_field_errors }}</div>{% endif %}
     {% if previous %}<div class="mb-3 flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900 ring-1 ring-sky-200">{% icon "info" "mt-0.5 h-4 w-4 shrink-0" %}<span>ติ๊กผลไว้ให้ตาม{{ previous_from }} ถ้าครั้งนี้ผลต่างไป ให้เลือกใหม่ก่อนบันทึก</span></div>{% endif %}
 
-    <div class="mb-2 text-sm font-medium text-emerald-700">ติดต่อได้</div>
+    <div id="outcome-panel">
+    <div class="outcome-head is-good"><span>{% icon "check-circle" "h-4 w-4" %}</span> ติดต่อได้</div>
     <div class="grid gap-2 sm:grid-cols-2">
       {% for value, label in outcomes_reached %}
       <label class="outcome-card is-good">
         <input type="radio" name="outcome" value="{{ value }}" class="h-4 w-4 shrink-0 text-emerald-600" {% if form.outcome.value == value %}checked{% endif %} required>
         <span class="outcome-icon">{% if value == "appointed" %}{% icon "calendar" "h-4 w-4" %}{% elif value == "info" %}{% icon "info" "h-4 w-4" %}{% elif value == "callback" %}{% icon "clock" "h-4 w-4" %}{% elif value == "not_proceed" %}{% icon "x" "h-4 w-4" %}{% else %}{% icon "pencil" "h-4 w-4" %}{% endif %}</span>
-        <span>{{ label }}</span></label>
+        <span>{{ label }}</span><span class="outcome-tick">{% icon "check" "h-3.5 w-3.5" %}</span></label>
       {% endfor %}
     </div>
-    <div class="mb-2 mt-4 text-sm font-medium text-amber-700">ติดต่อไม่ได้</div>
+    <div class="outcome-head is-drop mt-4"><span>{% icon "phone" "h-4 w-4" %}</span> ติดต่อไม่ได้</div>
     <div class="grid gap-2 sm:grid-cols-2">
       {% for value, label in outcomes_not %}
       <label class="outcome-card is-drop">
         <input type="radio" name="outcome" value="{{ value }}" class="h-4 w-4 shrink-0 text-amber-600" {% if form.outcome.value == value %}checked{% endif %}>
         <span class="outcome-icon">{% icon "phone" "h-4 w-4" %}</span>
-        <span>{{ label }}</span></label>
+        <span>{{ label }}</span><span class="outcome-tick">{% icon "check" "h-3.5 w-3.5" %}</span></label>
       {% endfor %}
+    </div>
     </div>
     {{ form.outcome.errors }}
 
@@ -176,7 +213,7 @@
     </div>
 
     <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-      <button class="btn btn-primary" name="go" value="next">{% icon "check" "h-4 w-4" %} บันทึก แล้วไปคดีถัดไป</button>
+      <button class="btn btn-primary" name="go" value="next" data-save-next>{% icon "check" "h-4 w-4" %} บันทึก แล้วไปคดีถัดไป</button>
       <button class="btn" name="go" value="stay">บันทึก</button>
     </div>
   </form>
@@ -200,6 +237,26 @@
       appt.value=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T09:00`;c.dataset.value=appt.value;}
     mark();}));
   appt.addEventListener('input',mark); mark();
+  // "เลือก" puts that number in the record form
+  document.querySelectorAll('[data-pick-phone]').forEach(b=>b.addEventListener('click',()=>{
+    const f=document.getElementById('id_phone'); f.value=b.dataset.pickPhone;
+    b.classList.remove('is-picked'); void b.offsetWidth; b.classList.add('is-picked');
+    f.classList.remove('flash-ok'); void f.offsetWidth; f.classList.add('flash-ok');}));
+  // skipping a case not called yet: say why, and point at where to record the call
+  const lockBtn=document.querySelector('[data-need-call]'), alertBox=document.getElementById('need-call'),
+        panel=document.getElementById('outcome-panel');
+  const attention=()=>{panel.classList.remove('is-attention'); void panel.offsetWidth; panel.classList.add('is-attention');
+    panel.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'center'});};
+  if(lockBtn){lockBtn.addEventListener('click',e=>{e.preventDefault();
+    alertBox.classList.remove('hidden','shake'); void alertBox.offsetWidth; alertBox.classList.add('shake');
+    lockBtn.classList.remove('shake'); void lockBtn.offsetWidth; lockBtn.classList.add('shake');
+    window.ccidToast && window.ccidToast(lockBtn.title,'warn');});}
+  const go=document.querySelector('[data-go-record]');
+  if(go){go.addEventListener('click',e=>{e.preventDefault(); attention();});}
+  if(alertBox && !alertBox.classList.contains('hidden')) attention();
+  // a result picked: the save button says so
+  form.addEventListener('change',e=>{if(e.target.name==='outcome'){const s=form.querySelector('[data-save-next]');
+    s.classList.remove('is-ready'); void s.offsetWidth; s.classList.add('is-ready');}});
 })();
 </script>
 {% endblock %}

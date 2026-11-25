@@ -9,6 +9,7 @@ Each case called that day counts once, by the result of its last call that day.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass, field
 
 from django.conf import settings
@@ -161,25 +162,87 @@ def period_text(d: Day) -> str:
     return f"ประจำวันที่ {thai_date_full(d.day, thai_digits=False)}"
 
 
-def summary_text(d: Day) -> str:
-    """The daily report for the commanders (counts only: no names or phone numbers)."""
+# The report for the commanders is written from a wording the staff can change on the page (and then lock).
+# {…} are filled in with the day's numbers; a line holding only {บรรทัดยังไม่ได้ข้อยุติ} disappears when it is 0.
+DEFAULT_SUMMARY_TEMPLATE = "\n".join([
+    "เรียนผู้บังคับบัญชา",
+    "",
+    "ขอรายงานสรุปผลการดำเนินการ ของ {ผู้โทร} สะสาง Case ID ประจำวันที่ {วันที่}",
+    "จำนวน {จำนวนทั้งหมด} Case ID",
+    f"1. {GROUP_LABEL[NOT_WANT]} จำนวน {{ไม่ประสงค์ดำเนินคดี}} Case",
+    f"2. {GROUP_LABEL[WANT]} จำนวน {{ประสงค์ดำเนินคดีต่อ}} Case",
+    f"3. {GROUP_LABEL[UNREACHED]} จำนวน {{ติดต่อไม่ได้}} Case",
+    "{บรรทัดยังไม่ได้ข้อยุติ}",
+    "",
+    "จึงเรียนมาเพื่อโปรดทราบ",
+])
+SUMMARY_FIELDS = {  # placeholder -> what it becomes (shown next to the editor)
+    "วันที่": "วันที่ เช่น 25 พฤศจิกายน 2569",
+    "ผู้โทร": "เจ้าหน้าที่ Outsource (มีชื่อเมื่อเลือกผู้โทร)",
+    "หน่วย": "ชื่อหน่วย เช่น กก.1บก.สอท.4",
+    "จำนวนทั้งหมด": "จำนวน Case ที่โทรทั้งหมด",
+    "ไม่ประสงค์ดำเนินคดี": "จำนวน ไม่ประสงค์ดำเนินคดี",
+    "ประสงค์ดำเนินคดีต่อ": "จำนวน ประสงค์ดำเนินคดีต่อ",
+    "ติดต่อไม่ได้": "จำนวน ไม่สามารถติดต่อได้",
+    "ยังไม่ได้ข้อยุติ": "จำนวน ติดต่อได้แต่ยังไม่ได้ข้อยุติ",
+    "บรรทัดยังไม่ได้ข้อยุติ": "ข้อ 4 ทั้งบรรทัด (หายไปเองเมื่อเป็น 0)",
+}
+_FIELD = re.compile(r"\{([^{}\n]*)\}")
+MAX_TEMPLATE = 3000
+
+
+def summary_values(d: Day) -> dict[str, str]:
     c = d.counts
     who = "เจ้าหน้าที่ Outsource"
     if d.caller is not None:
         who += f" ({d.caller.display_name()})"
-    lines = [
-        "เรียนผู้บังคับบัญชา",
-        "",
-        f"ขอรายงานสรุปผลการดำเนินการ ของ {who} สะสาง Case ID {period_text(d)}",
-        f"จำนวน {c['total']:,} Case ID",
-        f"1. {GROUP_LABEL[NOT_WANT]} จำนวน {c[NOT_WANT]:,} Case",
-        f"2. {GROUP_LABEL[WANT]} จำนวน {c[WANT]:,} Case",
-        f"3. {GROUP_LABEL[UNREACHED]} จำนวน {c[UNREACHED]:,} Case",
-    ]
-    if c[OTHER]:  # so the lines always add up to the total
-        lines.append(f"4. {GROUP_LABEL[OTHER]} จำนวน {c[OTHER]:,} Case")
-    lines += ["", "จึงเรียนมาเพื่อโปรดทราบ"]
-    return "\n".join(lines)
+    return {
+        "วันที่": thai_date_full(d.day, thai_digits=False), "ผู้โทร": who, "หน่วย": unit_text(),
+        "จำนวนทั้งหมด": f"{c['total']:,}", "ไม่ประสงค์ดำเนินคดี": f"{c[NOT_WANT]:,}",
+        "ประสงค์ดำเนินคดีต่อ": f"{c[WANT]:,}", "ติดต่อไม่ได้": f"{c[UNREACHED]:,}", "ยังไม่ได้ข้อยุติ": f"{c[OTHER]:,}",
+        # so the numbered lines always add up to the total
+        "บรรทัดยังไม่ได้ข้อยุติ": f"4. {GROUP_LABEL[OTHER]} จำนวน {c[OTHER]:,} Case" if c[OTHER] else "",
+    }
+
+
+def template_problems(text: str) -> list[str]:
+    """What is wrong with a wording the staff typed (empty list = fine). Unknown {…} are refused, so nothing
+    like {…} can end up in a report."""
+    problems = []
+    if not text.strip():
+        problems.append("ข้อความว่างเปล่า")
+    if len(text) > MAX_TEMPLATE:
+        problems.append(f"ยาวเกิน {MAX_TEMPLATE:,} ตัวอักษร")
+    unknown = sorted({m for m in _FIELD.findall(text) if m not in SUMMARY_FIELDS})
+    if unknown:
+        problems.append("ไม่รู้จัก " + ", ".join("{" + u + "}" for u in unknown))
+    if _FIELD.sub("", text).count("{") or _FIELD.sub("", text).count("}"):
+        problems.append("มีวงเล็บปีกกา { } ไม่ครบคู่")
+    return problems
+
+
+def summary_template() -> str:
+    """The wording in use: the one saved on the page, else the standard one."""
+    from apps.core.models import SystemSetting
+
+    saved = SystemSetting.get().report_template
+    return saved if saved.strip() and not template_problems(saved) else DEFAULT_SUMMARY_TEMPLATE
+
+
+def render_summary(template: str, d: Day) -> str:
+    values = summary_values(d)
+    lines = []
+    for line in template.replace("\r\n", "\n").split("\n"):
+        out = _FIELD.sub(lambda m: values.get(m.group(1), ""), line)
+        if not out.strip() and _FIELD.search(line) and not _FIELD.sub("", line).strip():
+            continue  # a line of placeholders only, all empty (e.g. no ข้อ 4 today)
+        lines.append(out.rstrip())
+    return "\n".join(lines).strip("\n")
+
+
+def summary_text(d: Day, template: str | None = None) -> str:
+    """The daily report for the commanders (counts only: no names or phone numbers)."""
+    return render_summary(template if template is not None else summary_template(), d)
 
 
 def stamp(day: dt.date, caller=None) -> str:

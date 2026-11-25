@@ -64,35 +64,67 @@
 {% if live %}<div class="mb-2 flex items-center gap-2 text-xs text-slate-500" aria-live="polite"><span class="live-dot"></span> อัปเดตยอดอัตโนมัติเมื่อมีการบันทึกผลการโทร · ล่าสุด <span class="tabular-nums">{{ now|time:"H:i:s" }}</span> น.</div>{% endif %}
 {% if from_file %}<p class="mb-2 text-xs text-slate-500">รวมผลการโทรที่บันทึกในไฟล์ Excel (บันทึกการติดต่อ) ตามวันเวลาที่เขียนในไฟล์ {{ from_file|intcomma }} คดี{% if caller %} · เลือกผู้โทรอยู่: ผลจากไฟล์ไม่ระบุผู้โทร จึงไม่นับ{% endif %}</p>{% endif %}
 <div class="stagger mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-  <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ counts.total|intcomma }}</span> <span class="text-sm font-normal text-slate-400">Case ID</span></div></div>
-  <div class="stat block"><div class="stat-label">1. ไม่ประสงค์ดำเนินคดี</div><div class="stat-value text-slate-700"><span data-countup>{{ counts.not_want|intcomma }}</span></div></div>
-  <div class="stat block"><div class="stat-label">2. ประสงค์ดำเนินคดีต่อ</div><div class="stat-value text-emerald-700"><span data-countup>{{ counts.want|intcomma }}</span></div></div>
-  <div class="stat block"><div class="stat-label">3. ไม่สามารถติดต่อได้</div><div class="stat-value text-amber-700"><span data-countup>{{ counts.unreached|intcomma }}</span></div>
+  <div class="stat kpi tone-navy block"><span class="kpi-icon">{% icon "phone" "h-5 w-5" %}</span><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ counts.total|intcomma }}</span> <span class="text-sm font-normal text-slate-400">Case ID</span></div></div>
+  <div class="stat kpi tone-plain block"><span class="kpi-icon">{% icon "x" "h-5 w-5" %}</span><div class="stat-label">1. ไม่ประสงค์ดำเนินคดี</div><div class="stat-value text-slate-700"><span data-countup>{{ counts.not_want|intcomma }}</span></div></div>
+  <div class="stat kpi tone-good block"><span class="kpi-icon">{% icon "check-circle" "h-5 w-5" %}</span><div class="stat-label">2. ประสงค์ดำเนินคดีต่อ</div><div class="stat-value text-emerald-700"><span data-countup>{{ counts.want|intcomma }}</span></div></div>
+  <div class="stat kpi tone-drop block"><span class="kpi-icon">{% icon "alert" "h-5 w-5" %}</span><div class="stat-label">3. ไม่สามารถติดต่อได้</div><div class="stat-value text-amber-700"><span data-countup>{{ counts.unreached|intcomma }}</span></div>
     {% if counts.other %}<div class="mt-1 text-xs text-slate-500">+ ยังไม่ได้ข้อยุติ (ขอให้โทรกลับ ฯลฯ) {{ counts.other|intcomma }} Case</div>{% endif %}</div>
 </div>
 
 <div class="mb-5 grid gap-5 lg:grid-cols-2">
-  <section class="card flex flex-col">
-    <div class="mb-2 flex flex-wrap items-center gap-2">
-      <h2 class="text-base font-semibold text-slate-800">ข้อความรายงานผู้บังคับบัญชา</h2>
-      <span class="text-xs text-slate-500">ตัวเลขอย่างเดียว ไม่มีชื่อ/เบอร์โทร</span>
+  <section class="card msg-card flex flex-col scroll-mt-4" id="report">
+    <div class="msg-card-head">
+      <span class="msg-card-icon bg-indigo-50 text-indigo-700">{% icon "document" "h-5 w-5" %}</span>
+      <div class="min-w-0 flex-1">
+        <h2 class="text-base font-semibold text-slate-800">ข้อความรายงานผู้บังคับบัญชา</h2>
+        <span class="text-xs text-slate-500">ตัวเลขอย่างเดียว ไม่มีชื่อ/เบอร์โทร · ใช้ข้อความเดียวกันนี้ส่งเข้า LINE</span>
+      </div>
+      {% if template.locked %}<span class="lock-badge" title="แก้รูปแบบได้หลังกดปลดล็อก">{% icon "lock" "h-3.5 w-3.5" %} ล็อกรูปแบบแล้ว</span>
+      {% else %}<span class="lock-badge is-open">{% icon "lock-open" "h-3.5 w-3.5" %} กำลังแก้รูปแบบ</span>{% endif %}
     </div>
+    {% if template.locked %}
     <label class="sr-only" for="t-summary">ข้อความรายงานผู้บังคับบัญชา</label>
-    <textarea id="t-summary" class="input min-h-[11rem] flex-1 font-[inherit] leading-relaxed" rows="11" readonly>{{ summary }}</textarea>
-    <div class="mt-3 flex flex-wrap gap-2">
+    <textarea id="t-summary" class="input msg-box min-h-[11rem] flex-1" rows="11" readonly>{{ summary }}</textarea>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
       <button type="button" class="btn btn-primary" data-copy="#t-summary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
       <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary">{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี (.txt)</a>
+      <form method="post" class="ml-auto" data-no-busy onsubmit="return confirm('ปลดล็อกเพื่อแก้รูปแบบข้อความรายงานผู้บังคับบัญชา?\nข้อความที่แก้จะใช้ทุกวัน รวมถึงข้อความที่ส่งเข้า LINE')">{% csrf_token %}
+        <input type="hidden" name="action" value="template_unlock">
+        <button class="btn btn-ghost btn-sm text-slate-600">{% icon "lock-open" "h-4 w-4" %} ปลดล็อกเพื่อแก้รูปแบบ</button>
+      </form>
     </div>
+    {% if template.custom or template.by %}<p class="mt-2 text-xs text-slate-400">{% if template.custom %}ใช้รูปแบบที่แก้เอง{% else %}ใช้รูปแบบมาตรฐาน{% endif %}{% if template.by %} · แก้/ล็อกล่าสุดโดย {{ template.by }} ({{ template.at|thai_date:"datetime" }}){% endif %}</p>{% endif %}
+    {% else %}
+    <form method="post" class="flex flex-1 flex-col" data-template-editor>{% csrf_token %}
+      <p class="mb-2 text-xs text-slate-500">พิมพ์ข้อความได้ตามต้องการ ส่วนที่อยู่ใน { } ระบบจะใส่ตัวเลขของวันนั้นให้เอง · กดชื่อด้านล่างเพื่อแทรกตรงตำแหน่งเคอร์เซอร์</p>
+      <div class="mb-2 flex flex-wrap gap-1.5">
+        {% for key, help in template.fields.items %}<button type="button" class="field-chip" data-insert="{{ '{' }}{{ key }}{{ '}' }}" title="{{ help }}">{{ key }}</button>{% endfor %}
+      </div>
+      <label class="sr-only" for="t-template">รูปแบบข้อความ</label>
+      <textarea id="t-template" name="template" class="input msg-box min-h-[13rem] font-mono text-[13px]" rows="12" spellcheck="false">{% if template.draft is not None %}{{ template.draft }}{% else %}{{ template.text }}{% endif %}</textarea>
+      <div class="mt-3 text-xs font-medium text-slate-500">ตัวอย่างข้อความของวันนี้</div>
+      <pre id="t-preview" class="msg-preview" aria-live="polite"></pre>
+      <p id="t-problem" class="mt-1 hidden text-xs text-rose-700"></p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button class="btn btn-primary" name="action" value="template_save">{% icon "lock" "h-4 w-4" %} บันทึกและล็อก</button>
+        <button class="btn" name="action" value="template_lock" formnovalidate>ยกเลิก (ล็อกแบบเดิม)</button>
+        <button class="btn btn-ghost ml-auto text-slate-600" name="action" value="template_reset" onclick="return confirm('คืนเป็นรูปแบบมาตรฐานของระบบ?')">{% icon "refresh" "h-4 w-4" %} คืนค่าแบบมาตรฐาน</button>
+      </div>
+      {{ template.values|json_script:"t-values" }}{{ template.fields|json_script:"t-fields" }}
+    </form>
+    {% endif %}
   </section>
 
-  <section class="card flex flex-col">
-    <div class="mb-2 flex flex-wrap items-center gap-2">
-      <h2 class="text-base font-semibold text-slate-800">ข้อความลงบันทึกประจำวัน</h2>
+  <section class="card msg-card flex flex-col">
+    <div class="msg-card-head">
+      <span class="msg-card-icon bg-slate-100 text-slate-600">{% icon "pencil" "h-5 w-5" %}</span>
+      <div class="min-w-0 flex-1"><h2 class="text-base font-semibold text-slate-800">ข้อความลงบันทึกประจำวัน</h2>
+        <span class="text-xs text-slate-500">รายชื่อผู้ที่ไม่ประสงค์ดำเนินคดีของวันนี้</span></div>
       <span class="badge badge-gray">ไม่ประสงค์ดำเนินคดี {{ counts.not_want|intcomma }} ราย</span>
     </div>
     {% if counts.not_want %}
     <label class="sr-only" for="t-diary">ข้อความลงบันทึกประจำวัน</label>
-    <textarea id="t-diary" class="input min-h-[11rem] flex-1 font-[inherit] leading-relaxed" rows="9" readonly>{{ diary }}</textarea>
+    <textarea id="t-diary" class="input msg-box min-h-[11rem] flex-1" rows="9" readonly>{{ diary }}</textarea>
     <div class="mt-3 flex flex-wrap gap-2">
       <button type="button" class="btn btn-primary" data-copy="#t-diary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
       <a class="btn" href="?{% if query %}{{ query }}&{% endif %}format=diary">{% icon "download" "h-4 w-4" %} ลงบันทึกประจำวัน (.txt)</a>
@@ -145,6 +177,7 @@
   let busy = false;
   async function tick() {
     if (busy || document.visibilityState !== "visible") return;
+    if (box.querySelector("[data-template-editor]")) return;  // someone is changing the wording: keep their text
     busy = true;
     try {
       const stamp = await (await fetch(box.dataset.liveUrl, { cache: "no-store", credentials: "same-origin" })).text();
@@ -160,6 +193,7 @@
         box.querySelectorAll("details").forEach(d => {
           if (open.includes(d.querySelector("summary").textContent.trim().slice(0, 20))) d.open = true;
         });
+        if (window.ccidFit) window.ccidFit(box);
         box.classList.remove("live-flash"); void box.offsetWidth; box.classList.add("live-flash");
       }
     } catch (e) { /* offline for a moment: next time */ } finally { busy = false; }

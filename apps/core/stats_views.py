@@ -91,6 +91,9 @@ def _line_chart(days, series, width=CHART_W, height=CHART_H, dashed=(), extra=()
         pts = [(round(PAD_L + (i + 0.5) * slot, 2), y_of(data.get(d, 0))) for i, d in enumerate(days)]
         lines.append({"key": key, "label": label, "color": color, "dashed": key in dashed,
                       "points": " ".join(f"{x},{y}" for x, y in pts),
+                      # the shaded area under the line, down to the axis
+                      "area": (f"M{pts[0][0]},{base_y} " + " ".join(f"L{x},{y}" for x, y in pts)
+                               + f" L{pts[-1][0]},{base_y} Z") if pts else "",
                       "markers": pts if len(days) <= 45 else [],
                       "last": {"x": pts[-1][0], "y": pts[-1][1], "n": data.get(days[-1], 0)} if pts else None})
     hover = []
