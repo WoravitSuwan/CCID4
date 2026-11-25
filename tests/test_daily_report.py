@@ -171,23 +171,31 @@ def test_page_texts_and_text_files(client, caller, day_calls):
     assert mine["counts"]["total"] == 6 and mine["caller"] == caller
 
 
-def test_summary_table_has_only_the_cases_called_that_day(tmp_path, day_calls):
-    """สรุปข้อมูลคดี is daily: calls of the day before or after are not in it (the table the PDF is made of)."""
-    from openpyxl import load_workbook
+def test_summary_file_laid_out_like_the_units_file(tmp_path, day_calls):
+    """สรุปข้อมูลคดี (the Word file the PDF is made of): the unit's layout - the title, then for each case called
+    that day a bold "ผู้เสียหาย: …" and five indented lines with bold labels. Calls of other days are not in it."""
+    from docx import Document
 
-    ws = load_workbook(report.write_summary_xlsx(report.load(DAY), tmp_path / "s.xlsx")).active
-    assert ws["A1"].value == "สรุปข้อมูลคดีและบันทึกการติดต่อ ประจำวันที่ 9 พฤศจิกายน 2569 (7 คดี)"
-    assert [c.value for c in ws[2]] == report.SUMMARY_HEADERS
-    rows = list(ws.iter_rows(min_row=3, values_only=True))
-    receipts = [r[2] for r in rows]
-    assert len(rows) == 7 and day_calls[7].receipt_no not in receipts and day_calls[8].receipt_no not in receipts
+    doc = Document(report.write_summary_docx(report.load(DAY), tmp_path / "s.docx"))
+    pars = [p for p in doc.paragraphs if p.text.strip()]
+    assert pars[0].text == "สรุปข้อมูลคดีและบันทึกการติดต่อ" and pars[0].runs[0].bold
+    heads = [p for p in pars if p.text.startswith("ผู้เสียหาย: ")]
+    assert len(heads) == 7 and all(p.runs[0].bold for p in heads)
     c0 = day_calls[0]
-    mine = rows[receipts.index(c0.receipt_no)]
-    assert mine[1] == "นางสาวทดสอบ หนึ่ง" and mine[4] == "หญิงสุดา รักษ์ดี" and mine[5] == "0811111111"
-    assert mine[6] == "ไม่ประสงค์ดำเนินคดี วันที่ 9 พ.ย. 2569 เวลา 14.00 น."
-    assert ws.page_setup.orientation == "landscape" and ws.print_title_rows.replace("$", "") == "2:2"
-    text = " ".join(str(v) for r in rows for v in r)
+    i = next(n for n, p in enumerate(pars) if p.text == "ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
+    amount = f"{c0.damage_amount:,.2f} บาท" if c0.damage_amount is not None else "-"
+    assert [p.text for p in pars[i:i + 6]] == [
+        "ผู้เสียหาย: นางสาวทดสอบ หนึ่ง", f"- เลขรับแจ้ง: {c0.receipt_no}", f"- มูลค่าความเสียหาย: {amount}",
+        "- พนักงานสอบสวน: หญิงสุดา รักษ์ดี", "- เบอร์โทรศัพท์ผู้เสียหาย: 0811111111",
+        "- บันทึกการติดต่อ: ไม่ประสงค์ดำเนินคดี วันที่ 9 พ.ย. 2569 เวลา 14.00 น."]
+    item = pars[i + 1]
+    assert item.runs[0].text == "- เลขรับแจ้ง:" and item.runs[0].bold and not item.runs[1].bold
+    assert item.paragraph_format.left_indent > 0 and heads[0].paragraph_format.keep_with_next
+    text = "\n".join(p.text for p in pars)
+    assert day_calls[7].receipt_no not in text and day_calls[8].receipt_no not in text
     assert "วันที่ 8 พ.ย." not in text and "วันที่ 10 พ.ย." not in text
+    # the same lines as the text version
+    assert report.summary_file_text(report.load(DAY)).replace("\n\n", "\n") == text
 
 
 def test_contact_log_lines_in_the_registers_words(day_calls):

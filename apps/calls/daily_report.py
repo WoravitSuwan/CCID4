@@ -9,7 +9,6 @@ Each case called that day counts once, by the result of its last call that day.
 from __future__ import annotations
 
 import datetime as dt
-import math
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -391,100 +390,100 @@ def diary_file_text(d: Day) -> str:
     return "\n\n".join(parts)
 
 
-def summary_file_text(d: Day) -> str:
-    """สรุปข้อมูลคดีและบันทึกการติดต่อ: every case called that day, six lines each."""
-    blocks = ["สรุปข้อมูลคดีและบันทึกการติดต่อ"]
+SUMMARY_FILE_TITLE = "สรุปข้อมูลคดีและบันทึกการติดต่อ"
+
+
+def summary_blocks(d: Day) -> list[tuple[str, list[tuple[str, str]]]]:
+    """สรุปข้อมูลคดี: every case called that day, in the order first called -
+    (victim's name, [(label, value) x 5]) as in the unit's own file."""
+    blocks = []
     for r in d.rows:
         case = r.case
         amount = f"{case.damage_amount:,.2f} บาท" if case.damage_amount is not None else "-"
-        blocks.append("\n".join([
-            f"ผู้เสียหาย: {r.name}",
-            f"- เลขรับแจ้ง: {case.receipt_no}",
-            f"- มูลค่าความเสียหาย: {amount}",
-            f"- พนักงานสอบสวน: {(case.investigator_raw or '').strip() or '-'}",
-            f"- เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}",
-            f"- บันทึกการติดต่อ: {log_line(r.attempt)}",
+        blocks.append((r.name, [
+            ("เลขรับแจ้ง", case.receipt_no),
+            ("มูลค่าความเสียหาย", amount),
+            ("พนักงานสอบสวน", (case.investigator_raw or "").strip() or "-"),
+            ("เบอร์โทรศัพท์ผู้เสียหาย", r.phone),
+            ("บันทึกการติดต่อ", log_line(r.attempt)),
         ]))
-    return "\n\n".join(blocks)
+    return blocks
 
 
-SUMMARY_HEADERS = ["ลำดับ", "ผู้เสียหาย", "เลขรับแจ้ง", "มูลค่าความเสียหาย (บาท)", "พนักงานสอบสวน",
-                   "เบอร์โทรศัพท์ผู้เสียหาย", "บันทึกการติดต่อ"]
+def summary_file_text(d: Day) -> str:
+    """สรุปข้อมูลคดีและบันทึกการติดต่อ as text: six lines a case (sent to LINE when no PDF link can be made)."""
+    parts = [SUMMARY_FILE_TITLE]
+    for name, items in summary_blocks(d):
+        parts.append("\n".join([f"ผู้เสียหาย: {name}"] + [f"- {label}: {value}" for label, value in items]))
+    return "\n\n".join(parts)
 
 
 def summary_title(d: Day) -> str:
-    return f"สรุปข้อมูลคดีและบันทึกการติดต่อ {period_text(d)} ({len(d.rows):,} คดี)"
+    return f"{SUMMARY_FILE_TITLE} {period_text(d)} ({len(d.rows):,} คดี)"
 
 
-_THAI_MARKS = re.compile("[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]")  # vowels and tone marks above/below: no width
+SUMMARY_FONT = "TH SarabunPSK"  # as in the unit's file (the server falls back to Sarabun Compat, see docker/)
 
 
-def _width(value) -> int:
-    """About how many characters wide a cell's text is (Thai marks above and below the line take no room)."""
-    return len(_THAI_MARKS.sub("", str(value if value is not None else "")))
+def write_summary_docx(d: Day, path) -> Path:
+    """สรุปข้อมูลคดี laid out as the unit's own Word file: the title in the middle, then for each case a bold
+    "ผู้เสียหาย: …" and five indented lines "- <label in bold>: <value>". A case is never split over two pages."""
+    from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.shared import Inches, Pt
 
+    doc = Document()
+    sec = doc.sections[0]
+    sec.page_width, sec.page_height = Inches(8.27), Inches(11.69)  # A4
+    sec.left_margin = sec.right_margin = Inches(0.6)
+    sec.top_margin = sec.bottom_margin = Inches(0.7)
+    style = doc.styles["Normal"]
+    style.font.name, style.font.size = SUMMARY_FONT, Pt(16)
+    rpr = style.element.get_or_add_rPr()
+    fonts = rpr.find(qn("w:rFonts"))
+    if fonts is None:
+        fonts = rpr.makeelement(qn("w:rFonts"), {})
+        rpr.append(fonts)
+    for attr in ("w:ascii", "w:hAnsi", "w:cs", "w:eastAsia"):
+        fonts.set(qn(attr), SUMMARY_FONT)
+    szcs = rpr.makeelement(qn("w:szCs"), {qn("w:val"): "32"})  # Thai text uses the complex-script size
+    rpr.append(szcs)
+    pf = style.paragraph_format
+    pf.space_before, pf.space_after, pf.line_spacing = Pt(0), Pt(6), 1.08
 
-def write_summary_xlsx(d: Day, path) -> Path:
-    """สรุปข้อมูลคดี as a table (A4 landscape, the header row on every page): the source of the PDF."""
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    def run(par, text, bold=False, size=None):
+        r = par.add_run(text)
+        r.bold = bold
+        if bold:  # bold for Thai too
+            r._element.get_or_add_rPr().append(r._element.makeelement(qn("w:bCs"), {}))
+        if size:
+            r.font.size = Pt(size)
+            r._element.get_or_add_rPr().append(r._element.makeelement(qn("w:szCs"), {qn("w:val"): str(size * 2)}))
+        return r
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "สรุปข้อมูลคดี"
-    font, bold = Font(name="TH Sarabun New", size=14), Font(name="TH Sarabun New", size=14, bold=True)
-    thin = Side(style="thin", color="808080")
-    box = Border(left=thin, right=thin, top=thin, bottom=thin)
-    ws.append([summary_title(d)])
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(SUMMARY_HEADERS))
-    ws["A1"].font = Font(name="TH Sarabun New", size=18, bold=True)
-    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 30
-    ws.append(SUMMARY_HEADERS)
-    for i, r in enumerate(d.rows, start=1):
-        case = r.case
-        ws.append([i, r.name, case.receipt_no,
-                   float(case.damage_amount) if case.damage_amount is not None else None,
-                   investigator_of(r), r.phone, log_line(r.attempt)])
-    if not d.rows:
-        ws.append(["", "ไม่มีคดีที่โทรในวันนี้"])
-    widths = [7, 26, 15, 15, 26, 17, 54]
-    for i, w in enumerate(widths):
-        ws.column_dimensions[chr(65 + i)].width = w
-    for row in ws.iter_rows(min_row=3):  # LibreOffice does not grow rows for wrapped text: set the height
-        lines = max(math.ceil(_width(c.value) / (widths[c.column - 1] * 1.3)) for c in row)
-        ws.row_dimensions[row[0].row].height = 21 * max(lines, 1) + 3
-    head_fill = PatternFill("solid", fgColor="E8EEF8")
-    for row in ws.iter_rows(min_row=2):
-        for cell in row:
-            cell.border = box
-            cell.font = bold if cell.row == 2 else font
-            if cell.row == 2:
-                cell.fill = head_fill
-                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            elif cell.column in (1, 3, 6):
-                cell.alignment = Alignment(horizontal="center", vertical="top")
-            elif cell.column == 4:
-                cell.number_format = "#,##0.00"
-                cell.alignment = Alignment(horizontal="right", vertical="top", indent=1)
-            else:
-                cell.alignment = Alignment(vertical="top", wrap_text=True, indent=1)
-    ws.row_dimensions[2].height = 36
-    ws.freeze_panes = "A3"
-    ws.print_title_rows = "2:2"
-    ws.page_setup.paperSize = ws.PAPERSIZE_A4
-    ws.page_setup.orientation = "landscape"
-    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.print_options.horizontalCentered = True
-    ws.page_margins.left = ws.page_margins.right = 0.4
-    ws.page_margins.top, ws.page_margins.bottom = 0.6, 0.75
-    ws.page_margins.header, ws.page_margins.footer = 0.3, 0.3
-    ws.oddFooter.left.text = f"{settings.OWN_UNIT} · พิมพ์ {timezone.localtime():%d/%m/%Y %H:%M}"
-    ws.oddFooter.right.text = "หน้า &P / &N"
-    wb.properties.title = summary_title(d)
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.paragraph_format.space_after = Pt(22)
+    run(title, SUMMARY_FILE_TITLE, bold=True, size=18)
+    blocks = summary_blocks(d)
+    if not blocks:
+        run(doc.add_paragraph(), f"ไม่มีคดีที่โทร{period_text(d)}")
+    for i, (name, items) in enumerate(blocks):
+        head = doc.add_paragraph()
+        head.paragraph_format.space_before = Pt(0 if i == 0 else 26)
+        head.paragraph_format.space_after = Pt(10)
+        head.paragraph_format.keep_with_next = True
+        run(head, f"ผู้เสียหาย: {name}", bold=True)
+        for j, (label, value) in enumerate(items):
+            par = doc.add_paragraph()
+            par.paragraph_format.left_indent = Inches(0.5)
+            par.paragraph_format.keep_with_next = j < len(items) - 1
+            run(par, f"- {label}:", bold=True)
+            run(par, f" {value}")
+    doc.core_properties.title = summary_title(d)
     path = Path(path)
-    wb.save(path)
+    doc.save(path)
     return path
 
 
@@ -496,8 +495,8 @@ def summary_pdf(d: Day) -> tuple[str, bytes]:
 
     stem = f"{FILE_STEM['summary']} {file_day(d.day)}"
     with tempfile.TemporaryDirectory() as tmp:
-        xlsx = write_summary_xlsx(d, Path(tmp) / f"{stem}.xlsx")
-        pdf = convert_many([xlsx], tmp, export_filter="calc_pdf_Export")[0]
+        docx = write_summary_docx(d, Path(tmp) / f"{stem}.docx")
+        pdf = convert_many([docx], tmp)[0]
         return f"{stem}.pdf", pdf.read_bytes()
 
 
