@@ -151,9 +151,13 @@ def test_page_texts_and_text_files(client, caller, day_calls):
         "หญิงสุดา รักษ์ดี จำนวน 2 Case",
         f"ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: {c0.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0811111111",
         f"ผู้เสียหาย: นายทดสอบ สอง เลขรับแจ้ง: {c1.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0899999999", ""]
+    # สรุปข้อมูลคดี: a PDF (one table of every case called that day)
     resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary"})
-    assert "9.11.2569.txt" in resp["Content-Disposition"]
-    summary = lines_of(resp)
+    assert resp["Content-Type"] == "application/pdf" and resp.content.startswith(b"%PDF")
+    assert "9.11.2569.pdf" in resp["Content-Disposition"]
+    assert "สรุปข้อมูลคดี (PDF)" in html
+    # the same rows as the text (still sent when no PDF can be made)
+    summary = report.summary_file_text(report.load(DAY)).split("\n") + [""]
     assert summary[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ" and summary[1] == ""
     first = summary.index("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
     assert summary[2].startswith("ผู้เสียหาย: ")  # in the order first called (c[5] at 08:00)
@@ -167,13 +171,22 @@ def test_page_texts_and_text_files(client, caller, day_calls):
     assert mine["counts"]["total"] == 6 and mine["caller"] == caller
 
 
-def test_summary_text_file_has_only_the_cases_called_that_day(client, caller, day_calls):
-    """สรุปข้อมูลคดี is daily: calls of the day before or after are not in it."""
-    client.force_login(caller)
-    resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary", "from": "2026-11-01"})
-    text = "\n".join(lines_of(resp))
-    assert sum(line.startswith("ผู้เสียหาย:") for line in text.split("\n")) == 7
-    assert day_calls[7].receipt_no not in text and day_calls[8].receipt_no not in text
+def test_summary_table_has_only_the_cases_called_that_day(tmp_path, day_calls):
+    """สรุปข้อมูลคดี is daily: calls of the day before or after are not in it (the table the PDF is made of)."""
+    from openpyxl import load_workbook
+
+    ws = load_workbook(report.write_summary_xlsx(report.load(DAY), tmp_path / "s.xlsx")).active
+    assert ws["A1"].value == "สรุปข้อมูลคดีและบันทึกการติดต่อ ประจำวันที่ 9 พฤศจิกายน 2569 (7 คดี)"
+    assert [c.value for c in ws[2]] == report.SUMMARY_HEADERS
+    rows = list(ws.iter_rows(min_row=3, values_only=True))
+    receipts = [r[2] for r in rows]
+    assert len(rows) == 7 and day_calls[7].receipt_no not in receipts and day_calls[8].receipt_no not in receipts
+    c0 = day_calls[0]
+    mine = rows[receipts.index(c0.receipt_no)]
+    assert mine[1] == "นางสาวทดสอบ หนึ่ง" and mine[4] == "หญิงสุดา รักษ์ดี" and mine[5] == "0811111111"
+    assert mine[6] == "ไม่ประสงค์ดำเนินคดี วันที่ 9 พ.ย. 2569 เวลา 14.00 น."
+    assert ws.page_setup.orientation == "landscape" and ws.print_title_rows.replace("$", "") == "2:2"
+    text = " ".join(str(v) for r in rows for v in r)
     assert "วันที่ 8 พ.ย." not in text and "วันที่ 10 พ.ย." not in text
 
 
@@ -308,6 +321,22 @@ def test_push_sends_three_text_messages(line, day_calls):
     setting(line_send_files=False)
     line_bot.send_day(DAY)
     assert len(line[-1][2]["messages"]) == 1
+
+
+def test_third_message_links_to_the_pdf(client, settings, line, day_calls):
+    """With the system's address known, message 3 is a link to the PDF of สรุปข้อมูลคดี (a bot cannot put a file
+    in a group); ไม่ประสงค์ดำเนินคดี stays a text message."""
+    settings.SITE_URL = "https://callcenter.example.org"
+    setting(line_group_id="Cgroup1")
+    line_bot.send_day(DAY)
+    report_msg, diary_msg, cases_msg = [m["text"] for m in line[-1][2]["messages"]]
+    assert diary_msg.startswith("ไม่ประสงค์ดำเนินคดี จำนวน 2 Case ดังนี้")
+    assert cases_msg.startswith("สรุปข้อมูลคดีและบันทึกการติดต่อ ประจำวันที่ 9 พฤศจิกายน 2569 (7 คดี)")
+    assert "ไฟล์ PDF: https://callcenter.example.org/line/file/" in cases_msg and "7 วัน" in cases_msg
+    assert day_calls[0].receipt_no not in cases_msg  # names and numbers are in the file, not in the chat
+    link = cases_msg.split("ไฟล์ PDF: https://callcenter.example.org")[1].split("\n")[0]
+    pdf = client.get(link)  # no login
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
 
 
 def test_long_texts_are_split_between_cases(line, imported, caller):
@@ -453,11 +482,15 @@ def test_line_settings_page(client, admin_user, settings, line):
     client.force_login(admin_user)
     html = client.get("/settings/line/").content.decode()
     assert "http://testserver/line/webhook/" in html and "ส่งอัตโนมัติ" in html
+    assert "ลิงก์ PDF สรุปข้อมูลคดีเปิดได้ (วัน)" in html
+    too_long = client.post("/settings/line/", {"action": "save", "line_send_time": "17:30", "line_link_days": "31"})
+    assert too_long.status_code == 200 and SystemSetting.get().line_link_days == 7
     resp = client.post("/settings/line/", {"action": "save", "line_enabled": "on", "line_send_time": "17:30",
-                                           "line_skip_empty": "on"})
+                                           "line_skip_empty": "on", "line_link_days": "3"})
     assert resp.status_code == 302
     s = SystemSetting.get()
     assert s.line_enabled and s.line_send_time == dt.time(17, 30) and not s.line_send_files
+    assert s.line_link_days == 3
     settings.LINE_CHANNEL_ACCESS_TOKEN = ""
     assert "ยังไม่ได้เชื่อมต่อ LINE" in client.get("/settings/line/").content.decode()
 
@@ -537,8 +570,9 @@ def test_links_sent_before_still_open_until_they_expire(client, line, day_calls)
     assert diary.status_code == 200 and "9.11.2569.txt" in diary["Content-Disposition"]
     rows = [ln for ln in lines_of(diary) if ln.startswith("ผู้เสียหาย: ")]
     assert len(rows) == 2 and rows[0].startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
-    summary = client.get(f"/line/file/{line_bot.file_token(DAY, 'summary')}/")
-    assert lines_of(summary)[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ"
+    summary = client.get(f"/line/file/{line_bot.file_token(DAY, 'summary')}/")  # now a PDF, opened on the phone
+    assert summary["Content-Type"] == "application/pdf" and summary.content.startswith(b"%PDF")
+    assert summary["Content-Disposition"].startswith("inline")
     from apps.core.models import AuditLog
     assert AuditLog.objects.filter(detail__contains="ผ่านลิงก์ใน LINE").count() == 2
     assert client.get(link[:-4] + "xx/").status_code == 404  # changed: refused

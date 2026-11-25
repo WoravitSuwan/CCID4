@@ -134,3 +134,39 @@ def test_template_problems():
     assert report.template_problems(report.DEFAULT_SUMMARY_TEMPLATE) == []
     assert report.template_problems("  ") == ["ข้อความว่างเปล่า"]
     assert report.template_problems("ยอด {จำนวนทั้งหมด") == ["มีวงเล็บปีกกา { } ไม่ครบคู่"]
+
+
+def test_diary_wording_can_be_changed_and_locked_too(client, imported, caller):
+    case, _ = _never_called()
+    record_call(case, caller, outcome=CallOutcome.NOT_PROCEED, phone="0811111111")
+    client.force_login(caller)
+    page = client.get("/reports/daily/")
+    assert page.context["diary"].startswith("วันนี้(") and case.receipt_no in page.context["diary"]
+    assert page.context["diary"] == report.diary_text(report.load(timezone.localdate()), report.DEFAULT_DIARY_TEMPLATE)
+    client.post("/reports/daily/", {"action": "template_unlock", "which": "diary"})
+    s = SystemSetting.get()
+    assert not s.diary_locked and s.report_locked  # only the diary was opened
+    html = client.get("/reports/daily/").content.decode()
+    assert 'name="which" value="diary"' in html and "รายชื่อแยกพนักงานสอบสวน" in html
+    bad = client.post("/reports/daily/", {"action": "template_save", "which": "diary", "template": "{จำนวนทั้งหมด}"},
+                      follow=True)  # a field of the other text
+    assert "ไม่รู้จัก {จำนวนทั้งหมด}" in bad.content.decode()
+    new = "บันทึกประจำวัน {วันที่}\nไม่ประสงค์ {จำนวน} ราย\n{รายชื่อแยกพนักงานสอบสวน}\nลงชื่อ ................"
+    client.post("/reports/daily/", {"action": "template_save", "which": "diary", "template": new})
+    s = SystemSetting.get()
+    assert s.diary_locked and s.diary_template == new and s.report_template == ""
+    diary = client.get("/reports/daily/").context["diary"]
+    assert diary.startswith("บันทึกประจำวัน ") and "\nไม่ประสงค์ 1 ราย\n" in diary and case.receipt_no in diary
+    assert diary.endswith("ลงชื่อ ................") and "{" not in diary
+    # the LINE message about ไม่ประสงค์ดำเนินคดี stays as it was
+    from apps.calls import line_bot
+    assert line_bot.texts_for(timezone.localdate(), with_texts=True)[1].startswith("ไม่ประสงค์ดำเนินคดี จำนวน 1 Case")
+    client.post("/reports/daily/", {"action": "template_reset", "which": "diary"})
+    assert client.get("/reports/daily/").context["diary"].startswith("วันนี้(")
+
+
+def test_diary_wording_can_be_opened_on_a_day_with_nobody_listed(client, imported, caller):
+    client.force_login(caller)
+    html = client.get("/reports/daily/").content.decode()
+    assert "ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี" in html and 'name="which" value="diary"' in html
+    assert client.post("/reports/daily/", {"action": "template_unlock", "which": "nope"}).status_code == 404

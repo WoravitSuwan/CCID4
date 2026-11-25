@@ -1,0 +1,19 @@
+{% load ui %}{# params: w = the wording (daily_report.wording_state + values, draft) #}
+<form method="post" class="flex flex-1 flex-col" data-template-editor>{% csrf_token %}
+  <input type="hidden" name="which" value="{{ w.kind }}">
+  <p class="mb-2 text-xs text-slate-500">พิมพ์ข้อความได้ตามต้องการ ส่วนที่อยู่ใน { } ระบบจะใส่ข้อมูลของวันนั้นให้เอง · กดชื่อด้านล่างเพื่อแทรกตรงตำแหน่งเคอร์เซอร์</p>
+  <div class="mb-2 flex flex-wrap gap-1.5">
+    {% for key, help in w.fields.items %}<button type="button" class="field-chip" data-insert="{{ '{' }}{{ key }}{{ '}' }}" title="{{ help }}">{{ key }}</button>{% endfor %}
+  </div>
+  <label class="sr-only" for="t-template-{{ w.kind }}">รูปแบบ{{ w.title }}</label>
+  <textarea id="t-template-{{ w.kind }}" name="template" class="input msg-box min-h-[13rem] font-mono text-[13px]" rows="12" spellcheck="false">{% if w.draft is not None %}{{ w.draft }}{% else %}{{ w.text }}{% endif %}</textarea>
+  <div class="mt-3 text-xs font-medium text-slate-500">ตัวอย่างข้อความของวันนี้</div>
+  <pre class="msg-preview" data-preview aria-live="polite"></pre>
+  <p class="mt-1 hidden text-xs text-rose-700" data-problem></p>
+  <div class="mt-3 flex flex-wrap gap-2">
+    <button class="btn btn-primary" name="action" value="template_save">{% icon "lock" "h-4 w-4" %} บันทึกและล็อก</button>
+    <button class="btn" name="action" value="template_lock" formnovalidate>ยกเลิก (ล็อกแบบเดิม)</button>
+    <button class="btn btn-ghost ml-auto text-slate-600" name="action" value="template_reset" onclick="return confirm('คืน{{ w.title }}เป็นรูปแบบมาตรฐานของระบบ?')">{% icon "refresh" "h-4 w-4" %} คืนค่าแบบมาตรฐาน</button>
+  </div>
+  {% with vid="t-values-"|add:w.kind fid="t-fields-"|add:w.kind %}{{ w.values|json_script:vid }}{{ w.fields|json_script:fid }}{% endwith %}
+</form>

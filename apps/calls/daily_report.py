@@ -9,7 +9,9 @@ Each case called that day counts once, by the result of its last call that day.
 from __future__ import annotations
 
 import datetime as dt
+import math
 import re
+from pathlib import Path
 from dataclasses import dataclass, field
 
 from django.conf import settings
@@ -142,28 +144,14 @@ def unit_text() -> str:
     return settings.OWN_UNIT.replace(" ", "")  # "กก.1บก.สอท.4"
 
 
-def diary_text(d: Day) -> str:
-    """ลงบันทึกประจำวัน: the victims called that day who said they do not want to proceed."""
-    lines = [
-        f"วันนี้( {short_day(d.day)}) พนักงานสอบสวน {unit_text()}  ได้ทำการโทรศัพท์ติดต่อผู้เสียหายที่แจ้งความออนไลน์ "
-        "ผ่านระบบ Thaipoliceonline.com/สายด่วน 1441 เพื่อมาให้ถ้อยคำเพิ่มเติมพร้อมนำพยานหลักฐานที่เกี่ยวข้องกับคดี"
-        "มามอบให้กับพนักงานสอบสวน",
-        "พบว่ามีผู้เสียหายไม่ประสงค์พบพนักงานสอบสวนและไม่ประสงค์ดำเนินคดี ดังนี้",
-        "",
-    ]
-    for i, r in enumerate(d.not_want, start=1):
-        lines.append(f"{i}. ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}")
-    lines += ["", "จึงลงบันทึกไว้เป็นหลักฐาน เพื่อที่จะดำเนินการในส่วนที่เกี่ยวข้องต่อไป"]
-    return "\n".join(lines)
-
-
 def period_text(d: Day) -> str:
     """'ประจำวันที่ 9 พฤศจิกายน 2569'."""
     return f"ประจำวันที่ {thai_date_full(d.day, thai_digits=False)}"
 
 
-# The report for the commanders is written from a wording the staff can change on the page (and then lock).
-# {…} are filled in with the day's numbers; a line holding only {บรรทัดยังไม่ได้ข้อยุติ} disappears when it is 0.
+# The two texts on the page - the report for the commanders and ลงบันทึกประจำวัน - are written from a wording
+# the staff can change there (and then lock), so a new wording needs no new version of the system.
+# {…} are filled in for the day; a line holding only placeholders that come out empty disappears.
 DEFAULT_SUMMARY_TEMPLATE = "\n".join([
     "เรียนผู้บังคับบัญชา",
     "",
@@ -176,6 +164,16 @@ DEFAULT_SUMMARY_TEMPLATE = "\n".join([
     "",
     "จึงเรียนมาเพื่อโปรดทราบ",
 ])
+DEFAULT_DIARY_TEMPLATE = "\n".join([
+    "วันนี้( {วันที่สั้น}) พนักงานสอบสวน {หน่วย}  ได้ทำการโทรศัพท์ติดต่อผู้เสียหายที่แจ้งความออนไลน์ "
+    "ผ่านระบบ Thaipoliceonline.com/สายด่วน 1441 เพื่อมาให้ถ้อยคำเพิ่มเติมพร้อมนำพยานหลักฐานที่เกี่ยวข้องกับคดี"
+    "มามอบให้กับพนักงานสอบสวน",
+    "พบว่ามีผู้เสียหายไม่ประสงค์พบพนักงานสอบสวนและไม่ประสงค์ดำเนินคดี ดังนี้",
+    "",
+    "{รายชื่อ}",
+    "",
+    "จึงลงบันทึกไว้เป็นหลักฐาน เพื่อที่จะดำเนินการในส่วนที่เกี่ยวข้องต่อไป",
+])
 SUMMARY_FIELDS = {  # placeholder -> what it becomes (shown next to the editor)
     "วันที่": "วันที่ เช่น 25 พฤศจิกายน 2569",
     "ผู้โทร": "เจ้าหน้าที่ Outsource (มีชื่อเมื่อเลือกผู้โทร)",
@@ -186,6 +184,14 @@ SUMMARY_FIELDS = {  # placeholder -> what it becomes (shown next to the editor)
     "ติดต่อไม่ได้": "จำนวน ไม่สามารถติดต่อได้",
     "ยังไม่ได้ข้อยุติ": "จำนวน ติดต่อได้แต่ยังไม่ได้ข้อยุติ",
     "บรรทัดยังไม่ได้ข้อยุติ": "ข้อ 4 ทั้งบรรทัด (หายไปเองเมื่อเป็น 0)",
+}
+DIARY_FIELDS = {
+    "วันที่สั้น": "วันที่แบบย่อ เช่น 9 พ.ย.69",
+    "วันที่": "วันที่ เช่น 9 พฤศจิกายน 2569",
+    "หน่วย": "ชื่อหน่วย เช่น กก.1บก.สอท.4",
+    "จำนวน": "จำนวนผู้ที่ไม่ประสงค์ดำเนินคดี",
+    "รายชื่อ": "รายชื่อทีละบรรทัด: 1. ผู้เสียหาย: … เลขรับแจ้ง: … เบอร์โทรศัพท์ผู้เสียหาย: …",
+    "รายชื่อแยกพนักงานสอบสวน": "รายชื่อแยกตามพนักงานสอบสวน พร้อมจำนวนของแต่ละคน",
 }
 _FIELD = re.compile(r"\{([^{}\n]*)\}")
 MAX_TEMPLATE = 3000
@@ -205,15 +211,50 @@ def summary_values(d: Day) -> dict[str, str]:
     }
 
 
-def template_problems(text: str) -> list[str]:
+def _victim_line(r: Row) -> str:
+    return f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}"
+
+
+def diary_values(d: Day) -> dict[str, str]:
+    rows = d.not_want
+    return {
+        "วันที่สั้น": short_day(d.day), "วันที่": thai_date_full(d.day, thai_digits=False), "หน่วย": unit_text(),
+        "จำนวน": f"{len(rows):,}",
+        "รายชื่อ": "\n".join(f"{i}. {_victim_line(r)}" for i, r in enumerate(rows, start=1)),
+        "รายชื่อแยกพนักงานสอบสวน": "\n\n".join(
+            "\n".join([f"{name} จำนวน {len(group):,} Case"] + [_victim_line(r) for r in group])
+            for name, group in by_investigator(rows)),
+    }
+
+
+@dataclass(frozen=True)
+class Wording:
+    """One text whose wording can be changed on the page: where it is kept and what it can hold."""
+    kind: str
+    title: str
+    default: str
+    fields: dict
+    values: object  # Day -> dict
+    prefix: str  # SystemSetting fields <prefix>_template, _locked, _updated_by, _updated_at
+
+
+WORDINGS = {
+    "summary": Wording("summary", "ข้อความรายงานผู้บังคับบัญชา", DEFAULT_SUMMARY_TEMPLATE, SUMMARY_FIELDS,
+                       summary_values, "report"),
+    "diary": Wording("diary", "ข้อความลงบันทึกประจำวัน", DEFAULT_DIARY_TEMPLATE, DIARY_FIELDS, diary_values, "diary"),
+}
+
+
+def template_problems(text: str, kind: str = "summary") -> list[str]:
     """What is wrong with a wording the staff typed (empty list = fine). Unknown {…} are refused, so nothing
     like {…} can end up in a report."""
+    fields = WORDINGS[kind].fields
     problems = []
     if not text.strip():
         problems.append("ข้อความว่างเปล่า")
     if len(text) > MAX_TEMPLATE:
         problems.append(f"ยาวเกิน {MAX_TEMPLATE:,} ตัวอักษร")
-    unknown = sorted({m for m in _FIELD.findall(text) if m not in SUMMARY_FIELDS})
+    unknown = sorted({m for m in _FIELD.findall(text) if m not in fields})
     if unknown:
         problems.append("ไม่รู้จัก " + ", ".join("{" + u + "}" for u in unknown))
     if _FIELD.sub("", text).count("{") or _FIELD.sub("", text).count("}"):
@@ -221,16 +262,24 @@ def template_problems(text: str) -> list[str]:
     return problems
 
 
-def summary_template() -> str:
-    """The wording in use: the one saved on the page, else the standard one."""
+def wording_state(kind: str) -> dict:
+    """The saved wording of one text and its lock, as stored in SystemSetting."""
     from apps.core.models import SystemSetting
 
-    saved = SystemSetting.get().report_template
-    return saved if saved.strip() and not template_problems(saved) else DEFAULT_SUMMARY_TEMPLATE
+    s, w = SystemSetting.get(), WORDINGS[kind]
+    saved = getattr(s, f"{w.prefix}_template")
+    text = saved if saved.strip() and not template_problems(saved, kind) else w.default
+    return {"kind": kind, "title": w.title, "text": text, "custom": text != w.default, "standard": w.default,
+            "locked": getattr(s, f"{w.prefix}_locked"), "by": getattr(s, f"{w.prefix}_updated_by"),
+            "at": getattr(s, f"{w.prefix}_updated_at"), "fields": w.fields}
 
 
-def render_summary(template: str, d: Day) -> str:
-    values = summary_values(d)
+def summary_template() -> str:
+    """The wording in use: the one saved on the page, else the standard one."""
+    return wording_state("summary")["text"]
+
+
+def render(template: str, values: dict) -> str:
     lines = []
     for line in template.replace("\r\n", "\n").split("\n"):
         out = _FIELD.sub(lambda m: values.get(m.group(1), ""), line)
@@ -240,9 +289,18 @@ def render_summary(template: str, d: Day) -> str:
     return "\n".join(lines).strip("\n")
 
 
+def render_summary(template: str, d: Day) -> str:
+    return render(template, summary_values(d))
+
+
 def summary_text(d: Day, template: str | None = None) -> str:
     """The daily report for the commanders (counts only: no names or phone numbers)."""
-    return render_summary(template if template is not None else summary_template(), d)
+    return render(template if template is not None else summary_template(), summary_values(d))
+
+
+def diary_text(d: Day, template: str | None = None) -> str:
+    """ลงบันทึกประจำวัน: the victims called that day who said they do not want to proceed."""
+    return render(template if template is not None else wording_state("diary")["text"], diary_values(d))
 
 
 def stamp(day: dt.date, caller=None) -> str:
@@ -348,6 +406,99 @@ def summary_file_text(d: Day) -> str:
             f"- บันทึกการติดต่อ: {log_line(r.attempt)}",
         ]))
     return "\n\n".join(blocks)
+
+
+SUMMARY_HEADERS = ["ลำดับ", "ผู้เสียหาย", "เลขรับแจ้ง", "มูลค่าความเสียหาย (บาท)", "พนักงานสอบสวน",
+                   "เบอร์โทรศัพท์ผู้เสียหาย", "บันทึกการติดต่อ"]
+
+
+def summary_title(d: Day) -> str:
+    return f"สรุปข้อมูลคดีและบันทึกการติดต่อ {period_text(d)} ({len(d.rows):,} คดี)"
+
+
+_THAI_MARKS = re.compile("[\u0e31\u0e34-\u0e3a\u0e47-\u0e4e]")  # vowels and tone marks above/below: no width
+
+
+def _width(value) -> int:
+    """About how many characters wide a cell's text is (Thai marks above and below the line take no room)."""
+    return len(_THAI_MARKS.sub("", str(value if value is not None else "")))
+
+
+def write_summary_xlsx(d: Day, path) -> Path:
+    """สรุปข้อมูลคดี as a table (A4 landscape, the header row on every page): the source of the PDF."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "สรุปข้อมูลคดี"
+    font, bold = Font(name="TH Sarabun New", size=14), Font(name="TH Sarabun New", size=14, bold=True)
+    thin = Side(style="thin", color="808080")
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+    ws.append([summary_title(d)])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(SUMMARY_HEADERS))
+    ws["A1"].font = Font(name="TH Sarabun New", size=18, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 30
+    ws.append(SUMMARY_HEADERS)
+    for i, r in enumerate(d.rows, start=1):
+        case = r.case
+        ws.append([i, r.name, case.receipt_no,
+                   float(case.damage_amount) if case.damage_amount is not None else None,
+                   investigator_of(r), r.phone, log_line(r.attempt)])
+    if not d.rows:
+        ws.append(["", "ไม่มีคดีที่โทรในวันนี้"])
+    widths = [7, 26, 15, 15, 26, 17, 54]
+    for i, w in enumerate(widths):
+        ws.column_dimensions[chr(65 + i)].width = w
+    for row in ws.iter_rows(min_row=3):  # LibreOffice does not grow rows for wrapped text: set the height
+        lines = max(math.ceil(_width(c.value) / (widths[c.column - 1] * 1.3)) for c in row)
+        ws.row_dimensions[row[0].row].height = 21 * max(lines, 1) + 3
+    head_fill = PatternFill("solid", fgColor="E8EEF8")
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.border = box
+            cell.font = bold if cell.row == 2 else font
+            if cell.row == 2:
+                cell.fill = head_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            elif cell.column in (1, 3, 6):
+                cell.alignment = Alignment(horizontal="center", vertical="top")
+            elif cell.column == 4:
+                cell.number_format = "#,##0.00"
+                cell.alignment = Alignment(horizontal="right", vertical="top", indent=1)
+            else:
+                cell.alignment = Alignment(vertical="top", wrap_text=True, indent=1)
+    ws.row_dimensions[2].height = 36
+    ws.freeze_panes = "A3"
+    ws.print_title_rows = "2:2"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_options.horizontalCentered = True
+    ws.page_margins.left = ws.page_margins.right = 0.4
+    ws.page_margins.top, ws.page_margins.bottom = 0.6, 0.75
+    ws.page_margins.header, ws.page_margins.footer = 0.3, 0.3
+    ws.oddFooter.left.text = f"{settings.OWN_UNIT} · พิมพ์ {timezone.localtime():%d/%m/%Y %H:%M}"
+    ws.oddFooter.right.text = "หน้า &P / &N"
+    wb.properties.title = summary_title(d)
+    path = Path(path)
+    wb.save(path)
+    return path
+
+
+def summary_pdf(d: Day) -> tuple[str, bytes]:
+    """(file name, PDF) of สรุปข้อมูลคดี; raises apps.documents.pdf.PdfConversionError without LibreOffice."""
+    import tempfile
+
+    from apps.documents.pdf import convert_many
+
+    stem = f"{FILE_STEM['summary']} {file_day(d.day)}"
+    with tempfile.TemporaryDirectory() as tmp:
+        xlsx = write_summary_xlsx(d, Path(tmp) / f"{stem}.xlsx")
+        pdf = convert_many([xlsx], tmp, export_filter="calc_pdf_Export")[0]
+        return f"{stem}.pdf", pdf.read_bytes()
 
 
 FILE_TEXT = {"diary": diary_file_text, "summary": summary_file_text}

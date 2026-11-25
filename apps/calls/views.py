@@ -863,6 +863,19 @@ def daily_report(request):
         resp = HttpResponse(report.stamp(day, caller), content_type="text/plain")
         resp["Cache-Control"] = "no-store"
         return resp
+    if fmt == "summary":  # สรุปข้อมูลคดี as a PDF (the text file when this computer cannot make PDFs)
+        from apps.documents.pdf import PdfConversionError, soffice_available
+
+        if soffice_available():
+            try:
+                name, body = report.summary_pdf(d)
+            except PdfConversionError as exc:
+                messages.error(request, f"สร้าง PDF ไม่ได้: {exc}")
+                return redirect(f"{reverse('daily_report')}?{request.GET.urlencode().replace('format=summary', '')}")
+            log(request, AuditAction.EXPORT, None, f"ดาวน์โหลด {name} ({d.counts['total']:,} Case)")
+            resp = HttpResponse(body, content_type="application/pdf")
+            resp["Content-Disposition"] = content_disposition(name, inline="inline" in request.GET)
+            return resp
     if fmt in ("diary", "summary"):
         name = report.file_name(report.FILE_STEM[fmt], d)
         log(request, AuditAction.EXPORT, None, f"ดาวน์โหลด {name} ({d.counts['total']:,} Case)")
@@ -871,12 +884,14 @@ def daily_report(request):
         return resp
 
     s = SystemSetting.get()
-    template = report.summary_template()
+    wordings = {}
+    for kind, w in report.WORDINGS.items():
+        wordings[kind] = report.wording_state(kind) | {"values": w.values(d),
+                                                       "draft": request.session.pop(f"{kind}_draft", None)}
+    from apps.documents.pdf import soffice_available
+
     return render(request, "calls/daily_report.html", {
-        "template": {"text": template, "locked": s.report_locked, "custom": template != report.DEFAULT_SUMMARY_TEMPLATE,
-                     "by": s.report_updated_by, "at": s.report_updated_at, "fields": report.SUMMARY_FIELDS,
-                     "values": report.summary_values(d), "standard": report.DEFAULT_SUMMARY_TEMPLATE,
-                     "draft": request.session.pop("report_draft", None)},
+        "template": wordings["summary"], "diary_template": wordings["diary"], "summary_pdf": soffice_available(),
         "d": d, "day": day, "today": today, "counts": d.counts, "caller": caller,
         "callers": User.objects.filter(pk__in=report.caller_ids(day)).order_by("first_name", "username"),
         "period_text": report.period_text(d), "stamp": report.stamp(day, caller), "live": day == today,
@@ -897,40 +912,49 @@ def daily_report(request):
 
 
 def _report_template_action(request, back):
-    """Unlock the wording of the report for editing, save it (which locks it again), lock it unchanged, or go back
-    to the standard wording. Every change is in the audit log."""
+    """Unlock the wording of one text on สรุปผลประจำวัน (the report for the commanders, or ลงบันทึกประจำวัน) for
+    editing, save it (which locks it again), lock it unchanged, or go back to the standard wording.
+    Every change is in the audit log."""
     from . import daily_report as report
 
+    kind = request.POST.get("which", "summary")
+    if kind not in report.WORDINGS:
+        raise Http404
+    w = report.WORDINGS[kind]
     s = SystemSetting.get()
     action = request.POST["action"]
+    anchor = "#report" if kind == "summary" else "#diary"
     who = request.user.display_name()
+    fields = [f"{w.prefix}_{f}" for f in ("template", "locked", "updated_by", "updated_at")]
     if action == "template_unlock":
-        s.report_locked = False
-        s.report_updated_by, s.report_updated_at = who, timezone.now()
-        s.save(update_fields=["report_locked", "report_updated_by", "report_updated_at"])
-        log(request, AuditAction.SETTINGS, s, "ปลดล็อกรูปแบบข้อความรายงานผู้บังคับบัญชาเพื่อแก้ไข")
-        return redirect(back + "#report")
+        setattr(s, f"{w.prefix}_locked", False)
+        setattr(s, f"{w.prefix}_updated_by", who)
+        setattr(s, f"{w.prefix}_updated_at", timezone.now())
+        s.save(update_fields=fields[1:])
+        log(request, AuditAction.SETTINGS, s, f"ปลดล็อกรูปแบบ{w.title}เพื่อแก้ไข")
+        return redirect(back + anchor)
     if action == "template_save":
         text = request.POST.get("template", "").replace("\r\n", "\n").strip("\n")
-        problems = report.template_problems(text)
+        problems = report.template_problems(text, kind)
         if problems:
-            messages.error(request, "ยังบันทึกรูปแบบข้อความไม่ได้: " + " · ".join(problems))
-            request.session["report_draft"] = text  # keep what was typed
-            return redirect(back + "#report")
-        s.report_template = "" if text == report.DEFAULT_SUMMARY_TEMPLATE else text
-        what = "บันทึกรูปแบบข้อความรายงานผู้บังคับบัญชาและล็อกแล้ว"
+            messages.error(request, f"ยังบันทึกรูปแบบ{w.title}ไม่ได้: " + " · ".join(problems))
+            request.session[f"{kind}_draft"] = text  # keep what was typed
+            return redirect(back + anchor)
+        setattr(s, f"{w.prefix}_template", "" if text == w.default else text)
+        what = f"บันทึกรูปแบบ{w.title}และล็อกแล้ว"
     elif action == "template_reset":
-        s.report_template = ""
-        what = "คืนรูปแบบข้อความรายงานผู้บังคับบัญชาเป็นแบบมาตรฐานและล็อกแล้ว"
+        setattr(s, f"{w.prefix}_template", "")
+        what = f"คืนรูปแบบ{w.title}เป็นแบบมาตรฐานและล็อกแล้ว"
     else:  # template_lock: keep the wording as it is
-        what = "ล็อกรูปแบบข้อความรายงานผู้บังคับบัญชา (ไม่ได้แก้)"
-    s.report_locked = True
-    s.report_updated_by, s.report_updated_at = who, timezone.now()
-    s.save(update_fields=["report_template", "report_locked", "report_updated_by", "report_updated_at"])
-    request.session.pop("report_draft", None)
+        what = f"ล็อกรูปแบบ{w.title} (ไม่ได้แก้)"
+    setattr(s, f"{w.prefix}_locked", True)
+    setattr(s, f"{w.prefix}_updated_by", who)
+    setattr(s, f"{w.prefix}_updated_at", timezone.now())
+    s.save(update_fields=fields)
+    request.session.pop(f"{kind}_draft", None)
     log(request, AuditAction.SETTINGS, s, what)
     messages.success(request, what)
-    return redirect(back + "#report")
+    return redirect(back + anchor)
 
 
 @csrf_exempt
@@ -969,6 +993,19 @@ def line_file(request, token):
     except (signing.BadSignature, ValueError):
         raise Http404 from None
     d = report.load(day)
+    if kind == "summary":  # สรุปข้อมูลคดี: the PDF, opened in the phone's viewer
+        from apps.documents.pdf import PdfConversionError
+
+        try:
+            name, body = report.summary_pdf(d)
+        except PdfConversionError:
+            name, body = None, None
+        if body is not None:
+            log(request, AuditAction.DOWNLOAD, None, f"เปิด {name} ผ่านลิงก์ใน LINE", user=None)
+            resp = HttpResponse(body, content_type="application/pdf")
+            resp["Content-Disposition"] = content_disposition(name, inline=True)
+            resp["Cache-Control"] = "no-store"
+            return resp
     name = report.file_name(report.FILE_STEM[kind], d)
     log(request, AuditAction.DOWNLOAD, None, f"ดาวน์โหลด {name} ผ่านลิงก์ใน LINE", user=None)
     resp = HttpResponse(report.text_file(kind, d), content_type="text/plain; charset=utf-8")

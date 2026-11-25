@@ -308,10 +308,10 @@
   function setupTemplateEditor(form) {
     if (form.dataset.ready) return;
     form.dataset.ready = "1";
-    const area = form.querySelector("textarea[name=template]"), out = form.querySelector("#t-preview"),
-      problem = form.querySelector("#t-problem"), save = form.querySelector('[value="template_save"]');
-    const values = JSON.parse(form.querySelector("#t-values").textContent),
-      fields = JSON.parse(form.querySelector("#t-fields").textContent), re = /\{([^{}\n]*)\}/g;
+    const area = form.querySelector("textarea[name=template]"), out = form.querySelector("[data-preview]"),
+      problem = form.querySelector("[data-problem]"), save = form.querySelector('[value="template_save"]');
+    const values = JSON.parse(form.querySelector('script[id^="t-values"]').textContent),
+      fields = JSON.parse(form.querySelector('script[id^="t-fields"]').textContent), re = /\{([^{}\n]*)\}/g;
     function render() {
       const text = area.value, unknown = new Set();
       const lines = [];

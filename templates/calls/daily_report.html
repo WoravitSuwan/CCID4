@@ -38,10 +38,10 @@
       {% if line_problem %}
       <p class="text-sm text-amber-700">ยังส่งไม่ได้: {{ line_problem }}{% if perm_settings %} · <a href="{% url 'settings_line' %}">ไปตั้งค่าบอท LINE</a>{% else %} · แจ้งผู้ดูแลระบบ{% endif %}</p>
       {% else %}
-      <p class="text-sm text-slate-500">{% if line_files %}ส่ง 3 ข้อความ: รายงานผู้บังคับบัญชา · ลงบันทึกประจำวัน · สรุปข้อมูลคดี{% else %}ส่งข้อความรายงานผู้บังคับบัญชา{% endif %} เข้ากลุ่ม {{ line_group|default:"LINE" }}</p>
+      <p class="text-sm text-slate-500">{% if line_files %}ส่ง 3 ข้อความ: รายงานผู้บังคับบัญชา · ลงบันทึกประจำวัน · ลิงก์ PDF สรุปข้อมูลคดี{% else %}ส่งข้อความรายงานผู้บังคับบัญชา{% endif %} เข้ากลุ่ม {{ line_group|default:"LINE" }}</p>
       {% endif %}
     </div>
-    <form method="post" class="w-full sm:w-auto" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE ตอนนี้?{% if line_files %}\n(3 ข้อความ: รายงาน / ลงบันทึกประจำวัน / สรุปข้อมูลคดี){% endif %}\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
+    <form method="post" class="w-full sm:w-auto" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE ตอนนี้?{% if line_files %}\n(3 ข้อความ: รายงาน / ลงบันทึกประจำวัน / ลิงก์ PDF สรุปข้อมูลคดี){% endif %}\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
       <button class="btn btn-line w-full sm:w-auto" {% if line_problem %}disabled title="{{ line_problem }}"{% endif %}>{% line_icon "line-mark" True %} ส่งสรุปผลวันที่ {{ day|thai_date }} ตอนนี้</button>
     </form>
   </div>
@@ -87,47 +87,33 @@
     <textarea id="t-summary" class="input msg-box min-h-[11rem] flex-1" rows="11" readonly>{{ summary }}</textarea>
     <div class="mt-3 flex flex-wrap items-center gap-2">
       <button type="button" class="btn btn-primary" data-copy="#t-summary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
-      <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary">{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี (.txt)</a>
-      <form method="post" class="ml-auto" data-no-busy onsubmit="return confirm('ปลดล็อกเพื่อแก้รูปแบบข้อความรายงานผู้บังคับบัญชา?\nข้อความที่แก้จะใช้ทุกวัน รวมถึงข้อความที่ส่งเข้า LINE')">{% csrf_token %}
-        <input type="hidden" name="action" value="template_unlock">
-        <button class="btn btn-ghost btn-sm text-slate-600">{% icon "lock-open" "h-4 w-4" %} ปลดล็อกเพื่อแก้รูปแบบ</button>
-      </form>
+      <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary" {% if summary_pdf %}title="ตารางทุกคดีที่โทรวันนี้ พร้อมบันทึกการติดต่อ (PDF แนวนอน)"{% endif %}>{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี ({% if summary_pdf %}PDF{% else %}.txt{% endif %})</a>
+      {% include "calls/_wording_unlock.html" with w=template %}
     </div>
     {% if template.custom or template.by %}<p class="mt-2 text-xs text-slate-400">{% if template.custom %}ใช้รูปแบบที่แก้เอง{% else %}ใช้รูปแบบมาตรฐาน{% endif %}{% if template.by %} · แก้/ล็อกล่าสุดโดย {{ template.by }} ({{ template.at|thai_date:"datetime" }}){% endif %}</p>{% endif %}
     {% else %}
-    <form method="post" class="flex flex-1 flex-col" data-template-editor>{% csrf_token %}
-      <p class="mb-2 text-xs text-slate-500">พิมพ์ข้อความได้ตามต้องการ ส่วนที่อยู่ใน { } ระบบจะใส่ตัวเลขของวันนั้นให้เอง · กดชื่อด้านล่างเพื่อแทรกตรงตำแหน่งเคอร์เซอร์</p>
-      <div class="mb-2 flex flex-wrap gap-1.5">
-        {% for key, help in template.fields.items %}<button type="button" class="field-chip" data-insert="{{ '{' }}{{ key }}{{ '}' }}" title="{{ help }}">{{ key }}</button>{% endfor %}
-      </div>
-      <label class="sr-only" for="t-template">รูปแบบข้อความ</label>
-      <textarea id="t-template" name="template" class="input msg-box min-h-[13rem] font-mono text-[13px]" rows="12" spellcheck="false">{% if template.draft is not None %}{{ template.draft }}{% else %}{{ template.text }}{% endif %}</textarea>
-      <div class="mt-3 text-xs font-medium text-slate-500">ตัวอย่างข้อความของวันนี้</div>
-      <pre id="t-preview" class="msg-preview" aria-live="polite"></pre>
-      <p id="t-problem" class="mt-1 hidden text-xs text-rose-700"></p>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <button class="btn btn-primary" name="action" value="template_save">{% icon "lock" "h-4 w-4" %} บันทึกและล็อก</button>
-        <button class="btn" name="action" value="template_lock" formnovalidate>ยกเลิก (ล็อกแบบเดิม)</button>
-        <button class="btn btn-ghost ml-auto text-slate-600" name="action" value="template_reset" onclick="return confirm('คืนเป็นรูปแบบมาตรฐานของระบบ?')">{% icon "refresh" "h-4 w-4" %} คืนค่าแบบมาตรฐาน</button>
-      </div>
-      {{ template.values|json_script:"t-values" }}{{ template.fields|json_script:"t-fields" }}
-    </form>
+    {% include "calls/_wording_editor.html" with w=template %}
     {% endif %}
   </section>
 
-  <section class="card msg-card flex flex-col">
+  <section class="card msg-card flex flex-col scroll-mt-4" id="diary">
     <div class="msg-card-head">
       <span class="msg-card-icon bg-slate-100 text-slate-600">{% icon "pencil" "h-5 w-5" %}</span>
       <div class="min-w-0 flex-1"><h2 class="text-base font-semibold text-slate-800">ข้อความลงบันทึกประจำวัน</h2>
-        <span class="text-xs text-slate-500">รายชื่อผู้ที่ไม่ประสงค์ดำเนินคดีของวันนี้</span></div>
-      <span class="badge badge-gray">ไม่ประสงค์ดำเนินคดี {{ counts.not_want|intcomma }} ราย</span>
+        <span class="text-xs text-slate-500">รายชื่อผู้ที่ไม่ประสงค์ดำเนินคดีของวันนี้ ({{ counts.not_want|intcomma }} ราย)</span></div>
+      {% if diary_template.locked %}<span class="lock-badge" title="แก้รูปแบบได้หลังกดปลดล็อก">{% icon "lock" "h-3.5 w-3.5" %} ล็อกรูปแบบแล้ว</span>
+      {% else %}<span class="lock-badge is-open">{% icon "lock-open" "h-3.5 w-3.5" %} กำลังแก้รูปแบบ</span>{% endif %}
     </div>
+    {% if not diary_template.locked %}
+    {% include "calls/_wording_editor.html" with w=diary_template %}
+    {% else %}
     {% if counts.not_want %}
     <label class="sr-only" for="t-diary">ข้อความลงบันทึกประจำวัน</label>
     <textarea id="t-diary" class="input msg-box min-h-[11rem] flex-1" rows="9" readonly>{{ diary }}</textarea>
-    <div class="mt-3 flex flex-wrap gap-2">
+    <div class="mt-3 flex flex-wrap items-center gap-2">
       <button type="button" class="btn btn-primary" data-copy="#t-diary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
       <a class="btn" href="?{% if query %}{{ query }}&{% endif %}format=diary">{% icon "download" "h-4 w-4" %} ลงบันทึกประจำวัน (.txt)</a>
+      {% include "calls/_wording_unlock.html" with w=diary_template %}
     </div>
     {% else %}
     <div class="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
@@ -135,6 +121,9 @@
       ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี{{ period_text }}{% if caller %} (ของ {{ caller.display_name }}){% endif %}
       <span class="mt-1 text-xs">รายการจะขึ้นเมื่อบันทึกผลการโทรเป็น "ไม่ประสงค์ดำเนินคดีต่อ"</span>
     </div>
+    <div class="mt-3 flex">{% include "calls/_wording_unlock.html" with w=diary_template %}</div>
+    {% endif %}
+    {% if diary_template.custom or diary_template.by %}<p class="mt-2 text-xs text-slate-400">{% if diary_template.custom %}ใช้รูปแบบที่แก้เอง{% else %}ใช้รูปแบบมาตรฐาน{% endif %}{% if diary_template.by %} · แก้/ล็อกล่าสุดโดย {{ diary_template.by }} ({{ diary_template.at|thai_date:"datetime" }}){% endif %}</p>{% endif %}
     {% endif %}
   </section>
 </div>

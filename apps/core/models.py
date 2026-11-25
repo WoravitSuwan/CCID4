@@ -70,12 +70,15 @@ class SystemSetting(models.Model):
     line_send_time = models.TimeField("เวลาส่งอัตโนมัติ", default=dt.time(18, 0))
     line_skip_empty = models.BooleanField("ไม่ส่งในวันที่ไม่มีการโทร (ประหยัดโควตา)", default=True)
     line_send_files = models.BooleanField(
-        "ส่งข้อความ ลงบันทึกประจำวัน และ สรุปข้อมูลคดี ไปด้วย (รวม 3 ข้อความ)", default=True,
-        help_text="1) รายงานผู้บังคับบัญชา 2) ลงบันทึกประจำวัน 3) สรุปข้อมูลคดี · ข้อความ 2-3 มีชื่อ เลขรับแจ้ง "
-                  "เบอร์โทรผู้เสียหาย ซึ่งจะอยู่บนเซิร์ฟเวอร์ของ LINE · ข้อความที่ยาวเกิน 5,000 ตัวอักษร "
-                  "(LINE จำกัด) แบ่งเป็นหลายข้อความต่อกัน")
+        "ส่งข้อความ ลงบันทึกประจำวัน และลิงก์ PDF สรุปข้อมูลคดี ไปด้วย (รวม 3 ข้อความ)", default=True,
+        help_text="1) รายงานผู้บังคับบัญชา 2) ลงบันทึกประจำวัน (ผู้ไม่ประสงค์ดำเนินคดี เป็นข้อความ) "
+                  "3) ลิงก์เปิด PDF สรุปข้อมูลคดี (ไม่ต้องเข้าระบบ ใช้ได้ตามจำนวนวันที่ตั้งไว้ด้านล่าง; "
+                  "บอท LINE แนบไฟล์เข้ากลุ่มเองไม่ได้) · ข้อความ 2 มีชื่อ เลขรับแจ้ง เบอร์โทรผู้เสียหาย "
+                  "ซึ่งจะอยู่บนเซิร์ฟเวอร์ของ LINE · ข้อความที่ยาวเกิน 5,000 ตัวอักษร (LINE จำกัด) "
+                  "แบ่งเป็นหลายข้อความต่อกัน")
     # links to the text files sent before (kept working until they expire)
-    line_link_days = models.PositiveIntegerField("ลิงก์ไฟล์ใช้ได้ (วัน)", default=7,
+    line_link_days = models.PositiveIntegerField("ลิงก์ PDF สรุปข้อมูลคดีเปิดได้ (วัน)", default=7,
+                                                 help_text="นับจากวันที่ส่ง 1–30 วัน หลังจากนั้นลิงก์ใช้ไม่ได้",
                                                  validators=[MinValueValidator(1), MaxValueValidator(30)])
     line_site_url = models.CharField(max_length=200, blank=True, editable=False)  # for links in messages
     line_group_id = models.CharField("กลุ่ม LINE ที่ส่ง", max_length=64, blank=True, editable=False)
@@ -95,6 +98,11 @@ class SystemSetting(models.Model):
     report_locked = models.BooleanField(default=True, editable=False)
     report_updated_by = models.CharField(max_length=150, blank=True, editable=False)
     report_updated_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # the same for ข้อความลงบันทึกประจำวัน
+    diary_template = models.TextField("รูปแบบข้อความลงบันทึกประจำวัน", blank=True, editable=False)
+    diary_locked = models.BooleanField(default=True, editable=False)
+    diary_updated_by = models.CharField(max_length=150, blank=True, editable=False)
+    diary_updated_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "การตั้งค่าระบบ"

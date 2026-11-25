@@ -193,19 +193,43 @@ def read_file_token(token: str) -> tuple[dt.date, str]:
     return dt.date.fromisoformat(data["d"]), data["k"]
 
 
-def texts_for(day: dt.date, with_texts: bool | None = None) -> list[str]:
-    """What the bot sends, as separate text messages: 1) the report for the commanders, and (unless turned off)
-    2) ลงบันทึกประจำวัน 3) สรุปข้อมูลคดี - both exactly as the unit's own files."""
+def pdf_link(day: dt.date) -> str:
+    """The address of สรุปข้อมูลคดี as a PDF (signed, expires; opens without logging in), or "" when it cannot be
+    made here: no address of the system known yet, or no LibreOffice to make PDFs."""
+    from django.urls import reverse
+
+    from apps.documents.pdf import soffice_available
+
+    site = site_url()
+    if not site or not soffice_available():
+        return ""
+    return site + reverse("line_file", args=[file_token(day, "summary")])
+
+
+def summary_message(d) -> str:
+    """Message 3: a link to the PDF of สรุปข้อมูลคดี (a LINE bot cannot put a file in a group); the text itself
+    when no PDF link can be made."""
     from apps.core.thai_format import thai_date_full
 
+    if not d.rows:
+        return f"สรุปข้อมูลคดีและบันทึกการติดต่อ: ไม่มีคดีที่โทรวันที่ {thai_date_full(d.day, thai_digits=False)}"
+    link = pdf_link(d.day)
+    if not link:
+        return report.summary_file_text(d)
+    days = SystemSetting.get().line_link_days or 7
+    return (f"{report.summary_title(d)}\nไฟล์ PDF: {link}\n"
+            f"(กดเปิดได้ {days} วัน ไม่ต้องเข้าสู่ระบบ)")
+
+
+def texts_for(day: dt.date, with_texts: bool | None = None) -> list[str]:
+    """What the bot sends, as separate text messages: 1) the report for the commanders, and (unless turned off)
+    2) ลงบันทึกประจำวัน (ไม่ประสงค์ดำเนินคดี, as text) 3) a link to the PDF of สรุปข้อมูลคดี."""
     s = SystemSetting.get()
     d = report.load(day)
     texts = [report.summary_text(d)]
     if s.line_send_files if with_texts is None else with_texts:
         texts.append(report.diary_file_text(d))  # ไม่ประสงค์ดำเนินคดี, grouped by investigator
-        texts.append(report.summary_file_text(d) if d.rows
-                     else f"สรุปข้อมูลคดีและบันทึกการติดต่อ: ไม่มีคดีที่โทรวันที่ "
-                          f"{thai_date_full(d.day, thai_digits=False)}")
+        texts.append(summary_message(d))
     return texts
 
 

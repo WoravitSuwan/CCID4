@@ -469,7 +469,7 @@ def system(request):
 class LineForm(StyledModelForm):
     class Meta:
         model = SystemSetting
-        fields = ["line_enabled", "line_send_time", "line_skip_empty", "line_send_files"]
+        fields = ["line_enabled", "line_send_time", "line_skip_empty", "line_send_files", "line_link_days"]
         widgets = {"line_send_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M")}
 
 
