@@ -41,8 +41,10 @@ def day_calls(imported, admin_user, caller):
     plus calls on other days that must not count."""
     ensure_call_pool()
     c = list(Case.objects.order_by("receipt_no")[:9])
-    Case.objects.filter(pk=c[0].pk).update(victim_name="นางสาวทดสอบ หนึ่ง", victim_phone="0811111111")
-    Case.objects.filter(pk=c[1].pk).update(victim_name="นายทดสอบ สอง", victim_phone="0822222222")
+    Case.objects.filter(pk=c[0].pk).update(victim_name="นางสาวทดสอบ หนึ่ง", victim_phone="0811111111",
+                                           investigator_alias=None, investigator_raw="หญิงสุดา รักษ์ดี")
+    Case.objects.filter(pk=c[1].pk).update(victim_name="นายทดสอบ สอง", victim_phone="0822222222",
+                                           investigator_alias=None, investigator_raw="หญิงสุดา รักษ์ดี")
     for x in c:
         x.refresh_from_db()
     record_call(c[0], caller, outcome=O.NO_ANSWER, called_at=at(DAY, 9))
@@ -142,10 +144,12 @@ def test_page_texts_and_text_files(client, caller, day_calls):
     diary = client.get("/reports/daily/", {"date": "2026-11-09", "format": "diary"})
     assert "%E0%B8%A5%E0%B8%87%E0%B8%9A%E0%B8%B1%E0%B8%99%E0%B8%97%E0%B8%B6%E0%B8%81" in diary["Content-Disposition"]
     assert "9.11.2569.txt" in diary["Content-Disposition"]
-    # same layout as the file the staff made by hand: one line each, a blank line between
+    # the total, then per investigator: their count and their victims, one line each
     c0, c1 = day_calls[0], day_calls[1]
     assert lines_of(diary) == [
-        f"ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: {c0.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0811111111", "",
+        "ไม่ประสงค์ดำเนินคดี จำนวน 2 Case ดังนี้", "",
+        "หญิงสุดา รักษ์ดี จำนวน 2 Case",
+        f"ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: {c0.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0811111111",
         f"ผู้เสียหาย: นายทดสอบ สอง เลขรับแจ้ง: {c1.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0899999999", ""]
     resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary"})
     assert "9.11.2569.txt" in resp["Content-Disposition"]
@@ -296,8 +300,8 @@ def test_push_sends_three_text_messages(line, day_calls):
     assert path == "/message/push" and payload["to"] == "Cgroup1"
     report_msg, diary_msg, cases_msg = [m["text"] for m in payload["messages"]]
     assert report_msg.startswith("เรียนผู้บังคับบัญชา") and day_calls[0].receipt_no not in report_msg
-    assert diary_msg == report.diary_file_text(report.load(DAY))  # as the unit's file: the list only
-    assert diary_msg.startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง เลขรับแจ้ง: ") and "วันนี้(" not in diary_msg
+    assert diary_msg == report.diary_file_text(report.load(DAY))  # grouped by investigator
+    assert diary_msg.startswith("ไม่ประสงค์ดำเนินคดี จำนวน 2 Case ดังนี้") and day_calls[0].receipt_no in diary_msg
     assert cases_msg.startswith("สรุปข้อมูลคดีและบันทึกการติดต่อ") and cases_msg.count("\nผู้เสียหาย: ") == 7
     assert len([x for x in line if x[1] == "/message/push"]) == 1  # one request: one quota count per member
     # turned off: the report only
@@ -531,7 +535,7 @@ def test_links_sent_before_still_open_until_they_expire(client, line, day_calls)
     link = f"/line/file/{line_bot.file_token(DAY, 'diary')}/"
     diary = client.get(link)  # no login needed
     assert diary.status_code == 200 and "9.11.2569.txt" in diary["Content-Disposition"]
-    rows = [ln for ln in lines_of(diary) if ln]
+    rows = [ln for ln in lines_of(diary) if ln.startswith("ผู้เสียหาย: ")]
     assert len(rows) == 2 and rows[0].startswith("ผู้เสียหาย: นางสาวทดสอบ หนึ่ง")
     summary = client.get(f"/line/file/{line_bot.file_token(DAY, 'summary')}/")
     assert lines_of(summary)[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ"
@@ -604,3 +608,36 @@ def test_a_day_without_calls_can_be_sent_too(client, caller, line, imported):
     assert "disabled" not in html.split('id="line"')[1].split("</form>")[0]
     client.post("/reports/daily/?date=2020-01-01")
     assert "จำนวน 0 Case ID" in line[-1][2]["messages"][0]["text"]
+
+
+def test_not_want_message_grouped_by_investigator(imported, caller):
+    """ไม่ประสงค์ดำเนินคดี จำนวน n Case ดังนี้, then each investigator (rank short + name when the signer is set up)
+    with their count; the most cases first; cases without an investigator last."""
+    from apps.registry.models import Investigator, InvestigatorAlias
+
+    ensure_call_pool()
+    c = list(Case.objects.order_by("receipt_no")[:5])
+    inv = Investigator.objects.create(rank_full="พันตำรวจตรี", sign_name="สมชาย ใจดี")
+    alias = InvestigatorAlias.objects.create(raw_name="สมชาย ใจดี", investigator=inv)
+    names = ["ก ทดสอบ", "ข ทดสอบ", "ค ทดสอบ", "ง ทดสอบ", "จ ทดสอบ"]
+    for case, name in zip(c, names, strict=True):
+        Case.objects.filter(pk=case.pk).update(victim_name=name, victim_phone="0800000000",
+                                               investigator_alias=None, investigator_raw="หญิงนิติยา เอกวงษา")
+    Case.objects.filter(pk__in=[c[1].pk, c[2].pk, c[3].pk]).update(investigator_alias=alias,
+                                                                   investigator_raw="สมชาย ใจดี")
+    Case.objects.filter(pk=c[4].pk).update(investigator_raw="")
+    for i, case in enumerate(c):
+        case.refresh_from_db()
+        record_call(case, caller, outcome=O.NOT_PROCEED, called_at=at(DAY, 9, i))
+    text = report.diary_file_text(report.load(DAY))
+    assert text.split("\n") == [
+        "ไม่ประสงค์ดำเนินคดี จำนวน 5 Case ดังนี้", "",
+        "พ.ต.ต.สมชาย ใจดี จำนวน 3 Case",
+        f"ผู้เสียหาย: ข ทดสอบ เลขรับแจ้ง: {c[1].receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0800000000",
+        f"ผู้เสียหาย: ค ทดสอบ เลขรับแจ้ง: {c[2].receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0800000000",
+        f"ผู้เสียหาย: ง ทดสอบ เลขรับแจ้ง: {c[3].receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0800000000", "",
+        "หญิงนิติยา เอกวงษา จำนวน 1 Case",
+        f"ผู้เสียหาย: ก ทดสอบ เลขรับแจ้ง: {c[0].receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0800000000", "",
+        "(ไม่ระบุพนักงานสอบสวน) จำนวน 1 Case",
+        f"ผู้เสียหาย: จ ทดสอบ เลขรับแจ้ง: {c[4].receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: 0800000000"]
+    assert report.diary_file_text(report.load(DAY + dt.timedelta(days=3))) == "ไม่ประสงค์ดำเนินคดี จำนวน 0 Case"

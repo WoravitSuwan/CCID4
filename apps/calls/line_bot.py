@@ -202,7 +202,7 @@ def texts_for(day: dt.date, with_texts: bool | None = None) -> list[str]:
     d = report.load(day)
     texts = [report.summary_text(d)]
     if s.line_send_files if with_texts is None else with_texts:
-        texts.append(report.diary_file_text(d))  # as the unit's ลงบันทึกประจำวัน file: the list only
+        texts.append(report.diary_file_text(d))  # ไม่ประสงค์ดำเนินคดี, grouped by investigator
         texts.append(report.summary_file_text(d) if d.rows
                      else f"สรุปข้อมูลคดีและบันทึกการติดต่อ: ไม่มีคดีที่โทรวันที่ "
                           f"{thai_date_full(d.day, thai_digits=False)}")

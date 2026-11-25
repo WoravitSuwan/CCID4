@@ -96,7 +96,8 @@ def caller_ids(day: dt.date) -> set[int]:
 
 def load(day: dt.date, caller=None) -> Day:
     """Cases called on ``day``, each once, by its last call of that day."""
-    qs = _of_day(day).select_related("case__complainant", "created_by").order_by("called_at", "number", "pk")
+    qs = (_of_day(day).select_related("case__complainant", "case__investigator_alias__investigator", "created_by")
+          .order_by("called_at", "number", "pk"))
     if caller is not None:
         qs = qs.filter(created_by=caller)
     first_at, last, calls = {}, {}, {}
@@ -126,7 +127,8 @@ def _group(a) -> str:
 def _file_contacts(day: dt.date):
     from .models import FileContact
 
-    return FileContact.objects.filter(day=day).select_related("case__complainant").order_by("time", "pk")
+    return (FileContact.objects.filter(day=day)
+            .select_related("case__complainant", "case__investigator_alias__investigator").order_by("time", "pk"))
 
 
 # --------------------------------------------------------------------------- texts
@@ -233,12 +235,39 @@ def log_line(a: CallAttempt) -> str:
 
 
 # --------------------------------------------------------------------------- text files (.txt)
+NO_INVESTIGATOR = "(ไม่ระบุพนักงานสอบสวน)"
+
+
+def investigator_of(r: Row) -> str:
+    """'พ.ต.ต.สมชาย ใจดี' (rank short + name of the linked signer), else the register's name."""
+    from .status_report import investigator_label
+
+    label = investigator_label(r.case)
+    return NO_INVESTIGATOR if label in ("", "-") else label
+
+
+def by_investigator(rows: list[Row]) -> list[tuple[str, list[Row]]]:
+    """Rows grouped by investigator: most cases first, then by name; the unnamed group last."""
+    groups: dict[str, list[Row]] = {}
+    for r in rows:
+        groups.setdefault(investigator_of(r), []).append(r)
+    return sorted(groups.items(), key=lambda g: (g[0] == NO_INVESTIGATOR, -len(g[1]), g[0]))
+
+
 def diary_file_text(d: Day) -> str:
-    """ลงบันทึกประจำวัน: only the victims who do not want to proceed, one line each, a blank line between."""
-    if not d.not_want:
-        return f"ไม่มีผู้เสียหายที่แจ้งไม่ประสงค์ดำเนินคดี{period_text(d)}"
-    return "\n\n".join(f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}"
-                       for r in d.not_want)
+    """ไม่ประสงค์ดำเนินคดี: the total, then one block per investigator with their count and their victims, one
+    line each:
+        ไม่ประสงค์ดำเนินคดี จำนวน 9 Case ดังนี้
+
+        พ.ต.ต.สมชาย ใจดี จำนวน 3 Case
+        ผู้เสียหาย: … เลขรับแจ้ง: … เบอร์โทรศัพท์ผู้เสียหาย: …
+    """
+    rows = d.not_want
+    parts = [f"ไม่ประสงค์ดำเนินคดี จำนวน {len(rows):,} Case" + (" ดังนี้" if rows else "")]
+    for name, group in by_investigator(rows):
+        parts.append("\n".join([f"{name} จำนวน {len(group):,} Case"] + [
+            f"ผู้เสียหาย: {r.name} เลขรับแจ้ง: {r.case.receipt_no} เบอร์โทรศัพท์ผู้เสียหาย: {r.phone}" for r in group]))
+    return "\n\n".join(parts)
 
 
 def summary_file_text(d: Day) -> str:
