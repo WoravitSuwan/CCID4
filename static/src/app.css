@@ -463,6 +463,16 @@ details[open] > summary + * { animation: rise .25s ease both; }
   .field-chip::before { content: "{"; @apply text-indigo-400; } .field-chip::after { content: "}"; @apply text-indigo-400; }
   .field-chip:hover { @apply bg-indigo-100; transform: translateY(-1px); }
   .field-chip:active { transform: scale(.95); }
+  /* one download, several file types: [ สรุปข้อมูลคดี | PDF | Word | Excel ] */
+  .dl-group { @apply inline-flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white text-sm shadow-sm; }
+  .dl-group.is-empty { @apply pointer-events-none opacity-50; }
+  .dl-group-label { @apply inline-flex items-center gap-1.5 bg-slate-50 px-3 py-2 font-medium text-slate-700; }
+  .dl-opt { @apply inline-flex items-center border-l border-slate-200 px-3 py-2 font-semibold no-underline;
+            transition: background-color .15s ease, color .15s ease; }
+  .dl-opt:focus-visible { @apply outline-none ring-2 ring-inset ring-indigo-500/50; }
+  .dl-opt.is-pdf { @apply text-rose-700 hover:bg-rose-50 hover:text-rose-800; }
+  .dl-opt.is-word { @apply text-blue-700 hover:bg-blue-50 hover:text-blue-800; }
+  .dl-opt.is-excel { @apply text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800; }
   .input.is-invalid { @apply border-rose-400; box-shadow: 0 0 0 4px rgb(244 63 94 / .12); }
 
   /* ---- the call page: moving between cases */

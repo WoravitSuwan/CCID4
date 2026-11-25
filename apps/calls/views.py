@@ -863,18 +863,20 @@ def daily_report(request):
         resp = HttpResponse(report.stamp(day, caller), content_type="text/plain")
         resp["Cache-Control"] = "no-store"
         return resp
-    if fmt == "summary":  # สรุปข้อมูลคดี as a PDF (the text file when this computer cannot make PDFs)
+    if fmt in report.SUMMARY_DOWNLOADS:  # สรุปข้อมูลคดี: PDF, Word or Excel (PDF: text file without LibreOffice)
         from apps.documents.pdf import PdfConversionError, soffice_available
 
-        if soffice_available():
+        if fmt != "summary" or soffice_available():
             try:
-                name, body = report.summary_pdf(d)
+                name, body, ctype = report.summary_download(d, fmt)
             except PdfConversionError as exc:
-                messages.error(request, f"สร้าง PDF ไม่ได้: {exc}")
-                return redirect(f"{reverse('daily_report')}?{request.GET.urlencode().replace('format=summary', '')}")
+                messages.error(request, f"สร้าง PDF ไม่ได้: {exc} (ดาวน์โหลดเป็น Word หรือ Excel แทนได้)")
+                params = request.GET.copy()
+                params.pop("format", None)
+                return redirect(f"{reverse('daily_report')}?{params.urlencode()}#report")
             log(request, AuditAction.EXPORT, None, f"ดาวน์โหลด {name} ({d.counts['total']:,} Case)")
-            resp = HttpResponse(body, content_type="application/pdf")
-            resp["Content-Disposition"] = content_disposition(name, inline="inline" in request.GET)
+            resp = HttpResponse(body, content_type=ctype)
+            resp["Content-Disposition"] = content_disposition(name, inline=fmt == "summary" and "inline" in request.GET)
             return resp
     if fmt in ("diary", "summary"):
         name = report.file_name(report.FILE_STEM[fmt], d)

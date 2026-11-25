@@ -477,6 +477,80 @@ def write_summary_docx(d: Day, path) -> Path:
     return path
 
 
+SUMMARY_HEADERS = ["ลำดับ", "ผู้เสียหาย", "เลขรับแจ้ง", "มูลค่าความเสียหาย (บาท)", "พนักงานสอบสวน",
+                   "เบอร์โทรศัพท์ผู้เสียหาย", "บันทึกการติดต่อ", "ผลการโทร", "ผู้โทร"]
+
+
+def write_summary_xlsx(d: Day, path) -> Path:
+    """สรุปข้อมูลคดี as a table (one row per case called that day) for sorting and filtering in Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "สรุปข้อมูลคดี"
+    font, bold = Font(name=SUMMARY_FONT, size=14), Font(name=SUMMARY_FONT, size=14, bold=True)
+    thin = Side(style="thin", color="A0A0A0")
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+    ws.append([summary_title(d)])
+    ws["A1"].font = Font(name=SUMMARY_FONT, size=16, bold=True)
+    ws.append(SUMMARY_HEADERS)
+    for i, r in enumerate(d.rows, start=1):
+        case = r.case
+        who = r.attempt.created_by.display_name() if r.attempt.created_by else ("(ในไฟล์ Excel)" if r.from_file else "")
+        ws.append([i, r.name, case.receipt_no,
+                   float(case.damage_amount) if case.damage_amount is not None else None,
+                   (case.investigator_raw or "").strip() or "-", r.phone, log_line(r.attempt),
+                   GROUP_SHORT[r.group], who])
+    for i, w in enumerate([7, 26, 16, 16, 26, 16, 60, 20, 22]):
+        ws.column_dimensions[chr(65 + i)].width = w
+    fill = PatternFill("solid", fgColor="E8EEF8")
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.border, cell.font = box, bold if cell.row == 2 else font
+            if cell.row == 2:
+                cell.fill = fill
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            elif cell.column == 4:
+                cell.number_format = "#,##0.00"
+                cell.alignment = Alignment(vertical="top")
+            else:
+                cell.alignment = Alignment(vertical="top", wrap_text=cell.column in (2, 5, 7))
+    ws.freeze_panes = "A3"
+    if d.rows:
+        ws.auto_filter.ref = f"A2:{chr(64 + len(SUMMARY_HEADERS))}{len(d.rows) + 2}"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_title_rows = "2:2"
+    path = Path(path)
+    wb.save(path)
+    return path
+
+
+SUMMARY_DOWNLOADS = {  # ?format= -> (extension, content type)
+    "summary": ("pdf", "application/pdf"),
+    "summary_docx": ("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    "summary_xlsx": ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+}
+
+
+def summary_download(d: Day, fmt: str) -> tuple[str, bytes, str]:
+    """(file name, content, content type) of สรุปข้อมูลคดี as PDF, Word or Excel. The PDF needs LibreOffice
+    (raises apps.documents.pdf.PdfConversionError without it)."""
+    import tempfile
+
+    ext, ctype = SUMMARY_DOWNLOADS[fmt]
+    if ext == "pdf":
+        name, body = summary_pdf(d)
+        return name, body, ctype
+    stem = f"{FILE_STEM['summary']} {file_day(d.day)}"
+    with tempfile.TemporaryDirectory() as tmp:
+        writer = write_summary_docx if ext == "docx" else write_summary_xlsx
+        path = writer(d, Path(tmp) / f"{stem}.{ext}")
+        return path.name, path.read_bytes(), ctype
+
+
 def summary_pdf(d: Day) -> tuple[str, bytes]:
     """(file name, PDF) of สรุปข้อมูลคดี; raises apps.documents.pdf.PdfConversionError without LibreOffice."""
     import tempfile

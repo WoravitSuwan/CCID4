@@ -87,7 +87,13 @@
     <textarea id="t-summary" class="input msg-box min-h-[11rem] flex-1" rows="11" readonly>{{ summary }}</textarea>
     <div class="mt-3 flex flex-wrap items-center gap-2">
       <button type="button" class="btn btn-primary" data-copy="#t-summary">{% icon "clipboard" "h-4 w-4" %} <span data-copy-label>คัดลอกข้อความ</span></button>
-      <a class="btn {% if not counts.total %}pointer-events-none opacity-50{% endif %}" href="?{% if query %}{{ query }}&{% endif %}format=summary" {% if summary_pdf %}title="ตารางทุกคดีที่โทรวันนี้ พร้อมบันทึกการติดต่อ (PDF แนวนอน)"{% endif %}>{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี ({% if summary_pdf %}PDF{% else %}.txt{% endif %})</a>
+      <div class="dl-group {% if not counts.total %}is-empty{% endif %}" role="group" aria-label="ดาวน์โหลดสรุปข้อมูลคดี" title="ทุกคดีที่โทรวันนี้ พร้อมบันทึกการติดต่อ">
+        <span class="dl-group-label">{% icon "download" "h-4 w-4" %} สรุปข้อมูลคดี</span>
+        {% if summary_pdf %}<a class="dl-opt is-pdf" href="?{% if query %}{{ query }}&{% endif %}format=summary" title="PDF รูปแบบเดียวกับไฟล์ของหน่วย">PDF</a>
+        {% else %}<a class="dl-opt" href="?{% if query %}{{ query }}&{% endif %}format=summary" title="เครื่องนี้สร้าง PDF ไม่ได้: ไฟล์ข้อความ">.txt</a>{% endif %}
+        <a class="dl-opt is-word" href="?{% if query %}{{ query }}&{% endif %}format=summary_docx" title="Word รูปแบบเดียวกับ PDF แก้ไขต่อได้">Word</a>
+        <a class="dl-opt is-excel" href="?{% if query %}{{ query }}&{% endif %}format=summary_xlsx" title="Excel ตารางคดีละแถว กรอง/เรียงได้">Excel</a>
+      </div>
       {% include "calls/_wording_unlock.html" with w=template %}
     </div>
     {% if template.custom or template.by %}<p class="mt-2 text-xs text-slate-400">{% if template.custom %}ใช้รูปแบบที่แก้เอง{% else %}ใช้รูปแบบมาตรฐาน{% endif %}{% if template.by %} · แก้/ล็อกล่าสุดโดย {{ template.by }} ({{ template.at|thai_date:"datetime" }}){% endif %}</p>{% endif %}

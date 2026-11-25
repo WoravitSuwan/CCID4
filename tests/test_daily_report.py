@@ -156,7 +156,9 @@ def test_page_texts_and_text_files(client, caller, day_calls):
     resp = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary"})
     assert resp["Content-Type"] == "application/pdf" and resp.content.startswith(b"%PDF")
     assert "9.11.2569.pdf" in resp["Content-Disposition"]
-    assert "สรุปข้อมูลคดี (PDF)" in html
+    assert 'aria-label="ดาวน์โหลดสรุปข้อมูลคดี"' in html
+    assert all(f"format={f}" in html for f in ("summary", "summary_docx", "summary_xlsx"))
+    assert ">PDF</a>" in html and ">Word</a>" in html and ">Excel</a>" in html
     # the same rows as the text (still sent when no PDF can be made)
     summary = report.summary_file_text(report.load(DAY)).split("\n") + [""]
     assert summary[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ" and summary[1] == ""
@@ -170,6 +172,34 @@ def test_page_texts_and_text_files(client, caller, day_calls):
     assert sum(t.startswith("ผู้เสียหาย:") for t in summary) == 7  # every case called that day
     mine = client.get("/reports/daily/", {"date": "2026-11-09", "caller": caller.pk}).context
     assert mine["counts"]["total"] == 6 and mine["caller"] == caller
+
+
+def test_summary_in_word_and_excel(client, caller, day_calls):
+    """สรุปข้อมูลคดี also as Word (the same layout as the PDF) and Excel (one row a case, to sort and filter)."""
+    import io
+
+    from docx import Document
+    from openpyxl import load_workbook
+
+    client.force_login(caller)
+    word = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary_docx"})
+    assert word.status_code == 200 and "wordprocessingml" in word["Content-Type"]
+    assert "9.11.2569.docx" in word["Content-Disposition"] and word["Content-Disposition"].startswith("attachment")
+    pars = [p.text for p in Document(io.BytesIO(word.content)).paragraphs if p.text.strip()]
+    assert pars[0] == "สรุปข้อมูลคดีและบันทึกการติดต่อ" and sum(p.startswith("ผู้เสียหาย: ") for p in pars) == 7
+    excel = client.get("/reports/daily/", {"date": "2026-11-09", "format": "summary_xlsx"})
+    assert "spreadsheetml" in excel["Content-Type"] and "9.11.2569.xlsx" in excel["Content-Disposition"]
+    ws = load_workbook(io.BytesIO(excel.content)).active
+    assert [c.value for c in ws[2]] == report.SUMMARY_HEADERS
+    rows = list(ws.iter_rows(min_row=3, values_only=True))
+    c0 = day_calls[0]
+    mine = next(r for r in rows if r[2] == c0.receipt_no)
+    assert len(rows) == 7 and mine[1] == "นางสาวทดสอบ หนึ่ง" and mine[5] == "0811111111"
+    assert mine[6] == "ไม่ประสงค์ดำเนินคดี วันที่ 9 พ.ย. 2569 เวลา 14.00 น." and mine[7] == "ไม่ประสงค์ดำเนินคดี"
+    assert mine[3] == (float(c0.damage_amount) if c0.damage_amount is not None else None)
+    assert ws.auto_filter.ref == "A2:I9"
+    from apps.core.models import AuditLog
+    assert AuditLog.objects.filter(detail__contains="สรุปข้อมูลคดี 9.11.2569.xlsx").exists()
 
 
 def test_summary_file_laid_out_like_the_units_file(tmp_path, day_calls):
