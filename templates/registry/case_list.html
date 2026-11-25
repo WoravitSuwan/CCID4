@@ -68,7 +68,7 @@
       {% if can_issue %}<th class="w-10"><input type="checkbox" class="check" id="check-all" aria-label="เลือกทั้งหมด"></th>{% endif %}
       <th>เลขรับแจ้ง / วันที่รับแจ้ง</th><th>ผู้แจ้ง</th><th>ประเภทคดี</th><th>พนักงานสอบสวน</th><th>สถานะ{% if can_bulk_status %} <span class="font-normal normal-case text-slate-400">(เลือกเพื่อแก้)</span>{% endif %}</th><th class="text-center">หมาย</th><th></th>
     </tr></thead>
-    <tbody>
+    <tbody class="rows-in">
     {% for c in page %}
       <tr class="cursor-pointer" onclick="if(!event.target.closest('input,a,button,label,select'))location.href='{% url 'case_detail' c.pk %}'">
         {% if can_issue %}<td><input type="checkbox" class="check case-cb" name="case_ids" value="{{ c.pk }}"></td>{% endif %}

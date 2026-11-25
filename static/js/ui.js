@@ -276,6 +276,95 @@
     input.focus();
   }
 
+  /* the emblem tilts a little towards the mouse */
+  if (!calm) {
+    document.addEventListener("pointermove", function (e) {
+      const t = e.target.closest && e.target.closest("[data-tilt]");
+      if (!t) return;
+      const r = t.getBoundingClientRect(), core = t.querySelector(".emblem-core");
+      if (!core) return;
+      const dx = (e.clientX - r.left) / r.width - 0.5, dy = (e.clientY - r.top) / r.height - 0.5;
+      core.style.setProperty("--rx", (-dy * 16).toFixed(1) + "deg");
+      core.style.setProperty("--ry", (dx * 16).toFixed(1) + "deg");
+    });
+    document.addEventListener("pointerout", function (e) {
+      const t = e.target.closest && e.target.closest("[data-tilt]");
+      if (!t || (e.relatedTarget && t.contains(e.relatedTarget))) return;
+      const core = t.querySelector(".emblem-core");
+      if (core) { core.style.removeProperty("--rx"); core.style.removeProperty("--ry"); }
+    });
+  }
+
+  /* Sankey: light the hovered path (band + its two bars, or a bar + its bands), dim the rest, show a tooltip */
+  function setupSankey(wrap) {
+    if (wrap._sk) return;
+    wrap._sk = true;
+    const svg = wrap.querySelector("svg"), tip = wrap.querySelector(".sankey-tip");
+    if (!svg || !tip) return;
+    // the SVG titles become labels for screen readers (the browser's own tooltip would show twice)
+    svg.querySelectorAll("a").forEach(function (a) {
+      const t = a.querySelector("title");
+      if (t) { a.setAttribute("aria-label", t.textContent); t.remove(); }
+    });
+    const bands = svg.querySelectorAll(".sankey-band"), nodes = svg.querySelectorAll(".sankey-node");
+    function light(el) {
+      const lit = new Set([el]);
+      if (el.classList.contains("sankey-band")) {
+        const ends = (el.getAttribute("data-sk-ends") || "").split(" ");
+        nodes.forEach(function (n) { if (ends.indexOf(n.getAttribute("data-sk-key")) >= 0) lit.add(n); });
+      } else {
+        const key = el.getAttribute("data-sk-key");
+        bands.forEach(function (b) {
+          const ends = (b.getAttribute("data-sk-ends") || "").split(" ");
+          if (ends.indexOf(key) >= 0) {
+            lit.add(b);
+            nodes.forEach(function (n) { if (ends.indexOf(n.getAttribute("data-sk-key")) >= 0) lit.add(n); });
+          }
+        });
+      }
+      svg.classList.add("is-focus");
+      bands.forEach(function (b) { b.classList.toggle("is-lit", lit.has(b)); });
+      nodes.forEach(function (n) { n.classList.toggle("is-lit", lit.has(n)); });
+    }
+    function clear() {
+      svg.classList.remove("is-focus");
+      svg.querySelectorAll(".is-lit").forEach(function (x) { x.classList.remove("is-lit"); });
+      tip.hidden = true;
+    }
+    function show(el, e) {
+      const pct = el.getAttribute("data-sk-pct");
+      tip.innerHTML = "";
+      const b = document.createElement("b"); b.textContent = el.getAttribute("data-sk-tip"); tip.appendChild(b);
+      const n = document.createElement("div"); n.className = "tip-n";
+      n.textContent = el.getAttribute("data-sk-n") + " คดี" + (pct ? " · " + pct + "% ของทั้งหมด" : "");
+      tip.appendChild(n);
+      const hint = document.createElement("div"); hint.className = "mt-1 text-slate-300"; hint.textContent = "กดเพื่อดูรายการ";
+      tip.appendChild(hint);
+      tip.hidden = false;
+      move(e);
+    }
+    function move(e) {
+      const r = wrap.getBoundingClientRect();
+      let x = e.clientX - r.left + wrap.scrollLeft + 14, y = e.clientY - r.top + 14;
+      const maxX = wrap.scrollLeft + wrap.clientWidth - tip.offsetWidth - 4;
+      if (x > maxX) x = Math.max(wrap.scrollLeft + 4, e.clientX - r.left + wrap.scrollLeft - tip.offsetWidth - 14);
+      tip.style.transform = "translate(" + x + "px," + y + "px)";
+    }
+    svg.addEventListener("pointerover", function (e) {
+      const el = e.target.closest("[data-sk-tip]");
+      if (el) { light(el); show(el, e); }
+    });
+    svg.addEventListener("pointermove", function (e) { if (!tip.hidden) move(e); });
+    svg.addEventListener("pointerleave", clear);
+    svg.addEventListener("focusin", function (e) {  // keyboard: the same light on the focused path
+      const el = e.target.closest("[data-sk-tip]");
+      if (el) light(el);
+    });
+    svg.addEventListener("focusout", clear);
+  }
+  document.addEventListener("DOMContentLoaded", function () { document.querySelectorAll("[data-sankey]").forEach(setupSankey); });
+  document.addEventListener("htmx:afterSettle", function () { document.querySelectorAll("[data-sankey]").forEach(setupSankey); });
+
   /* messages */
   function closeAlert(el) {
     el.classList.remove("alert-enter");

@@ -127,6 +127,7 @@ def sankey(n: dict, width=1040, height=320, node_w=16, gap=22, label_w=230, labe
             nodes[key] = {"key": key, "label": DIAGRAM_LABEL.get(key, STAGES[key][0]), "n": n[key],
                           "full_label": STAGES[key][0], "x": round(ci * step, 1),
                           "y": round(y, 1), "h": round(h, 1), "w": node_w, "color": COLORS[TONE[key]],
+                          "tone": TONE[key],
                           "pct": round(n[key] / total * 100), "out": 0.0,
                           "lx": round(ci * step + node_w + 8, 1), "ly": round(ly, 1)}
             y += h + gap
@@ -141,11 +142,16 @@ def sankey(n: dict, width=1040, height=320, node_w=16, gap=22, label_w=230, labe
         x0, x1 = parent["x"] + node_w, node["x"]
         xm = (x0 + x1) / 2
         y1 = node["y"]
+        c0, c1 = y0 + h / 2, y1 + h / 2
         links.append({"key": key, "color": node["color"], "label": f"{parent['label']} → {node['label']}",
-                      "n": node["n"],
+                      "n": node["n"], "pct": node["pct"], "from": parent["key"], "to": key,
+                      "from_tone": parent["tone"], "to_tone": node["tone"], "x0": round(x0, 1), "x1": round(x1, 1),
                       "d": (f"M{x0:.1f},{y0:.1f} C{xm:.1f},{y0:.1f} {xm:.1f},{y1:.1f} {x1:.1f},{y1:.1f} "
                             f"L{x1:.1f},{y1 + h:.1f} "
-                            f"C{xm:.1f},{y1 + h:.1f} {xm:.1f},{y0 + h:.1f} {x0:.1f},{y0 + h:.1f} Z")})
+                            f"C{xm:.1f},{y1 + h:.1f} {xm:.1f},{y0 + h:.1f} {x0:.1f},{y0 + h:.1f} Z"),
+                      # the band's centre line, for the slow "flow" stream drawn along it
+                      "flow": f"M{x0:.1f},{c0:.1f} C{xm:.1f},{c0:.1f} {xm:.1f},{c1:.1f} {x1:.1f},{c1:.1f}",
+                      "flow_w": round(min(max(h * 0.18, 1.2), 3.2), 1)})
     bottom = max(max(nd["y"] + nd["h"], nd["ly"] + 20) for nd in nodes.values())
     return {"empty": False, "w": width, "h": round(bottom + 4, 1), "nodes": list(nodes.values()), "links": links,
             "node_w": node_w}

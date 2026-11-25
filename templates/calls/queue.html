@@ -10,9 +10,9 @@
     <a class="btn btn-primary" href="{% url 'daily_report' %}">{% icon "clipboard" "h-4 w-4" %} สรุปผลวันนี้ / ข้อความลงบันทึกประจำวัน</a>
     {% if line_ready %}
     <form method="post" action="{% url 'daily_report' %}" onsubmit="return confirm('ส่งสรุปผลวันนี้เข้ากลุ่ม LINE ตอนนี้?\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
-      <button class="btn btn-success">{% icon "chat" "h-4 w-4" %} ส่งสรุปเข้า LINE</button></form>
+      <button class="btn btn-line">{% line_icon "line-mark" True %} ส่งสรุปเข้า LINE</button></form>
     {% else %}
-    <a class="btn" href="{% url 'daily_report' %}#line" title="ตั้งเวลาส่งอัตโนมัติ / ดูว่าทำไมยังส่งไม่ได้">{% icon "chat" "h-4 w-4" %} LINE</a>
+    <a class="btn btn-line-soft" href="{% url 'daily_report' %}#line" title="ตั้งเวลาส่งอัตโนมัติ / ดูว่าทำไมยังส่งไม่ได้">{% line_icon %} LINE</a>
     {% endif %}
     {% if is_outsource %}<a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} อัปเดตข้อมูลคดี (Excel)</a>{% endif %}
     {% if can_manage %}
@@ -26,7 +26,7 @@
   .viz-root { --series-1: #2a78d6; --series-2: #eb6834; --muted-node: #94a3b8; --text-muted: #64748b; }
 </style>
 {% include "calls/_summary_tiles.html" with n=counts link=True %}
-<div class="viz-root card mb-5">
+<div class="viz-root card rise-in mb-5">
   <div class="card-header">{% icon "phone" "h-5 w-5 text-slate-400" %}<h2>ภาพรวมคดี → ออกหมายเรียก</h2>
     <span class="text-sm text-slate-500">กดที่กล่องหรือแถบเพื่อดูรายการ</span>
     <span class="ml-auto text-sm text-slate-600">โทรวันนี้ <b class="tabular-nums">{{ stats.today|intcomma }}</b> (ติดต่อได้ {{ stats.today_reached }}){% if perm_settings and stats.today %} · <a href="{% url 'settings_wipe' %}?scope=calls_today" class="text-slate-400 underline hover:text-red-600">รีเซ็ต</a>{% endif %}</span>
@@ -121,7 +121,7 @@
       <th>{% include "calls/_col_head.html" with label="โทร" c=col.calls filter="" %}</th>
       <th>{% include "calls/_col_head.html" with label="ผลการโทรล่าสุด" c=col.last filter="result" groups=f.result_groups active=f.active.result %}</th>
       <th class="th-plain"></th></tr></thead>
-    <tbody>
+    <tbody class="rows-in">
     {% for a in page %}
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
         {% if can_issue %}<td data-label="เลือก"><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}

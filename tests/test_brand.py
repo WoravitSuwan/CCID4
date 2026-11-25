@@ -68,3 +68,16 @@ def test_search_address_for_quick_search(client, admin_user, imported):
     staff = User.objects.create_user("caller30", password="pass12345", role=Role.OUTSOURCE)
     client.force_login(staff)
     assert 'data-search-url="/calls/?tab=all&amp;year=&amp;state=&amp;q="' in client.get("/calls/").content.decode()
+
+
+def test_animated_emblem_line_button_and_sankey_tones(client, admin_user, imported):
+    html = client.get("/accounts/login/").content.decode()
+    assert 'class="emblem emblem-lg" data-tilt' in html and "emblem-orbit" in html and "emblem-shine" in html
+    client.force_login(admin_user)
+    page = client.get("/calls/").content.decode()
+    assert 'class="emblem emblem-sm" data-tilt' in page and "brand-divider" in page
+    assert "btn-line" in page and 'fill="#06C755"' in page  # LINE's own mark, not an empty circle
+    assert 'fill="url(#sk-' in page and "sankey-flow" in page and "sankey-tip" in page
+    css = (Path(settings.BASE_DIR) / "static" / "css" / "app.css").read_text()
+    # band colours are built in the template, so they must survive Tailwind's clean-up
+    assert ".sk-stop-good{" in css and ".sk-stop-drop{" in css and "prefers-reduced-motion" in css

@@ -78,6 +78,19 @@ def icon(name, css="h-5 w-5"):
         'stroke-linejoin="round" d="{}"/></svg>', css, mark_safe(path))
 
 
+LINE_BUBBLE = ("M12 5.25c-4.42 0-8 2.86-8 6.39 0 3.16 2.84 5.81 6.67 6.31.26.06.61.17.7.39.08.2.05.51.03.71l-.11.68"
+               "c-.03.2-.16.79.69.43.86-.36 4.62-2.72 6.3-4.66 1.16-1.27 1.72-2.57 1.72-4.01 0-3.53-3.58-6.24-8-6.24Z")
+
+
+@register.simple_tag
+def line_icon(css="line-mark", plain=False):
+    """LINE's mark: a white chat bubble on LINE green, or just the bubble in the text colour (on a green button)."""
+    if plain:
+        return format_html('<svg viewBox="0 0 24 24" class="{}" aria-hidden="true"><path fill="currentColor" d="{}"/></svg>',
+                           css, LINE_BUBBLE)
+    return format_html('<svg viewBox="0 0 24 24" class="{}" aria-hidden="true"><rect width="24" height="24" rx="6" '
+                       'fill="#06C755"/><path fill="#fff" d="{}"/></svg>', css, LINE_BUBBLE)
+
 @register.filter
 def status_class(status):
     """CSS class for a status badge (Status object or name)."""

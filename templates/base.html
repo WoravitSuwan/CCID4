@@ -20,13 +20,20 @@
   <!-- sidebar -->
   <aside id="sidebar" class="cmd-sidebar fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col text-white transition-transform duration-300 ease-out lg:translate-x-0">
     <a href="{% if is_outsource %}{% url 'calls_queue' %}{% else %}{% url 'dashboard' %}{% endif %}" class="brand">
-      <span class="brand-mark"><img src="{{ brand_logo }}" alt="โลโก้ CCID4" width="48" height="48"></span>
-      <span class="leading-tight">
+      <span class="emblem emblem-sm" data-tilt style="--emblem: url('{{ brand_logo }}')" aria-hidden="true">
+        <span class="emblem-halo"></span>
+        <svg class="emblem-orbit" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48"/></svg>
+        <span class="emblem-radar"></span>
+        <span class="emblem-core"><img src="{{ brand_logo }}" alt="" width="44" height="44"><span class="emblem-shine"></span></span>
+      </span>
+      <span class="min-w-0 leading-tight">
         <span class="brand-name">CCID4</span>
         <span class="brand-sub">ระบบออกหมายเรียก</span>
-        <span class="brand-sub text-slate-400">กก.1 บก.สอท.4</span>
+        <span class="brand-unit">กก.1 บก.สอท.4</span>
       </span>
+      <span class="sr-only">หน้าแรก</span>
     </a>
+    <div class="brand-divider" aria-hidden="true"></div>
     <button type="button" class="cmd-open" data-cmd-open title="ค้นหาเมนูหรือคดี (Ctrl + K)">
       {% icon "search" "h-4 w-4" %} <span class="flex-1 text-left">ค้นหาเร็ว…</span><kbd>Ctrl K</kbd>
     </button>

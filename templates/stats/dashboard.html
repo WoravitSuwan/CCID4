@@ -68,7 +68,7 @@
 {% endwith %}
 
 <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">ในช่วงที่เลือก</h2>
-<div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
+<div class="stagger mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6">
   <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ period.calls|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.cases_called|intcomma }} คดี{% if period.from_file %} · รวมจากไฟล์ Excel {{ period.from_file|intcomma }}{% endif %}</div></div>
   <div class="stat block"><div class="stat-label">ติดต่อได้</div><div class="stat-value"><span data-countup>{{ period.reached|intcomma }}</span></div><div class="text-xs text-slate-400">{{ period.reach_rate }}% ของการโทร</div></div>
   <div class="stat block"><div class="stat-label">ติดต่อไม่ได้</div><div class="stat-value"><span data-countup>{{ period.not_reached|intcomma }}</span></div></div>
@@ -110,7 +110,7 @@
   </div>
 </div>
 
-<div class="card mb-6">
+<div class="card rise-in mb-6">
   <div class="card-header"><h2>ภาพรวมทั้งหมด (ขณะนี้)</h2>
     <span class="ml-auto text-sm text-slate-500">หมายเรียก {{ overall.summonses|intcomma }} ฉบับ (ส่งแล้ว {{ overall.ems_sent|intcomma }} · ยังไม่ส่ง {{ overall.ems_waiting|intcomma }})</span></div>
   {% include "calls/_sankey.html" with sankey=overall.sankey link_to_calls=True %}

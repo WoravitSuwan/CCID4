@@ -34,10 +34,18 @@
   .btn svg { transition: transform .2s ease; }
   .btn:hover .nudge-r { transform: translateX(2px); }
   .btn:hover .nudge-l { transform: translateX(-2px); }
-  .btn-primary { @apply border-indigo-600 bg-indigo-600 text-white;
-                 background-image: linear-gradient(180deg, rgb(255 255 255 / .12), rgb(255 255 255 / 0));
-                 box-shadow: 0 1px 2px rgb(30 27 75 / .25), inset 0 1px 0 rgb(255 255 255 / .15); }
-  .btn-primary:hover { @apply border-indigo-700 bg-indigo-700 text-white; box-shadow: 0 6px 16px -6px rgb(79 70 229 / .6), inset 0 1px 0 rgb(255 255 255 / .15); }
+  .btn-primary { @apply border-indigo-700 bg-indigo-700 text-white;
+                 background-image: linear-gradient(135deg, #122852 0%, #1f4b9a 55%, #3a64b1 100%);
+                 box-shadow: 0 1px 2px rgb(11 26 54 / .3), inset 0 1px 0 rgb(255 255 255 / .16); }
+  .btn-primary:hover { @apply border-indigo-900 text-white; background-image: linear-gradient(135deg, #0b1a36 0%, #1a3d7e 55%, #2f5aa8 100%);
+                       box-shadow: 0 8px 18px -8px rgb(31 75 154 / .75), 0 0 0 1px rgb(227 176 52 / .25), inset 0 1px 0 rgb(255 255 255 / .16); }
+  /* LINE's own green, with its chat-bubble mark */
+  .btn-line { @apply border-[#06C755] bg-[#06C755] text-white; box-shadow: 0 1px 2px rgb(4 120 87 / .3), inset 0 1px 0 rgb(255 255 255 / .18); }
+  .btn-line:hover { @apply border-[#05b34c] bg-[#05b34c] text-white; box-shadow: 0 8px 18px -8px rgb(6 199 85 / .7); }
+  .btn-line-soft { @apply border-[#06C755]/40 bg-[#06C755]/[.08] text-[#047a3a]; }
+  .btn-line-soft:hover { @apply border-[#06C755]/60 bg-[#06C755]/[.14] text-[#035c2c]; }
+  .line-mark { @apply inline-block h-4 w-4 shrink-0; }
+  .btn-line[aria-busy="true"]::after, .btn-line.htmx-request::after { border-color: rgb(255 255 255 / .35); border-top-color: #fff; }
   .btn-success { @apply border-emerald-600 bg-emerald-600 text-white; box-shadow: 0 1px 2px rgb(6 78 59 / .25); }
   .btn-success:hover { @apply border-emerald-700 bg-emerald-700 text-white; box-shadow: 0 6px 16px -6px rgb(5 150 105 / .6); }
   .btn-danger { @apply border-rose-600 bg-rose-600 text-white; box-shadow: 0 1px 2px rgb(136 19 55 / .25); }
@@ -80,15 +88,44 @@
     background-image: linear-gradient(rgb(255 255 255 / .6) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / .6) 1px, transparent 1px);
     background-size: 28px 28px; mask-image: linear-gradient(180deg, #000, transparent 45%); }
   .cmd-sidebar > * { position: relative; z-index: 1; }
-  .brand { @apply flex items-center gap-3 px-5 pb-4 pt-5 text-white no-underline hover:text-white; }
-  .brand-mark { @apply relative flex h-12 w-12 shrink-0 items-center justify-center; }
-  .brand-mark::before { content: ""; @apply absolute inset-0 rounded-full; background: radial-gradient(circle, rgb(227 176 52 / .35), transparent 70%);
-                        animation: brand-glow 4.5s ease-in-out infinite; }
-  .brand-mark img { @apply relative h-12 w-12 object-contain; filter: drop-shadow(0 2px 6px rgb(0 0 0 / .45)); transition: transform .28s cubic-bezier(.2,.8,.2,1); }
-  .brand:hover .brand-mark img { transform: scale(1.06) rotate(-2deg); }
-  .brand-name { @apply block text-lg font-bold tracking-[0.18em] text-gold-300; text-shadow: 0 1px 0 rgb(0 0 0 / .35); }
-  .brand-sub { @apply block text-xs text-slate-200; }
-  @keyframes brand-glow { 0%, 100% { opacity: .55; transform: scale(.95); } 50% { opacity: 1; transform: scale(1.12); } }
+  .brand { @apply flex items-center gap-3.5 px-4 pb-4 pt-5 text-white no-underline hover:text-white; }
+  .brand-name { @apply block text-lg font-bold leading-none tracking-[0.22em] text-gold-300; text-shadow: 0 1px 0 rgb(0 0 0 / .35); }
+  .brand-sub { @apply mt-1.5 block text-[13px] font-medium text-slate-100; }
+  .brand-unit { @apply mt-0.5 block text-xs text-slate-400; }
+  .brand-divider { @apply mx-4 mb-3 h-px; background: linear-gradient(90deg, rgb(227 176 52 / 0), rgb(227 176 52 / .55), rgb(227 176 52 / 0)); }
+
+  /* the emblem: a slow gold orbit and radar sweep around it, a royal-blue/gold halo, a metallic shine passing
+     over the shield now and then (clipped to the shield's own outline), and a gentle 3D tilt under the mouse */
+  .emblem { @apply relative grid shrink-0 place-items-center; width: var(--s); height: var(--s); perspective: 600px; }
+  .emblem-sm { --s: 3.5rem; --img: 2.75rem; }
+  .emblem-lg { --s: 11rem; --img: 8rem; }
+  .emblem > * { grid-area: 1 / 1; }
+  .emblem-halo { @apply h-full w-full rounded-full;
+                 background: radial-gradient(circle, rgb(227 176 52 / .30) 0%, rgb(58 100 177 / .28) 45%, transparent 70%);
+                 animation: brand-glow 5s ease-in-out infinite; }
+  .emblem-orbit { @apply h-full w-full; animation: spin 28s linear infinite; }
+  .emblem-orbit circle { fill: none; stroke: rgb(227 176 52 / .55); stroke-width: .8; stroke-dasharray: 1.6 4.2; stroke-linecap: round; }
+  .emblem-radar { @apply h-full w-full rounded-full;
+                  background: conic-gradient(from 0deg, transparent 0 72%, rgb(227 176 52 / .0) 72%, rgb(227 176 52 / .65) 96%, transparent 96.5%);
+                  -webkit-mask: radial-gradient(circle, transparent 61%, #000 62%, #000 70%, transparent 71%);
+                  mask: radial-gradient(circle, transparent 61%, #000 62%, #000 70%, transparent 71%);
+                  animation: spin 18s linear infinite reverse; }
+  .emblem-core { @apply relative; width: var(--img); height: var(--img); transform-style: preserve-3d;
+                 transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(0);
+                 transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+  .emblem-core img { @apply block h-full w-full object-contain; filter: drop-shadow(0 3px 8px rgb(0 0 0 / .45));
+                     transition: filter .3s ease, transform .3s cubic-bezier(.2,.8,.2,1); }
+  .emblem-shine { @apply pointer-events-none absolute inset-0;
+                  -webkit-mask: var(--emblem) center / contain no-repeat; mask: var(--emblem) center / contain no-repeat;
+                  background: linear-gradient(115deg, transparent 38%, rgb(255 255 255 / .55) 50%, transparent 62%) 160% 0 / 260% 100% no-repeat;
+                  animation: shine 7s ease-in-out infinite 1.2s; }
+  a:hover .emblem-core img, .emblem:hover .emblem-core img { filter: drop-shadow(0 0 10px rgb(227 176 52 / .75)) drop-shadow(0 4px 10px rgb(0 0 0 / .5));
+                                                            transform: translateZ(10px) scale(1.04); }
+  .emblem-sm .emblem-orbit circle { stroke: rgb(227 176 52 / .8); stroke-width: 1.4; stroke-dasharray: 2.4 5.2; }
+  .emblem-lg .emblem-orbit circle { stroke-width: .5; }
+  .emblem-lg .emblem-core img { filter: drop-shadow(0 12px 26px rgb(0 0 0 / .5)); animation: emblem-in .8s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes shine { 0%, 70% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
+  @keyframes brand-glow { 0%, 100% { opacity: .6; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.06); } }
   .cmd-open { @apply mx-3 mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300;
               transition: background-color .2s ease, border-color .2s ease, color .2s ease; }
   .cmd-open:hover { @apply border-gold-400/40 bg-white/10 text-white; }
@@ -108,11 +145,7 @@
   .login-grid { @apply pointer-events-none absolute inset-0 opacity-[.08];
                 background-image: linear-gradient(rgb(255 255 255 / .7) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / .7) 1px, transparent 1px);
                 background-size: 36px 36px; mask-image: radial-gradient(circle at 30% 45%, #000, transparent 70%); }
-  .login-emblem { @apply relative h-32 w-32; }
-  .login-emblem::before { content: ""; @apply absolute -inset-6 rounded-full; background: radial-gradient(circle, rgb(227 176 52 / .30), transparent 68%);
-                          animation: brand-glow 5s ease-in-out infinite; }
-  .login-emblem img { @apply relative h-32 w-32 object-contain; filter: drop-shadow(0 10px 24px rgb(0 0 0 / .45));
-                      animation: emblem-in .7s cubic-bezier(.2,.8,.2,1) both; }
+  .login-emblem { @apply relative -ml-6 -mt-6 inline-block; }
   @keyframes emblem-in { from { opacity: 0; transform: translateY(10px) scale(.94); } }
 
   /* quick search (Ctrl + K): menu pages and a case search, from static/js/ui.js */
@@ -141,21 +174,66 @@
     .table tr:hover .copy-btn, .table .copy-btn:focus-visible, .table .copy-btn.is-copied { opacity: 1; }
   }
 
+  /* ---- Sankey (calls/_sankey.html): gradient bands that fade from source to target, a slow light stream
+     along each band, the hovered path lit and the rest dimmed, a tooltip (static/js/ui.js) ---- */
+  .sankey-link { opacity: .3; transition: opacity .25s ease; }
+  .sankey-band { animation: sk-in .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i, 0) * 70ms + 120ms); }
+  .sankey-band:hover .sankey-link, .sankey-band.is-lit .sankey-link { opacity: .62; }
+  .sankey-flow { fill: none; stroke: #fff; stroke-opacity: .55; stroke-linecap: round; stroke-dasharray: 1.5 22;
+                 pointer-events: none; animation: sk-flow 3.2s linear infinite; transition: opacity .25s ease; }
+  @keyframes sk-flow { to { stroke-dashoffset: -47; } }
+  @keyframes sk-in { from { opacity: 0; } }
+  .sankey-node { animation: fade .5s ease both; transition: opacity .25s ease; }
+  .sankey-node rect { transition: filter .2s ease; }
+  .sankey-node:hover rect, .sankey-node.is-lit rect { filter: url(#sk-glow) brightness(1.12) saturate(1.1); }
+  .sankey-node.is-active .sankey-name { text-decoration: underline; text-decoration-color: #c99a1f; text-underline-offset: 3px; }
+  .sankey.is-focus .sankey-band:not(.is-lit) .sankey-link { opacity: .07; }
+  .sankey.is-focus .sankey-band:not(.is-lit) .sankey-flow { opacity: 0; }
+  .sankey.is-focus .sankey-node:not(.is-lit) { opacity: .35; }
+  .sankey-label { paint-order: stroke; stroke: #fff; stroke-width: 5px; stroke-linejoin: round; }
+  .sankey-name { font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .sankey-num { font-size: 13px; fill: #334155; } .sankey-pct { font-size: 12px; fill: #64748b; }
+  .sankey-tip { @apply pointer-events-none absolute left-0 top-0 z-20 min-w-[10rem] max-w-[16rem] rounded-xl px-3 py-2 text-xs text-white shadow-xl;
+                background: rgb(11 26 54 / .94); box-shadow: 0 10px 30px -8px rgb(11 26 54 / .5), inset 0 0 0 1px rgb(227 176 52 / .25);
+                transition: opacity .15s ease; }
+  .sankey-tip b { @apply block text-sm font-semibold text-white; }
+  .sankey-tip .tip-n { @apply mt-0.5 text-gold-300; }
+
   /* parts of a page replaced by htmx come in softly */
   .htmx-added { animation: fade .25s ease both; }
+  .htmx-swapping { opacity: .35; transition: opacity .15s ease; }
+  .htmx-settling > * { animation: fade .22s ease both; }
+  /* entrance: tiles, cards and the first rows come in one after another */
+  .stagger > * { animation: rise .45s cubic-bezier(.2,.8,.2,1) backwards; }
+  .stagger > *:nth-child(2) { animation-delay: 60ms; } .stagger > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger > *:nth-child(4) { animation-delay: 180ms; } .stagger > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger > *:nth-child(n+6) { animation-delay: 280ms; }
+  .rise-in { animation: rise .5s cubic-bezier(.2,.8,.2,1) .2s backwards; }
+  .table tbody.rows-in tr { animation: rise .35s ease backwards; }
+  .table tbody.rows-in tr:nth-child(1) { animation-delay: 150ms; } .table tbody.rows-in tr:nth-child(2) { animation-delay: 180ms; }
+  .table tbody.rows-in tr:nth-child(3) { animation-delay: 210ms; } .table tbody.rows-in tr:nth-child(4) { animation-delay: 240ms; }
+  .table tbody.rows-in tr:nth-child(5) { animation-delay: 270ms; } .table tbody.rows-in tr:nth-child(n+6) { animation-delay: 300ms; }
   .card-header { @apply -mx-5 -mt-5 mb-4 flex items-center gap-2 border-b border-slate-100 px-5 py-3.5; }
   .page-header { @apply mb-6 flex flex-wrap items-end gap-3; }
   .page-sub { @apply mt-1 text-sm text-slate-500; }
 
   /* forms */
-  .input { @apply w-full rounded-lg border-slate-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500; }
+  .input { @apply w-full rounded-xl border border-slate-300 bg-white text-sm text-slate-800 shadow-sm placeholder:text-slate-400
+                  hover:border-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15;
+           transition: border-color .15s ease, box-shadow .15s ease; }
+  .input:focus { box-shadow: 0 0 0 4px rgb(31 75 154 / .14), 0 0 0 1px rgb(227 176 52 / .35), 0 1px 2px rgb(15 23 42 / .06); }
+  .input:-webkit-autofill, .input:-webkit-autofill:hover, .input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1e293b; -webkit-box-shadow: 0 0 0 1000px #fff inset; caret-color: #1e293b; }
+  .input:disabled { @apply cursor-not-allowed bg-slate-50 text-slate-500 hover:border-slate-300; }
+  .input[aria-invalid="true"], .errorlist + .input { @apply border-rose-400 focus:border-rose-500; }
   .label { @apply mb-1 block text-sm font-medium text-slate-700; }
   .helptext { @apply mt-1 block text-xs text-slate-500; }
   .errorlist { @apply mt-1 text-xs text-rose-700; }
   .check { @apply h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500; }
 
   /* badges */
-  .badge { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset; }
+  .badge { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset;
+           background-image: linear-gradient(180deg, rgb(255 255 255 / .55), rgb(255 255 255 / 0)); }
   .badge-gray { @apply bg-slate-100 text-slate-700 ring-slate-200; }
   .badge-green { @apply bg-emerald-50 text-emerald-700 ring-emerald-200; }
   .badge-red { @apply bg-rose-50 text-rose-700 ring-rose-200; }
@@ -201,12 +279,16 @@
   .side-link.active::before { content: ""; @apply absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-gold-400;
                               box-shadow: 0 0 12px rgb(227 176 52 / .7); animation: grow-y .3s ease-out; }
   .side-link .count { @apply ml-auto rounded-full bg-amber-400 px-1.5 text-xs font-semibold text-slate-900; }
-  .tab { @apply -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-800; }
-  .tab.active { @apply border-indigo-600 text-indigo-700; }
+  .tab { @apply -mb-px rounded-t-lg border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800; }
+  .tab.active { @apply border-indigo-600 bg-indigo-50/60 text-indigo-700; }
 
   /* stats */
-  .stat { @apply flex items-start gap-4 rounded-xl bg-white p-3.5 sm:p-4 shadow-sm ring-1 ring-slate-200/80 hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200;
+  .stat { @apply relative flex items-start gap-4 overflow-hidden rounded-xl bg-white p-3.5 sm:p-4 shadow-sm ring-1 ring-slate-200/80 hover:-translate-y-0.5 hover:shadow-md hover:ring-indigo-200;
           transition: transform .2s ease, box-shadow .2s ease; }
+  .stat::before { content: ""; @apply pointer-events-none absolute inset-x-0 top-0 h-[3px];
+                  background: linear-gradient(90deg, #1f4b9a, #3a64b1 50%, #e3b034); transform: scaleX(0); transform-origin: left;
+                  transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+  .stat:hover::before, a.stat:focus-visible::before { transform: scaleX(1); }
   a.stat:active { transform: translateY(0) scale(.99); }
   .stat-icon { @apply hidden h-11 w-11 sm:flex shrink-0 items-center justify-center rounded-lg; }
   .stat-value { @apply text-2xl font-bold leading-tight text-slate-900; }
@@ -267,7 +349,11 @@
   .col-filter-btn.is-active { @apply bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200; }
   .col-filter[open] > .col-filter-btn { @apply bg-indigo-600 text-white; }
   .col-filter-dot { @apply absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-indigo-600 ring-2 ring-white; }
-  .col-filter-panel { @apply fixed z-50 w-64 rounded-xl bg-white p-3 text-left font-normal normal-case tracking-normal shadow-xl ring-1 ring-slate-200; }
+  .col-filter-panel { @apply fixed z-[70] w-64 max-w-[calc(100vw-1.5rem)] rounded-2xl bg-white/95 p-3 text-left font-normal normal-case tracking-normal ring-1 ring-slate-200/90 backdrop-blur-md;
+                      box-shadow: 0 1px 2px rgb(15 23 42 / .06), 0 12px 28px -6px rgb(11 26 54 / .22), 0 30px 60px -20px rgb(11 26 54 / .25);
+                      animation: pop-in .16s cubic-bezier(.2,.8,.2,1) both; transform-origin: top; }
+  .col-filter-panel::before { content: ""; @apply pointer-events-none absolute inset-x-4 top-0 h-px;
+                              background: linear-gradient(90deg, transparent, rgb(227 176 52 / .7), transparent); }
   .col-filter-list { @apply max-h-72 overflow-y-auto pr-1; }
   .col-filter-group { @apply px-1 pb-1 pt-2 text-xs font-semibold text-slate-400; }
   .col-filter-item { @apply flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm text-slate-700 hover:bg-slate-50; }
@@ -325,10 +411,16 @@
 details > summary + * { animation: none; }
 details[open] > summary + * { animation: rise .25s ease both; }
 
+/* Sankey band colours: written outside @layer because the class names are put together in the template
+   (sk-stop-{{ tone }}), so Tailwind would not find them and would drop them */
+.sk-stop-good { stop-color: #2b7be0; } .sk-stop-drop { stop-color: #f08a24; } .sk-stop-done { stop-color: #10b981; }
+.sk-stop-plain { stop-color: #64748b; } .sk-stop-muted { stop-color: #cbd5e1; } .sk-stop-neutral { stop-color: #1f4b9a; }
+
 @keyframes ripple { to { transform: scale(2.6); opacity: 0; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes slide-down { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes fade-up { to { opacity: 0; transform: translateY(-6px); height: 0; margin: 0; padding-top: 0; padding-bottom: 0; } }
 @keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -339,4 +431,6 @@ details[open] > summary + * { animation: rise .25s ease both; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
                            transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .viz-line polyline { stroke-dasharray: none !important; }
+  .emblem-core { transform: none !important; }
+  .sankey-flow { display: none; }
 }

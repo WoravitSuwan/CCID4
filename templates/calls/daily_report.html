@@ -32,7 +32,7 @@
 
 <section id="line" class="card mb-5 scroll-mt-4">
   <div class="flex flex-wrap items-center gap-3">
-    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">{% icon "chat" "h-5 w-5" %}</div>
+    <div class="flex h-9 w-9 items-center justify-center">{% line_icon "h-9 w-9 drop-shadow-sm" %}</div>
     <div class="min-w-[12rem] flex-1">
       <h2 class="text-base font-semibold text-slate-800">ส่งเข้ากลุ่ม LINE</h2>
       {% if line_problem %}
@@ -42,7 +42,7 @@
       {% endif %}
     </div>
     <form method="post" class="w-full sm:w-auto" onsubmit="return confirm('ส่งสรุปผลวันที่ {{ date_text }} เข้ากลุ่ม LINE ตอนนี้?{% if line_files %}\n(3 ข้อความ: รายงาน / ลงบันทึกประจำวัน / สรุปข้อมูลคดี){% endif %}\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
-      <button class="btn btn-success w-full sm:w-auto" {% if line_problem %}disabled title="{{ line_problem }}"{% endif %}>{% icon "chat" "h-4 w-4" %} ส่งสรุปผลวันที่ {{ day|thai_date }} ตอนนี้</button>
+      <button class="btn btn-line w-full sm:w-auto" {% if line_problem %}disabled title="{{ line_problem }}"{% endif %}>{% line_icon "line-mark" True %} ส่งสรุปผลวันที่ {{ day|thai_date }} ตอนนี้</button>
     </form>
   </div>
   <form method="post" class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-4 text-sm" data-no-busy>{% csrf_token %}
@@ -63,7 +63,7 @@
 <div id="daily-live" data-stamp="{{ stamp }}"{% if live %} data-live-url="?{% if query %}{{ query }}&{% endif %}format=stamp"{% endif %}>
 {% if live %}<div class="mb-2 flex items-center gap-2 text-xs text-slate-500" aria-live="polite"><span class="live-dot"></span> อัปเดตยอดอัตโนมัติเมื่อมีการบันทึกผลการโทร · ล่าสุด <span class="tabular-nums">{{ now|time:"H:i:s" }}</span> น.</div>{% endif %}
 {% if from_file %}<p class="mb-2 text-xs text-slate-500">รวมผลการโทรที่บันทึกในไฟล์ Excel (บันทึกการติดต่อ) ตามวันเวลาที่เขียนในไฟล์ {{ from_file|intcomma }} คดี{% if caller %} · เลือกผู้โทรอยู่: ผลจากไฟล์ไม่ระบุผู้โทร จึงไม่นับ{% endif %}</p>{% endif %}
-<div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+<div class="stagger mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
   <div class="stat block"><div class="stat-label">โทรทั้งหมด</div><div class="stat-value"><span data-countup>{{ counts.total|intcomma }}</span> <span class="text-sm font-normal text-slate-400">Case ID</span></div></div>
   <div class="stat block"><div class="stat-label">1. ไม่ประสงค์ดำเนินคดี</div><div class="stat-value text-slate-700"><span data-countup>{{ counts.not_want|intcomma }}</span></div></div>
   <div class="stat block"><div class="stat-label">2. ประสงค์ดำเนินคดีต่อ</div><div class="stat-value text-emerald-700"><span data-countup>{{ counts.want|intcomma }}</span></div></div>

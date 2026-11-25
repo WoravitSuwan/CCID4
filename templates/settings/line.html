@@ -106,7 +106,7 @@
     <section class="card text-sm">
       <h2>ทดสอบ</h2>
       <form method="post" class="mt-2" onsubmit="return confirm('ส่งสรุปผลวันนี้เข้ากลุ่ม LINE ตอนนี้?')">{% csrf_token %}
-        <button class="btn w-full" name="action" value="test" {% if not s.line_group_id %}disabled{% endif %}>{% icon "chat" "h-4 w-4" %} ส่งสรุปผลวันนี้เข้ากลุ่ม</button></form>
+        <button class="btn w-full" name="action" value="test" {% if not s.line_group_id %}disabled{% endif %}>{% line_icon %} ส่งสรุปผลวันนี้เข้ากลุ่ม</button></form>
       <a class="btn btn-ghost mt-2 w-full" href="?quota=1">ตรวจโควตาข้อความเดือนนี้</a>
       {% if quota_checked %}
       <p class="mt-2 text-slate-700">{% if quota %}ใช้ไป {{ quota.used }}{% if quota.limit %} / {{ quota.limit }}{% endif %} ข้อความ{% else %}ติดต่อ LINE ไม่ได้ (ตรวจ token หรืออินเทอร์เน็ตของเซิร์ฟเวอร์){% endif %}</p>
