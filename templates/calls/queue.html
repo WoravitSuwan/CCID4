@@ -3,10 +3,13 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>{% if is_outsource %}รายการคดีที่ต้องโทร{% else %}ติดต่อผู้เสียหาย{% endif %}</h1>
-    <p class="page-sub">คดีทั้งหมดในทะเบียน แยกตามการโทรและสถานะคดี · เจ้าหน้าที่ทุกคนใช้รายการเดียวกัน ใครโทรคดีไหนก่อนจะเป็นผู้รับผิดชอบคดีนั้น</p>
+    <h1>{% if is_investigator %}คดีของฉัน{% elif is_outsource %}รายการคดีที่ต้องโทร{% else %}ติดต่อผู้เสียหาย{% endif %}</h1>
+    {% if my_investigator %}<p class="page-sub">เฉพาะคดีของพนักงานสอบสวน <b>{{ my_investigator }}</b> (ใครคดีมัน) · ออกหมายเรียก แก้ที่อยู่ และอ่านที่อยู่จาก PDF ทะเบียนราษฎร ได้เฉพาะคดีเหล่านี้</p>
+    {% elif is_investigator %}<p class="page-sub text-amber-700">บัญชีนี้ยังไม่ได้ผูกกับพนักงานสอบสวน จึงยังไม่เห็นคดีใด แจ้งผู้ดูแลระบบให้ผูกที่ ตั้งค่า &gt; ผู้ใช้</p>
+    {% else %}<p class="page-sub">คดีทั้งหมดในทะเบียน แยกตามการโทรและสถานะคดี · เจ้าหน้าที่ทุกคนใช้รายการเดียวกัน ใครโทรคดีไหนก่อนจะเป็นผู้รับผิดชอบคดีนั้น</p>{% endif %}
   </div>
   <div class="ml-auto flex flex-wrap gap-2">
+    {% if not is_investigator %}
     <a class="btn btn-primary" href="{% url 'daily_report' %}">{% icon "clipboard" "h-4 w-4" %} สรุปผลวันนี้ / ข้อความลงบันทึกประจำวัน</a>
     {% if line_ready %}
     <form method="post" action="{% url 'daily_report' %}" onsubmit="return confirm('ส่งสรุปผลวันนี้เข้ากลุ่ม LINE ตอนนี้?\n(นับโควตาข้อความตามจำนวนสมาชิกในกลุ่ม)')">{% csrf_token %}
@@ -14,7 +17,9 @@
     {% else %}
     <a class="btn btn-line-soft" href="{% url 'daily_report' %}#line" title="ตั้งเวลาส่งอัตโนมัติ / ดูว่าทำไมยังส่งไม่ได้">{% line_icon %} LINE</a>
     {% endif %}
-    {% if is_outsource %}<a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} อัปเดตข้อมูลคดี (Excel)</a>{% endif %}
+    {% endif %}
+    {% if is_outsource %}<a class="btn" href="{% url 'dopa_home' %}">{% icon "cases" "h-4 w-4" %} PDF ทะเบียนราษฎร</a>
+    <a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} อัปเดตข้อมูลคดี (Excel)</a>{% endif %}
     {% if can_manage %}
     <a class="btn" href="{% url 'calls_export' %}">{% icon "download" "h-4 w-4" %} ส่งออกผลการโทร (Excel)</a>
     <a class="btn" href="{% url 'calls_assign' %}">{% icon "users" "h-4 w-4" %} กำหนดผู้รับผิดชอบ (ไม่บังคับ)</a>

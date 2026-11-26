@@ -39,12 +39,14 @@
     </button>
     <nav class="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
       {% if is_outsource %}
-      <a class="side-link {% if u and 'call' in u %}active{% endif %}" href="{% url 'calls_queue' %}">{% icon "phone" %} รายการที่ต้องโทร</a>
+      <a class="side-link {% if u and 'call' in u %}active{% endif %}" href="{% url 'calls_queue' %}">{% icon "phone" %} {% if is_investigator %}คดีของฉัน{% else %}รายการที่ต้องโทร{% endif %}</a>
       <a class="side-link {% if u == 'summons_list' or u == 'issue_form' %}active{% endif %}" href="{% url 'summons_list' %}">{% icon "document" %} หมายเรียกที่ออก</a>
       <a class="side-link {% if u and 'export' in u %}active{% endif %}" href="{% url 'export_jobs' %}">{% icon "download" %} ส่งออกเอกสาร</a>
+      {% if not is_investigator %}
       <a class="side-link {% if u == 'stats_dashboard' %}active{% endif %}" href="{% url 'stats_dashboard' %}">{% icon "calendar" %} สถิติ</a>
       <a class="side-link {% if u == 'daily_report' %}active{% endif %}" href="{% url 'daily_report' %}">{% icon "clipboard" %} สรุปผลประจำวัน</a>
       <a class="side-link {% if u == 'status_report' %}active{% endif %}" href="{% url 'status_report' %}">{% icon "document" %} แก้สถานะระบบใหญ่</a>
+      {% endif %}
       <a class="side-link {% if u and u|slice:":7" == "import_" %}active{% endif %}" href="{% url 'import_home' %}">{% icon "upload" %} อัปเดตข้อมูลคดี (Excel)</a>
       <a class="side-link {% if u and u|slice:":5" == "dopa_" %}active{% endif %}" href="{% url 'dopa_home' %}">{% icon "cases" %} PDF ทะเบียนราษฎร</a>
       {% else %}

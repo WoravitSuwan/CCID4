@@ -23,6 +23,10 @@ class Command(BaseCommand):
         linked = link_register_names()
         if linked:
             self.stdout.write(f"สร้าง/ผูกผู้ลงนามให้ชื่อพนักงานสอบสวนในทะเบียน {linked} ชื่อ")
+        from django.conf import settings
+
+        if not settings.DEMO_MODE:  # the public try-out site gets no real accounts
+            call_command("seed_investigators", stdout=self.stdout)
         from apps.calls.services import ensure_call_pool
 
         pooled = ensure_call_pool()

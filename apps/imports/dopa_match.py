@@ -20,13 +20,9 @@ RECEIPT_IN_NAME = re.compile(r"(?<![A-Z0-9])([A-Z]\d{8,13})(?!\d)")
 
 def cases_for(user):
     """The cases this user may update from a registration PDF."""
-    qs = Case.objects.all()
     if not perms.can_issue_any(user):
-        return qs.none()
-    investigator_id = getattr(user, "investigator_id", None)
-    if investigator_id and not perms.is_admin(user):
-        qs = qs.filter(investigator_alias__investigator_id=investigator_id)
-    return qs
+        return Case.objects.none()
+    return perms.case_scope(Case.objects.all(), user)
 
 
 def may_use(user, case) -> bool:

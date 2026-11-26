@@ -61,7 +61,9 @@ def app_context(request):
         "pdf_available": pdf_available(),
         "thai_font": thai_font(),
         "perm_calls_manage": perms.can_manage_calls(user),
-        "is_outsource": perms.is_outsource(user),
+        "is_outsource": perms.is_case_staff(user),  # the call-staff screens (call staff and investigators)
+        "is_investigator": perms.is_investigator(user),
+        "my_investigator": getattr(user, "investigator", None) if perms.scoped_investigator(user) else None,
     }
     if perms.is_admin(user):
         from apps.registry.models import InvestigatorAlias, Status, other_unit_cases

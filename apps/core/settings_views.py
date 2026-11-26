@@ -330,23 +330,63 @@ def template_download(request, pk):
 
 # --------------------------------------------------------------------------- users
 class UserForm(StyledModelForm):
-    password = forms.CharField(label="รหัสผ่าน", required=False, widget=forms.PasswordInput,
-                               help_text="เว้นว่างถ้าไม่ต้องการเปลี่ยน (อย่างน้อย 8 ตัวอักษร)")
+    """An account: its username (ID), a new password, the name shown, role, on/off, and - for พนักงานสอบสวน - the
+    investigator record its cases come from (kept when the username changes: the link is by record, not name)."""
+
+    password = forms.CharField(label="รหัสผ่านใหม่", required=False, strip=False,
+                               widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+                               help_text="เว้นว่างถ้าไม่ต้องการเปลี่ยน · อย่างน้อย 8 ตัวอักษร ไม่ใช่รหัสที่เดาง่าย")
+    password2 = forms.CharField(label="ยืนยันรหัสผ่านใหม่", required=False, strip=False,
+                                widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}))
+    position = forms.CharField(label="ตำแหน่ง (พนักงานสอบสวน)", required=False, max_length=300,
+                               help_text="เช่น สว.(สอบสวน) กก.๑ บก.สอท.๔ ใช้ในหมายเรียก · บันทึกไว้ที่ข้อมูลพนักงานสอบสวน")
 
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name", "role", "is_active"]
+        fields = ["username", "first_name", "last_name", "role", "investigator", "is_active"]
+        labels = {"username": "ชื่อผู้ใช้ (ID สำหรับเข้าระบบ)", "first_name": "ยศ-ชื่อ (ชื่อที่แสดง)",
+                  "last_name": "นามสกุล", "is_active": "เปิดใช้งานบัญชีนี้",
+                  "investigator": "พนักงานสอบสวนที่ผูกไว้ (ใครคดีมัน)"}
+        help_texts = {"username": "ตัวอักษร ตัวเลข และ @ . + - _ เท่านั้น ห้ามซ้ำกับผู้ใช้อื่น",
+                      "investigator": "บัญชีพนักงานสอบสวนเห็นและออกหมายได้เฉพาะคดีของพนักงานสอบสวนคนนี้ "
+                                      "(เปลี่ยนชื่อผู้ใช้แล้วคดียังผูกอยู่เหมือนเดิม)"}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.instance.pk:
-            self.fields["password"].required = True
+            self.fields["password"].required = self.fields["password2"].required = True
+        taken = User.objects.exclude(pk=self.instance.pk).filter(investigator__isnull=False)
+        self.fields["investigator"].queryset = Investigator.objects.exclude(
+            pk__in=taken.values("investigator_id")).order_by("sign_name")
+        self.fields["investigator"].required = False
+        if self.instance.investigator_id:
+            self.fields["position"].initial = self.instance.investigator.position
 
-    def clean_password(self):
-        pw = self.cleaned_data.get("password")
-        if pw and len(pw) < 8:
-            raise forms.ValidationError("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร")
-        return pw
+    def clean_username(self):
+        name = (self.cleaned_data.get("username") or "").strip()
+        if not name:
+            raise forms.ValidationError("ต้องมีชื่อผู้ใช้")
+        if User.objects.exclude(pk=self.instance.pk).filter(username__iexact=name).exists():
+            raise forms.ValidationError("ชื่อผู้ใช้นี้มีอยู่แล้ว")
+        return name
+
+    def clean(self):
+        from django.contrib.auth.password_validation import validate_password
+
+        data = super().clean()
+        pw, pw2 = data.get("password") or "", data.get("password2") or ""
+        if pw or pw2:
+            if pw != pw2:
+                self.add_error("password2", "รหัสผ่านทั้งสองช่องไม่ตรงกัน")
+            else:
+                try:
+                    validate_password(pw, self.instance if self.instance.pk else None)
+                except forms.ValidationError as exc:
+                    self.add_error("password", [THAI_PASSWORD_ERRORS.get(e.code, m)
+                                                for e, m in zip(exc.error_list, exc.messages, strict=False)])
+        if data.get("role") == Role.INVESTIGATOR and not data.get("investigator"):
+            self.add_error("investigator", "บัญชีพนักงานสอบสวนต้องผูกกับพนักงานสอบสวน (ไม่งั้นจะไม่เห็นคดีใดเลย)")
+        return data
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -355,36 +395,83 @@ class UserForm(StyledModelForm):
             user.set_password(self.cleaned_data["password"])
         if commit:
             user.save()
+            inv = user.investigator
+            if inv is not None and "position" in self.changed_data:
+                inv.position = self.cleaned_data.get("position", "")
+                inv.save(update_fields=["position"])
         return user
+
+
+THAI_PASSWORD_ERRORS = {
+    "password_too_short": "รหัสผ่านสั้นเกินไป (อย่างน้อย 8 ตัวอักษร)",
+    "password_too_common": "รหัสผ่านนี้เดาง่ายเกินไป",
+    "password_entirely_numeric": "รหัสผ่านต้องไม่เป็นตัวเลขล้วน",
+    "password_too_similar": "รหัสผ่านคล้ายชื่อผู้ใช้เกินไป",
+}
 
 
 @admin_only
 def users(request):
     return render(request, "settings/users.html", {
-        "users": User.objects.order_by("username"), "tab": "users",
+        "users": User.objects.select_related("investigator").order_by("role", "username"), "tab": "users",
     })
+
+
+def _changes(before: dict | None, user, password_changed: bool) -> list[str]:
+    """What happened to an account, in words for the audit log (never the password itself)."""
+    if before is None:
+        linked = f" ผูกกับ {user.investigator}" if user.investigator else ""
+        return [f"เพิ่มผู้ใช้ {user.username} ({user.role_label}){linked}"]
+    out = []
+    if before["username"] != user.username:
+        out.append(f"เปลี่ยนชื่อผู้ใช้ {before['username']} → {user.username}")
+    if password_changed:
+        out.append(f"เปลี่ยนรหัสผ่านของ {user.username}")
+    if before["is_active"] != user.is_active:
+        out.append(f"{'เปิด' if user.is_active else 'ปิด'}ใช้งานบัญชี {user.username}")
+    if before["role"] != user.role:
+        out.append(f"เปลี่ยนบทบาท {user.username}: {Role(before['role']).label} → {user.role_label}")
+    if before["investigator_id"] != user.investigator_id:
+        out.append(f"ผูก {user.username} กับพนักงานสอบสวน: {user.investigator or '(ไม่ผูก)'}")
+    if (before["first_name"], before["last_name"]) != (user.first_name, user.last_name):
+        out.append(f"แก้ชื่อที่แสดงของ {user.username}: {before['name']} → {user.display_name()}")
+    return out
 
 
 @admin_only
 def user_edit(request, pk=None):
+    from django.contrib.auth import update_session_auth_hash
+
     user = get_object_or_404(User, pk=pk) if pk else None
+    before = None if user is None else {
+        "username": user.username, "is_active": user.is_active, "role": user.role, "first_name": user.first_name,
+        "last_name": user.last_name, "investigator_id": user.investigator_id, "name": user.display_name()}
     form = UserForm(request.POST or None, instance=user)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         demoting = d["role"] != Role.ADMIN or not d["is_active"]
         other_admins = User.objects.filter(role=Role.ADMIN, is_active=True).exclude(pk=getattr(user, "pk", None))
-        if user is not None and demoting and (user.pk == request.user.pk or not other_admins.exists()):
+        # (the form has already put the new values on `user`: compare with what it was before)
+        if user is not None and before["role"] == Role.ADMIN and demoting and (
+                user.pk == request.user.pk or not other_admins.exists()):
             form.add_error("role", "เปลี่ยนบทบาทหรือปิดบัญชีนี้ไม่ได้ ต้องมีผู้ดูแลระบบที่ใช้งานอยู่อย่างน้อย 1 คน "
                                    "และห้ามลดสิทธิ์บัญชีของตนเอง")
     if request.method == "POST" and form.is_valid():
+        password_changed = bool(form.cleaned_data.get("password"))
         obj = form.save()
-        log(request, AuditAction.SETTINGS, obj, f"{'แก้ไข' if user else 'เพิ่ม'}ผู้ใช้ {obj.username} ({obj.role_label})")
-        messages.success(request, "บันทึกแล้ว")
+        if password_changed and obj.pk == request.user.pk:
+            update_session_auth_hash(request, obj)  # stay logged in here; other browsers are logged out
+        # a new password (or a closed account) ends that account's other sessions: Django checks the password
+        # hash on every request, and a closed account cannot log in
+        for change in _changes(before, obj, password_changed) or [f"บันทึกผู้ใช้ {obj.username} (ไม่มีการเปลี่ยนแปลง)"]:
+            log(request, AuditAction.SETTINGS, obj, change)
+        messages.success(request, "บันทึกแล้ว" + (" · รหัสผ่านใหม่มีผลทันที (เครื่องอื่นที่เข้าบัญชีนี้อยู่ต้องเข้าระบบใหม่)"
+                                                  if password_changed and before else ""))
         return redirect("settings_users")
     return render(request, "settings/form.html", {
         "form": form, "title": "แก้ไขผู้ใช้" if user else "เพิ่มผู้ใช้", "tab": "users", "back": "settings_users",
-        "help": "ผู้ดูแลระบบ: ใช้งานได้ทุกส่วน (นำเข้า ทะเบียนคดี ออกหมาย ส่งออก มอบหมายงานโทร ตั้งค่า) · "
-                "เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): เห็นเฉพาะคดีที่ได้รับมอบหมาย และบันทึกผลการโทรเท่านั้น",
+        "help": "ผู้ดูแลระบบ: ใช้งานได้ทุกส่วน · เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource): รายการโทรของทุกคดี บันทึกผล "
+                "แก้ที่อยู่ ออกหมาย · พนักงานสอบสวน: ทำได้แบบเดียวกันแต่เฉพาะคดีของพนักงานสอบสวนที่ผูกไว้ (ใครคดีมัน)",
     })
 
 

@@ -3,12 +3,16 @@
 {% block content %}
 {% include "settings/_tabs.html" %}
 <div class="card overflow-x-auto p-0">
-  <div class="flex items-center px-4 pt-4"><h2>ผู้ใช้และสิทธิ์</h2><a class="btn btn-sm ml-auto" href="{% url 'settings_user_new' %}">+ เพิ่มผู้ใช้</a></div>
+  <div class="flex items-center px-4 pt-4"><h2>ผู้ใช้และสิทธิ์</h2>
+    <span class="ml-3 text-xs text-slate-500">แก้ชื่อผู้ใช้ (ID) รหัสผ่าน ชื่อ ตำแหน่ง และเปิด/ปิดบัญชีได้ที่ปุ่ม แก้ไข · บัญชีพนักงานสอบสวนเห็นเฉพาะคดีของตนเอง</span><a class="btn btn-sm ml-auto" href="{% url 'settings_user_new' %}">+ เพิ่มผู้ใช้</a></div>
   <table class="table mt-2">
-    <thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>ใช้งาน</th><th>เข้าระบบล่าสุด</th><th></th></tr></thead>
+    <thead><tr><th>ชื่อผู้ใช้ (ID)</th><th>ชื่อ</th><th>บทบาท</th><th>พนักงานสอบสวนที่ผูกไว้</th><th>ใช้งาน</th><th>เข้าระบบล่าสุด</th><th></th></tr></thead>
     <tbody>
     {% for u in users %}
-      <tr class="{% if not u.is_active %}opacity-50{% endif %}"><td>{{ u.username }}</td><td>{{ u.first_name }} {{ u.last_name }}</td><td><span class="badge {% if u.effective_role == 'admin' %}badge-blue{% else %}badge-gray{% endif %}">{{ u.role_label }}</span></td><td>{% if u.is_active %}✓{% else %}ปิด{% endif %}</td><td>{{ u.last_login|thai_date:"datetime" }}</td>
+      <tr class="{% if not u.is_active %}opacity-50{% endif %}"><td class="font-mono">{{ u.username }}</td><td>{{ u.first_name }} {{ u.last_name }}</td>
+        <td><span class="badge {% if u.effective_role == 'admin' %}badge-blue{% elif u.effective_role == 'investigator' %}badge-amber{% else %}badge-gray{% endif %}">{{ u.role_label }}</span></td>
+        <td class="text-sm">{% if u.investigator %}{{ u.investigator }}{% elif u.effective_role == 'investigator' %}<span class="text-rose-700">ยังไม่ผูก (ไม่เห็นคดีใด)</span>{% else %}<span class="text-slate-400">-</span>{% endif %}</td>
+        <td>{% if u.is_active %}✓{% else %}ปิด{% endif %}</td><td>{{ u.last_login|thai_date:"datetime" }}</td>
         <td><a class="btn btn-sm" href="{% url 'settings_user_edit' u.pk %}">แก้ไข</a></td></tr>
     {% endfor %}
     </tbody>

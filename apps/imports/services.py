@@ -184,6 +184,7 @@ class Analysis:
     looks_like_update: bool = False  # a big-system file picked as "ทะเบียนคดี"
     contact_only: bool = False  # the unit's own register loaded as an update: only its contact log is taken
     contact_unknown: int = 0  # rows of such a file whose case is not in the system (not added)
+    not_yours: int = 0  # update file loaded by an investigator: rows of other people's cases (left alone)
     ranks: dict = field(default_factory=dict)  # investigator key -> full rank written by the big system
     remove_count: int = 0  # cases of another unit already in the system, removed on import
     remove_calls: int = 0
@@ -278,9 +279,14 @@ def complainant_issues(analysis: Analysis, row: ParsedRow):
 def analyze(batch: ImportBatch, progress=None) -> Analysis:
     kind = batch.kind
     analysis = Analysis(kind=kind)
+    scope = None  # receipt numbers the uploader may update (None = all): ใครคดีมัน
     if kind == ImportKind.UPDATE:
         analysis.present = [f for f, _h, _r in COLUMNS[kind] if batch.mapping.get(f)]
         known = set(Case.objects.values_list("receipt_no", flat=True))
+        from apps.core import permissions as perms
+
+        if batch.created_by_id and perms.scoped_investigator(batch.created_by) is not None:
+            scope = set(perms.case_scope(Case.objects.all(), batch.created_by).values_list("receipt_no", flat=True))
     sheets = batch.sheets or [DEFAULT_SHEET.get(kind)] or []
     path = batch.file.path
     for s_index, sheet in enumerate(sheets):
@@ -307,6 +313,10 @@ def analyze(batch: ImportBatch, progress=None) -> Analysis:
                 if key not in known and not (unit.strip() and is_own_unit(unit)):
                     analysis.total_rows -= 1
                     analysis.other_units[unit.strip() or "(ไม่ระบุหน่วย)"] += 1
+                    continue
+                if scope is not None and key not in scope:  # not one of the uploader's cases (nor a new case)
+                    analysis.total_rows -= 1
+                    analysis.not_yours += 1
                     continue
             else:
                 prow.values = parse_register_row(raw, batch.mapping, sheet, analysis, prow)
@@ -625,6 +635,7 @@ def summary_dict(analysis: Analysis) -> dict:
         "kept_with_summons": analysis.kept_with_summons,
         "looks_like_update": analysis.looks_like_update,
         "contact_only": analysis.contact_only, "contact_unknown": analysis.contact_unknown,
+        "not_yours": analysis.not_yours,
         "matched": len(analysis.rows) - len(analysis.new_keys) if analysis.kind == ImportKind.UPDATE else None,
         "status_changes": [f"{old} → {new}: {n:,} คดี" for (old, new), n in analysis.status_changes.most_common()],
         "to_final": sum(n for (old, new), n in analysis.status_changes.items() if new in FINAL_BY_DEFAULT),

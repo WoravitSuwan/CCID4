@@ -12,6 +12,8 @@ OUTSOURCE_PREFIXES = ("/calls/", "/accounts/", "/static/", "/healthz", "/summons
 # other pages call staff may open: start issuing a summons for one of their cases, and the
 # postcode lookup used by the address form on the call page
 OUTSOURCE_PATTERNS = (re.compile(r"^/cases/\d+/issue/$"), re.compile(r"^/cases/postcode/$"))
+# investigators: the same pages, without the statistics and daily reports (they list everyone's cases)
+INVESTIGATOR_PREFIXES = tuple(p for p in OUTSOURCE_PREFIXES if p not in ("/stats/", "/reports/"))
 
 
 class LoginRequiredMiddleware:
@@ -29,8 +31,9 @@ class LoginRequiredMiddleware:
                 response["HX-Redirect"] = reverse(settings.LOGIN_URL)
                 return response
             return redirect(f"{reverse(settings.LOGIN_URL)}?next={request.get_full_path()}")
-        if (request.user.is_authenticated and request.user.effective_role == "outsource"
-                and not request.path.startswith(OUTSOURCE_PREFIXES)
+        role = request.user.effective_role if request.user.is_authenticated else ""
+        allowed = INVESTIGATOR_PREFIXES if role == "investigator" else OUTSOURCE_PREFIXES
+        if (role in ("outsource", "investigator") and not request.path.startswith(allowed)
                 and not any(p.match(request.path) for p in OUTSOURCE_PATTERNS)):
             return redirect("calls_queue")
         response = self.get_response(request)

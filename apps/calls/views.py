@@ -62,11 +62,11 @@ def call_staff():
 # --------------------------------------------------------------------------- queue
 def _queue(request):
     """The shared call list: every open case (plus closed ones that were called), for all call staff."""
-    if not (perms.is_outsource(request.user) or perms.can_manage_calls(request.user)):
+    if not (perms.is_case_staff(request.user) or perms.can_manage_calls(request.user)):
         raise PermissionDenied
     ensure_call_pool()
-    qs = funnel.with_summons_flag(CallAssignment.objects.select_related(
-        "case", "case__complainant", "case__status", "assignee", "opened_by"))
+    qs = funnel.with_summons_flag(perms.case_scope(CallAssignment.objects.select_related(
+        "case", "case__complainant", "case__status", "assignee", "opened_by"), request.user, "case__"))
     who = request.GET.get("assignee", "")
     if who == "me":
         qs = qs.filter(assignee=request.user)
@@ -354,7 +354,7 @@ def queue(request):
     qs = _apply_tab(filtered, tab)
     today = timezone.localdate()
     today_calls = CallAttempt.objects.filter(called_at__date=today)
-    if perms.is_outsource(request.user):
+    if perms.is_case_staff(request.user):
         today_calls = today_calls.filter(created_by=request.user)
     stats = {
         "today": today_calls.count(),

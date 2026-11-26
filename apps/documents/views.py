@@ -111,7 +111,7 @@ def _selected_cases(request):
         request.session[SESSION_EXCLUDED] = sorted(excluded)
     else:
         excluded = set(request.session.get(SESSION_EXCLUDED) or [])
-    qs = (Case.objects.filter(pk__in=ids).exclude(pk__in=excluded)
+    qs = (perms.case_scope(Case.objects.filter(pk__in=ids), request.user).exclude(pk__in=excluded)
           .select_related("status", "unit", "complainant", "investigator_alias__investigator"))
     return list(qs), excluded
 
@@ -121,7 +121,7 @@ def issue_form(request):
         raise PermissionDenied
     cases, excluded = _selected_cases(request)
     if not cases and request.method == "GET":
-        if perms.is_outsource(request.user):
+        if perms.is_case_staff(request.user):
             messages.info(request, "เลือกคดีจากรายการที่ต้องโทรก่อน แล้วกด 'ออกหมายเรียก'")
             return redirect("calls_queue")
         messages.info(request, "เลือกคดีจากทะเบียนคดีก่อน แล้วกด 'ออกหมายเรียก'")
@@ -270,8 +270,10 @@ def issue_signer(request):
 
 # --------------------------------------------------------------------------- summons list & downloads
 def _own_summonses(request, qs):
-    """Call staff share one call list, so they see every summons (filter 'mine' to narrow it)."""
-    if perms.is_outsource(request.user) and request.GET.get("mine"):
+    """Call staff share one call list, so they see every summons (filter 'mine' to narrow it); investigators
+    only the summonses of their own cases."""
+    qs = perms.case_scope(qs, request.user, "case__")
+    if perms.is_case_staff(request.user) and request.GET.get("mine"):
         qs = qs.filter(created_by=request.user)
     return qs
 

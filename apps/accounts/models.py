@@ -5,6 +5,7 @@ from django.db import models
 class Role(models.TextChoices):
     ADMIN = "admin", "ผู้ดูแลระบบ"
     OUTSOURCE = "outsource", "เจ้าหน้าที่ติดต่อผู้เสียหาย (outsource)"
+    INVESTIGATOR = "investigator", "พนักงานสอบสวน (เฉพาะคดีของตนเอง)"
 
 
 class User(AbstractUser):
@@ -32,6 +33,10 @@ class User(AbstractUser):
     @property
     def role_label(self) -> str:
         return Role(self.effective_role).label if self.effective_role in Role.values else self.effective_role
+
+    # the account made by `manage.py seed_investigators` (ccid14_001 ...): found by this key, not by the
+    # username, so a username or password changed in ตั้งค่า is never reset when the command runs again
+    seed_key = models.CharField(max_length=40, unique=True, null=True, blank=True, editable=False)
 
     def display_name(self) -> str:
         full = f"{self.first_name} {self.last_name}".strip()

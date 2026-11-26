@@ -126,6 +126,22 @@ def test_every_page_opens_or_is_refused_for_outsource(world):
     assert client.get("/imports/").context["update_only"]
 
 
+def test_every_page_opens_or_is_refused_for_an_investigator(world):
+    """A พนักงานสอบสวน account linked to the investigator of the summonsed case: nothing crashes, the pages of
+    other people's cases are refused, the reports of everyone's cases redirect."""
+    from apps.registry.models import Case
+
+    case = Case.objects.get(pk=world["case"])
+    officer = User.objects.create_user("smoke_inv", password="x" * 12, role=Role.INVESTIGATOR,
+                                       investigator=case.investigator)
+    client = Client(raise_request_exception=False)
+    client.force_login(officer)
+    assert crawl(client, world) == []
+    assert client.get(f"/calls/{case.pk}/").status_code == 200
+    for url in ("/stats/", "/reports/daily/", "/settings/", "/cases/"):
+        assert client.get(url).status_code == 302, url
+
+
 def test_every_page_needs_login(world):
     client = Client(raise_request_exception=False)
     for pattern, name in all_patterns():

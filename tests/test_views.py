@@ -51,10 +51,10 @@ def test_role_permissions(client, setup_signers):
     assert client.get("/calls/assign/").status_code == 403
 
 
-def test_only_two_roles_offered(client, db):
+def test_three_roles_offered(client, db):
     login(client, Role.ADMIN)
     form = client.get("/settings/users/new/").context["form"]
-    assert [v for v, _ in form.fields["role"].choices if v] == ["admin", "outsource"]
+    assert [v for v, _ in form.fields["role"].choices if v] == ["admin", "outsource", "investigator"]
 
 
 def test_admin_cannot_demote_self(client, db):

@@ -10,6 +10,7 @@
 {% else %}
   {% with s=batch.summary %}
   {% if batch.status == 'done' %}<div class="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">นำเข้าสำเร็จ{% if s.linked %} · จับคู่คดีกับผู้แจ้งเพิ่ม {{ s.linked|intcomma }} คดี{% endif %}</div>{% endif %}
+  {% if s.not_yours %}<div class="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">ใครคดีมัน: ข้ามแถวของคดีที่ไม่ใช่ของคุณ {{ s.not_yours|intcomma }} แถว · อัปเดตได้เฉพาะคดีของตนเอง และไม่เพิ่มคดีใหม่</div>{% endif %}
   {% if batch.kind == 'update' and s.contact_only %}
   <div class="mb-4 rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950">
     <b>ไฟล์ทะเบียนของหน่วย (มีคอลัมน์บันทึกการติดต่อ)</b> · อัปเดต<b>เฉพาะบันทึกการติดต่อ</b> {{ s.updated|intcomma }} คดี · เหมือนเดิม {{ s.unchanged|intcomma }} คดี
