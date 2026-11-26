@@ -452,7 +452,8 @@ def test_web_pages_check_when_no_worker_runs(client, caller, line, day_calls, se
 
     settings.LINE_WEB_CHECK = True
     setting(line_group_id="Cgroup1", line_enabled=True, line_send_time=dt.time(0, 0))
-    monkeypatch.setattr(line_bot, "_last_web_check", 0.0)
+    monkeypatch.setattr(line_bot, "_last_web_check", -1e9)  # never checked (whatever the machine's uptime)
+    monkeypatch.setattr(threading, "active_count", lambda: 1)  # not the threads other tests left behind
     started = []
     monkeypatch.setattr("apps.core.background.start_thread", lambda f, *a: started.append(f))
     client.force_login(caller)

@@ -9,7 +9,7 @@ from apps.core.models import AuditAction
 from .forms import AddressOverrideForm
 from .models import AddressOverride, Case, complainant_address_snapshot
 
-PREFILL_FIELDS = ["house_no", "moo", "building", "soi", "road", "subdistrict", "district", "province"]
+PREFILL_FIELDS = ["house_no", "moo", "building", "alley", "soi", "road", "subdistrict", "district", "province"]
 
 
 def address_form(case: Case, prefix: str | None = None) -> AddressOverrideForm:

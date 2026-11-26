@@ -52,4 +52,11 @@ class Command(BaseCommand):
                             changed = True
                     if changed:
                         obj.save(update_fields=fields)
-        self.stdout.write(f"ลบไฟล์ {removed} ไฟล์ (เก่ากว่า {days} วัน)")
+        # what was read from ทะเบียนราษฎร PDFs (names, ID numbers, addresses): gone after the same period
+        from apps.imports.models import DopaRecord
+
+        old = DopaRecord.objects.filter(uploaded_at__lt=cutoff)
+        dopa = old.count()
+        if not dry_run:
+            old.delete()
+        self.stdout.write(f"ลบไฟล์ {removed} ไฟล์ และข้อมูลจาก PDF ทะเบียนราษฎร {dopa} รายการ (เก่ากว่า {days} วัน)")

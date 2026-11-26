@@ -32,10 +32,10 @@ class StyledForm(StyledFormMixin, forms.Form):
 class AddressOverrideForm(StyledModelForm):
     class Meta:
         model = AddressOverride
-        fields = ["recipient_name", "house_no", "moo", "building", "soi", "road", "subdistrict", "district",
+        fields = ["recipient_name", "house_no", "moo", "building", "alley", "soi", "road", "subdistrict", "district",
                   "province", "postcode", "note"]
         widgets = {name: forms.TextInput() for name in
-                   ["house_no", "moo", "building", "soi", "road", "subdistrict", "district", "province",
+                   ["house_no", "moo", "building", "alley", "soi", "road", "subdistrict", "district", "province",
                     "recipient_name"]}
         widgets["note"] = forms.TextInput()
 

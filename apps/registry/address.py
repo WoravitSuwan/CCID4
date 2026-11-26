@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass, field
 
 ADDRESS_FIELDS = [
-    "house_no", "moo", "building", "soi", "road",
+    "house_no", "moo", "building", "alley", "soi", "road",
     "subdistrict", "district", "province", "postcode",
 ]
 
@@ -15,6 +15,7 @@ _PREFIXES = {
     "house_no": ["บ้านเลขที่", "เลขที่", "บ้าน"],
     "moo": ["หมู่ที่", "หมู่", "ม."],
     "building": ["อาคาร", "ตึก"],
+    "alley": ["ตรอก", "ตร."],
     "soi": ["ซอย", "ซ."],
     "road": ["ถนน", "ถ."],
     "subdistrict": ["ตำบล", "แขวง", "ต."],
@@ -45,6 +46,17 @@ def is_bangkok(province: str) -> bool:
     return strip_prefix("province", province).replace(" ", "") in BANGKOK_NAMES
 
 
+# a building value that already says what kind of place it is gets no "อาคาร" in front
+_PLACE_WORDS = ("หมู่บ้าน", "คอนโด", "อพาร์ท", "อพาร์ต", "แมนชั่น", "หอพัก", "ห้องชุด", "ชั้น", "ห้อง", "โครงการ",
+                "ทาวน์", "บ้านพัก", "แฟลต", "ตึก")
+
+
+def same_address(a: dict | None, b: dict | None) -> bool:
+    """Two address snapshots are the same; a field missing from one (saved before it existed) counts as blank."""
+    a, b = a or {}, b or {}
+    return all(clean_text(a.get(k, "")) == clean_text(b.get(k, "")) for k in set(a) | set(b))
+
+
 def is_blank_value(value) -> bool:
     text = clean_text(value)
     return text in {"", "-", "--", ".", "0", "ไม่มี", "ไม่ระบุ", "n/a", "N/A"}
@@ -55,6 +67,7 @@ class Address:
     house_no: str = ""
     moo: str = ""
     building: str = ""
+    alley: str = ""
     soi: str = ""
     road: str = ""
     subdistrict: str = ""
@@ -109,7 +122,9 @@ class Address:
 
         add(street, "house_no", "บ้านเลขที่" if house_label else "")
         add(street, "moo", "หมู่")
-        add(street, "building", "อาคาร", "")
+        building = strip_prefix("building", self.building)
+        add(street, "building", "" if building.startswith(_PLACE_WORDS) else "อาคาร", "")
+        add(street, "alley", "ตรอก", "")
         add(street, "soi", "ซอย", "")
         add(street, "road", "ถนน", "")
         add(area, "subdistrict", "แขวง" if bkk else "ตำบล", "")

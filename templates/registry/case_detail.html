@@ -94,7 +94,7 @@
 
     {% if can_edit %}
     <details class="mt-4" {% if not override %}{% if not c or c.address_incomplete %}open{% endif %}{% endif %}>
-      <summary class="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-indigo-700">{% icon "pencil" "h-4 w-4" %} {% if override %}แก้ไขที่อยู่ที่แก้เอง{% else %}แก้ไข / กรอกที่อยู่เอง{% endif %}</summary>
+      <summary class="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-indigo-700">{% icon "pencil" "h-4 w-4" %} {% if override %}แก้ไขที่อยู่ที่แก้เอง{% else %}แก้ไข / กรอกที่อยู่เอง{% endif %}</summary><a class="ml-3 inline-flex items-center gap-1 text-sm font-medium text-indigo-700" href="{% url 'dopa_home' %}?case={{ case.pk }}">{% icon "upload" "h-4 w-4" %} อ่านที่อยู่จาก PDF ทะเบียนราษฎร</a>
       {% url 'case_address_save' case.pk as addr_action %}{% include "registry/_address_form.html" with action=addr_action %}
     </details>
     {% endif %}

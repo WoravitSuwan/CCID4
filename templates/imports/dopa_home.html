@@ -1,0 +1,71 @@
+{% extends "base.html" %}{% load thai ui humanize %}
+{% block title %}นำเข้า PDF ทะเบียนราษฎร{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>นำเข้า PDF ทะเบียนราษฎร</h1>
+    <p class="page-sub">อ่านชื่อ เลขประจำตัวประชาชน และที่อยู่ตามทะเบียนบ้าน จากไฟล์ PDF ข้อมูลทะเบียนราษฎร แล้วตรวจก่อนนำไปใช้ออกหมายเรียก</p>
+  </div>
+</div>
+
+<div class="grid gap-5 lg:grid-cols-5">
+  <form method="post" enctype="multipart/form-data" class="card space-y-4 lg:col-span-2" data-no-busy>{% csrf_token %}
+    <h2 class="flex items-center gap-2">{% icon "upload" "h-5 w-5 text-slate-400" %} อัปโหลดไฟล์ PDF</h2>
+    {% if chosen %}
+    <input type="hidden" name="case" value="{{ chosen.pk }}">
+    <div class="rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-900 ring-1 ring-indigo-200">สำหรับคดี <b class="font-mono">{{ chosen.receipt_no }}</b> {{ chosen.recipient_name }}</div>
+    {% endif %}
+    <div>
+      <label class="label" for="dopa-files">ไฟล์ PDF (เลือกได้หลายไฟล์ ไม่เกิน {{ max_files }} ไฟล์ ไฟล์ละ {{ max_mb }} MB)</label>
+      <input type="file" id="dopa-files" name="files" accept=".pdf,application/pdf" multiple required class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-medium file:text-indigo-700 hover:file:bg-indigo-100">
+    </div>
+    <button class="btn btn-primary">{% icon "search" "h-4 w-4" %} อ่านข้อมูล</button>
+    <ul class="list-disc space-y-1 pl-5 text-xs text-slate-500">
+      <li>ไฟล์ที่มีข้อความ (PDF จากระบบ) อ่านได้ทันที · ไฟล์สแกน/ภาพ/มีลายน้ำ อ่านด้วย OCR{% if ocr != "ok" %} <span class="text-amber-700">(ยังใช้ไม่ได้บนเครื่องนี้: {{ ocr_help }})</span>{% endif %}</li>
+      <li>จับคู่คดีจาก เลขประจำตัวประชาชนในไฟล์ผู้แจ้ง · เลขรับแจ้งในชื่อไฟล์ (เช่น C660611953.pdf) · ชื่อ-ชื่อสกุล</li>
+      <li>รองรับที่อยู่ต่างจังหวัด (ตำบล/อำเภอ) และกรุงเทพมหานคร (แขวง/เขต) เติมรหัสไปรษณีย์ให้เองถ้าในไฟล์ไม่มี</li>
+      <li>ยังไม่มีอะไรเปลี่ยนจนกว่าจะกด "บันทึกที่อยู่" ในหน้าตรวจ · ระบบไม่เก็บไฟล์ PDF</li>
+      {% if linked %}<li>คุณผูกกับพนักงานสอบสวน <b>{{ linked }}</b>: จับคู่และแก้ได้เฉพาะคดีของท่านเท่านั้น</li>{% endif %}
+    </ul>
+  </form>
+
+  <section class="card p-0 lg:col-span-3">
+    <div class="flex flex-wrap items-center gap-2 px-5 pt-5">
+      <h2>รอตรวจ ({{ pending|length }})</h2>
+      {% if pending %}
+      <form method="post" action="{% url 'dopa_discard_all' %}" class="ml-auto" onsubmit="return confirm('ไม่ใช้รายการที่ค้างตรวจทั้งหมด?')">{% csrf_token %}
+        <button class="btn btn-ghost btn-sm text-slate-500">ล้างรายการ</button></form>
+      {% endif %}
+    </div>
+    {% if pending %}
+    <div class="table-wrap mt-3 rounded-none shadow-none ring-0">
+      <table class="table">
+        <thead><tr><th>ไฟล์</th><th>ชื่อ-ชื่อสกุล</th><th>คดี</th><th></th></tr></thead>
+        <tbody>
+        {% for r in pending %}{% with p=r.person %}
+          <tr>
+            <td class="max-w-[12rem] truncate text-xs text-slate-500" title="{{ r.file_name }}">{{ r.file_name }}{% if r.read_by == "ocr" %} <span class="badge badge-amber">OCR</span>{% elif r.read_by == "none" %} <span class="badge badge-red">อ่านไม่ได้</span>{% endif %}</td>
+            <td>{{ p.full_name|default:"-" }}{% if p.national_id %}<div class="font-mono text-xs text-slate-400">{{ p.national_id|mask_id }}</div>{% endif %}</td>
+            <td>{% if r.case %}<span class="font-mono text-sm">{{ r.case.receipt_no }}</span><div class="text-xs text-slate-400">{{ r.match_by }}</div>{% else %}<span class="badge badge-amber">ยังไม่ได้จับคู่</span>{% endif %}</td>
+            <td class="text-right"><a class="btn btn-sm btn-primary" href="{% url 'dopa_review' r.pk %}">ตรวจ</a></td>
+          </tr>
+        {% endwith %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="px-5 py-10 text-center text-sm text-slate-400">ไม่มีรายการรอตรวจ</div>
+    {% endif %}
+    {% if done %}
+    <details class="border-t border-slate-100 px-5 py-3 text-sm">
+      <summary class="cursor-pointer text-slate-500">ล่าสุดที่ตรวจแล้ว ({{ done|length }})</summary>
+      <ul class="mt-2 space-y-1">
+        {% for r in done %}<li class="flex flex-wrap gap-2"><span class="badge {% if r.state == 'applied' %}badge-green{% else %}badge-gray{% endif %}">{{ r.get_state_display }}</span>
+          {% if r.case %}<a class="font-mono" href="{% url 'call_case' r.case.pk %}">{{ r.case.receipt_no }}</a>{% endif %}
+          <span class="text-slate-500">{{ r.person.full_name }}</span><span class="text-xs text-slate-400">{{ r.done_at|thai_date:"datetime" }}{% if r.done_by %} · {{ r.done_by.display_name }}{% endif %}</span></li>{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

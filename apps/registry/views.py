@@ -23,6 +23,7 @@ from apps.core.downloads import content_disposition
 from apps.core.models import AuditAction
 from apps.documents.models import Summons, SummonsResult
 
+from .address import same_address
 from .address_edit import address_form, save_address
 from .forms import CaseFilterForm
 from .models import (
@@ -98,7 +99,7 @@ def conflict_receipts() -> list[str]:
         return out
     for case in Case.objects.filter(receipt_no__in=overrides.keys()).select_related("complainant"):
         o = overrides[case.receipt_no]
-        if case.complainant and complainant_address_snapshot(case.complainant) != (o.source_snapshot or {}):
+        if case.complainant and not same_address(complainant_address_snapshot(case.complainant), o.source_snapshot):
             out.append(case.receipt_no)
     return out
 

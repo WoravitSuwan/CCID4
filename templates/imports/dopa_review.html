@@ -1,0 +1,98 @@
+{% extends "base.html" %}{% load thai ui humanize %}
+{% block title %}ตรวจข้อมูลทะเบียนราษฎร{% endblock %}
+{% block content %}
+<div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+  <a href="{% url 'dopa_home' %}" class="nav-link">{% icon "chevron-left" "h-4 w-4" %} นำเข้า PDF ทะเบียนราษฎร</a>
+  {% if pending_left %}<span class="ml-auto text-slate-500">รอตรวจอีก {{ pending_left }} รายการ</span>{% endif %}
+</div>
+<div class="page-header">
+  <div>
+    <h1>ตรวจข้อมูลจากทะเบียนราษฎร</h1>
+    <p class="page-sub">{{ rec.file_name }} · อ่าน{% if rec.read_by == "ocr" %}จากภาพ (OCR){% elif rec.read_by == "text" %}จากข้อความในไฟล์{% else %}ไม่ได้{% endif %} · {{ rec.uploaded_at|thai_date:"datetime" }}</p>
+  </div>
+  {% if rec.state != "pending" %}<span class="badge {% if rec.state == 'applied' %}badge-green{% else %}badge-gray{% endif %} ml-auto">{{ rec.get_state_display }}</span>{% endif %}
+</div>
+
+{% for n in rec.notes %}<div class="alert {% if rec.read_by == 'none' %}alert-error{% else %}alert-warning{% endif %} mb-3">{% icon "alert" "h-5 w-5 shrink-0" %}<div>{{ n }}</div></div>{% endfor %}
+{% for w in person.warnings %}<div class="alert alert-warning mb-3">{% icon "alert" "h-5 w-5 shrink-0" %}<div>{{ w }}</div></div>{% endfor %}
+
+<form method="post" class="grid gap-5 lg:grid-cols-5" id="dopa-form">{% csrf_token %}
+  <div class="space-y-5 lg:col-span-2">
+    <section class="card dossier">
+      <div class="dossier-kicker">บุคคลตามทะเบียนราษฎร</div>
+      <div class="mt-1 text-xl font-semibold text-slate-900">{{ person.full_name|default:"(อ่านชื่อไม่ได้)" }}</div>
+      <div class="mt-1 font-mono text-sm text-slate-500">{% if person.national_id %}{{ person.national_id|mask_id }}{% else %}ไม่พบเลขประจำตัวประชาชน{% endif %}</div>
+      {% if case %}
+      <div class="mt-2">{% if id_agrees is True %}<span class="state-pill is-called">{% icon "check-circle" "h-4 w-4" %} เลขประจำตัวประชาชนตรงกับไฟล์ผู้แจ้งของคดี</span>
+      {% elif id_agrees is False %}<span class="state-pill is-pending">{% icon "alert" "h-4 w-4" %} เลขประจำตัวประชาชนไม่ตรงกับไฟล์ผู้แจ้ง ตรวจว่าเป็นคนเดียวกัน</span>{% endif %}</div>
+      {% endif %}
+      <dl class="dl dl-case mt-4 border-t border-slate-100 pt-4">
+        {% for label, value in details %}<dt>{{ label }}</dt><dd>{{ value|default:"-" }}</dd>{% endfor %}
+      </dl>
+    </section>
+
+    <section class="card">
+      <div class="card-header">{% icon "cases" "h-5 w-5 text-slate-400" %}<h2>คดี</h2>
+        {% if case %}<span class="ml-auto text-xs text-slate-500">{{ rec.match_by }}</span>{% endif %}</div>
+      {% if case %}
+      <div class="font-mono text-lg font-semibold">{{ case.receipt_no }}</div>
+      <div class="text-sm text-slate-600">{{ case.recipient_name|default:"-" }} · {% if case.investigator %}{{ case.investigator }}{% else %}{{ case.investigator_raw|default:"-" }}{% endif %}</div>
+      {% else %}
+      <div class="alert alert-warning">{% icon "alert" "h-5 w-5" %} ยังไม่ได้จับคู่คดี ใส่เลขรับแจ้งด้านล่างแล้วกด "ใช้คดีนี้"</div>
+      {% endif %}
+      <div class="mt-3 flex flex-wrap items-end gap-2">
+        <div class="min-w-0 flex-1"><label class="label" for="{{ form.receipt_no.id_for_label }}">{{ form.receipt_no.label }}</label>{{ form.receipt_no }}{{ form.receipt_no.errors }}</div>
+        {% if rec.state == "pending" %}<button class="btn" name="action" value="set_case" formnovalidate>ใช้คดีนี้</button>{% endif %}
+      </div>
+      {% if candidates %}<div class="mt-2 flex flex-wrap gap-1.5 text-xs"><span class="text-slate-500">คดีที่อาจใช่:</span>
+        {% for c in candidates %}<button type="button" class="field-chip before:content-none after:content-none" onclick="document.getElementById('{{ form.receipt_no.id_for_label }}').value='{{ c.receipt_no }}'">{{ c.receipt_no }}</button>{% endfor %}</div>{% endif %}
+    </section>
+
+    {% if page_text %}
+    <details class="card text-sm">
+      <summary class="cursor-pointer font-medium text-slate-600">ข้อความที่อ่านได้จากไฟล์ (ซ่อนเลขบัตร)</summary>
+      <pre class="msg-preview mt-2 max-h-96 text-xs">{{ page_text }}</pre>
+    </details>
+    {% endif %}
+  </div>
+
+  <section class="card lg:col-span-3">
+    <div class="card-header">{% icon "envelope" "h-5 w-5 text-slate-400" %}<h2>ที่อยู่สำหรับออกหมายเรียก</h2>
+      {% if new.is_complete %}<span class="badge badge-green ml-auto">ครบ</span>{% else %}<span class="badge badge-amber ml-auto">ยังไม่ครบ</span>{% endif %}</div>
+    <p class="mb-3 text-sm text-slate-500">ช่องซ้ายคือที่อยู่ที่ระบบใช้อยู่ตอนนี้ ช่องขวาคือที่อยู่ตามทะเบียนราษฎร (แก้ได้) แถวสีเหลืองคือที่ต่างกัน{% if postcode_from == "table" %} · รหัสไปรษณีย์เติมจากตำบล/อำเภอ/จังหวัด{% endif %}</p>
+    <div class="mb-3"><label class="label" for="{{ form.recipient_name.id_for_label }}">{{ form.recipient_name.label }}</label>{{ form.recipient_name }}<span class="helptext">{{ form.recipient_name.help_text }}</span></div>
+    <div class="overflow-x-auto">
+      <table class="table table-tight">
+        <thead><tr><th class="w-32">ช่อง</th><th>ตอนนี้ในระบบ</th><th>ตามทะเบียนราษฎร</th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr class="{% if r.changed %}bg-amber-50/70{% endif %}">
+            <td class="whitespace-nowrap text-sm text-slate-600"><label for="{{ r.field.id_for_label }}">{{ r.label }}</label></td>
+            <td class="text-sm text-slate-500">{{ r.now|default:"-" }}</td>
+            <td>{{ r.field }}{{ r.field.errors }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-4 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
+      <div class="text-xs font-medium text-slate-500">ที่อยู่ในหมายเรียก</div>
+      <div class="mt-0.5 text-slate-800">{{ new.format|default:"-" }}</div>
+      {% if current %}<div class="mt-2 text-xs font-medium text-slate-500">ที่อยู่เดิม</div><div class="text-slate-500">{{ current.format|default:"-" }}</div>{% endif %}
+    </div>
+    {% if blockers %}<div class="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200"><b>ตอนนี้คดีนี้ยังออกหมายไม่ได้:</b><ul class="ml-4 list-disc">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul><span class="text-amber-800">ถ้าติดเรื่องที่อยู่ บันทึกที่อยู่นี้แล้วจะหายไป</span></div>{% endif %}
+    {% if rec.state == "pending" %}
+    <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+      <button class="btn btn-primary" name="action" value="save_issue">{% icon "document" "h-4 w-4" %} บันทึกที่อยู่ แล้วออกหมายเรียก</button>
+      <button class="btn" name="action" value="save">{% icon "check" "h-4 w-4" %} บันทึกที่อยู่</button>
+      <button class="btn btn-ghost ml-auto text-slate-500" name="action" value="discard" formnovalidate onclick="return confirm('ไม่ใช้ข้อมูลจากไฟล์นี้?')">ไม่ใช้รายการนี้</button>
+    </div>
+    {% elif case %}
+    <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+      <a class="btn btn-primary" href="{% url 'case_issue' case.pk %}">{% icon "document" "h-4 w-4" %} ออกหมายเรียก</a>
+      <a class="btn" href="{% url 'call_case' case.pk %}">เปิดคดี</a>
+    </div>
+    {% endif %}
+  </section>
+</form>
+{% endblock %}

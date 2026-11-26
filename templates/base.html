@@ -46,6 +46,7 @@
       <a class="side-link {% if u == 'daily_report' %}active{% endif %}" href="{% url 'daily_report' %}">{% icon "clipboard" %} สรุปผลประจำวัน</a>
       <a class="side-link {% if u == 'status_report' %}active{% endif %}" href="{% url 'status_report' %}">{% icon "document" %} แก้สถานะระบบใหญ่</a>
       <a class="side-link {% if u and u|slice:":7" == "import_" %}active{% endif %}" href="{% url 'import_home' %}">{% icon "upload" %} อัปเดตข้อมูลคดี (Excel)</a>
+      <a class="side-link {% if u and u|slice:":5" == "dopa_" %}active{% endif %}" href="{% url 'dopa_home' %}">{% icon "cases" %} PDF ทะเบียนราษฎร</a>
       {% else %}
       <a class="side-link {% if u == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">{% icon "home" %} ภาพรวม</a>
       <a class="side-link {% if u == 'case_list' or u == 'case_detail' %}active{% endif %}" href="{% url 'case_list' %}?open=on">{% icon "cases" %} ทะเบียนคดี</a>
@@ -56,6 +57,7 @@
       <a class="side-link {% if u == 'daily_report' %}active{% endif %}" href="{% url 'daily_report' %}">{% icon "clipboard" %} สรุปผลประจำวัน</a>
       <a class="side-link {% if u == 'status_report' %}active{% endif %}" href="{% url 'status_report' %}">{% icon "document" %} แก้สถานะระบบใหญ่</a>
       {% if perm_import %}<a class="side-link {% if u and u|slice:":7" == "import_" %}active{% endif %}" href="{% url 'import_home' %}">{% icon "upload" %} นำเข้าข้อมูล</a>{% endif %}
+      <a class="side-link {% if u and u|slice:":5" == "dopa_" %}active{% endif %}" href="{% url 'dopa_home' %}">{% icon "cases" %} PDF ทะเบียนราษฎร</a>
       {% endif %}
       {% if perm_settings %}
       <div class="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">ผู้ดูแลระบบ</div>

@@ -7,6 +7,7 @@ from apps.calls import views as cv
 from apps.core import settings_views as sv
 from apps.core import stats_views as stv
 from apps.documents import views as dv
+from apps.imports import dopa_views as dopa_v
 from apps.imports import views as iv
 from apps.registry import views as rv
 
@@ -31,6 +32,9 @@ urlpatterns = [
     path("cases/status/bulk/", rv.case_status_bulk, name="case_status_bulk"),
     # imports
     path("imports/", iv.import_home, name="import_home"),
+    path("imports/dopa/", dopa_v.dopa_home, name="dopa_home"),
+    path("imports/dopa/<int:pk>/", dopa_v.dopa_review, name="dopa_review"),
+    path("imports/dopa/clear/", dopa_v.dopa_discard_all, name="dopa_discard_all"),
     path("imports/<int:pk>/sheets/", iv.import_sheets, name="import_sheets"),
     path("imports/<int:pk>/mapping/", iv.import_mapping, name="import_mapping"),
     path("imports/<int:pk>/preview/", iv.import_preview, name="import_preview"),

@@ -92,3 +92,47 @@ class ColumnMapping(models.Model):
 
     class Meta:
         unique_together = [("kind", "source_header")]
+
+
+class DopaState(models.TextChoices):
+    PENDING = "pending", "รอตรวจ"
+    APPLIED = "applied", "บันทึกที่อยู่แล้ว"
+    DISCARDED = "discarded", "ไม่ใช้"
+
+
+class DopaRecord(models.Model):
+    """One person read from an uploaded civil registration (ทะเบียนราษฎร / DOPA) PDF, waiting for the staff to
+    check it and use its address for the summons. The PDF itself is not kept; the text read from it is kept
+    only until the record is used or discarded (old records are removed with the other old files)."""
+
+    file_name = models.CharField("ไฟล์", max_length=300)
+    file_hash = models.CharField(max_length=64, db_index=True)
+    read_by = models.CharField("อ่านด้วย", max_length=10, blank=True)  # text | ocr | none
+    notes = models.JSONField(default=list, blank=True)
+    page_text = models.TextField(blank=True)
+    data = models.JSONField(default=dict, blank=True)  # apps.imports.dopa.Person.as_dict()
+    national_id = models.CharField(max_length=13, blank=True, db_index=True)
+    case = models.ForeignKey("registry.Case", null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name="dopa_records", verbose_name="คดี")
+    match_by = models.CharField("จับคู่จาก", max_length=60, blank=True)
+    state = models.CharField("สถานะ", max_length=10, choices=DopaState.choices, default=DopaState.PENDING,
+                             db_index=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
+                                    related_name="+", verbose_name="ผู้อัปโหลด")
+    uploaded_at = models.DateTimeField("เวลาอัปโหลด", auto_now_add=True, db_index=True)
+    done_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                related_name="+")
+    done_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-uploaded_at", "-pk"]
+        verbose_name = "ข้อมูลจากทะเบียนราษฎร (PDF)"
+        verbose_name_plural = "ข้อมูลจากทะเบียนราษฎร (PDF)"
+
+    def __str__(self):
+        return f"{self.file_name} ({self.get_state_display()})"
+
+    def person(self):
+        from .dopa import Person
+
+        return Person.from_dict(self.data or {})

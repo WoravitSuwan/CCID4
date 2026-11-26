@@ -14,6 +14,7 @@ COMPLAINANT_COLUMNS = [
     ("house_no", "บ้านเลขที่", True),
     ("moo", "หมู่", False),
     ("building", "อาคาร/ตึก", False),
+    ("alley", "ตรอก", False),
     ("soi", "ซอย", False),
     ("road", "ถนน", False),
     ("subdistrict", "ตำบล", True),

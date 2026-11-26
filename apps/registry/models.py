@@ -6,7 +6,7 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Exists, OuterRef, Q
 
-from .address import Address, clean_text
+from .address import Address, clean_text, same_address
 
 
 def normalize_receipt_no(value) -> str:
@@ -221,6 +221,7 @@ class AddressFields(models.Model):
     house_no = models.TextField("บ้านเลขที่", blank=True)
     moo = models.TextField("หมู่", blank=True)
     building = models.TextField("อาคาร/ตึก", blank=True)
+    alley = models.TextField("ตรอก", blank=True)
     soi = models.TextField("ซอย", blank=True)
     road = models.TextField("ถนน", blank=True)
     subdistrict = models.TextField("ตำบล", blank=True)
@@ -524,7 +525,7 @@ class Case(models.Model):
         override = self.get_override()
         if not override or not self.complainant:
             return False
-        return complainant_address_snapshot(self.complainant) != (override.source_snapshot or {})
+        return not same_address(complainant_address_snapshot(self.complainant), override.source_snapshot)
 
     def set_status(self, status: Status, user=None, note: str = "") -> bool:
         """Change the status by hand (kept across re-imports of an unchanged register)."""
