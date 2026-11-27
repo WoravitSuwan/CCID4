@@ -10,6 +10,9 @@ Four layouts, as such reports come:
   bangkok.pdf    "label : value" lines, the address in separate fields (ตำบล/แขวง, อำเภอ/เขต) in Bangkok
   two_people.pdf two people in one file (one per page)
   scanned.pdf    the province page as a picture only (no text: needs OCR)
+  dopa_report.pdf  laid out like the real DOPA printout (JasperReports): label/value grid, the photo box, and a
+                 watermark written upwards across the page ("พิมพ์วันที่ ...", "ผู้พิมพ์รายงาน ..."), Bangkok address
+                 under the labels ตำบล/อำเภอ (needs reportlab, only to make this file)
 """
 from __future__ import annotations
 
@@ -115,6 +118,71 @@ def lines_page(doc, person):
         doc.add_paragraph(line)
 
 
+DOPA_REPORT = {
+    "id": make_id("170990011223"), "name": "นางสาวมะลิ ทดสอบใจ", "gender": "หญิง", "birth": "3 ก.ย. 2541",
+    "age": "28", "house": "1030-012345-1", "owner": "ผู้อาศัย", "house_no": "77/5", "moo": "", "alley": "",
+    "soi": "พหลโยธิน 32", "road": "พหลโยธิน", "sub": "ลาดยาว", "dist": "จตุจักร", "prov": "กรุงเทพมหานคร",
+    "status": "บุคคลนี้มีภูมิลำเนาอยู่ในบ้านนี้", "moved": "15 ม.ค. 2565",
+}
+
+
+def dopa_report(path: Path) -> None:
+    """The real printout's layout (positions taken from one), with made-up data."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfgen import canvas
+
+    font = "/usr/share/fonts/truetype/sarabun-compat/SarabunCompat-Regular.ttf"
+    pdfmetrics.registerFont(TTFont("Sarabun", font))
+    p, (_w, h) = DOPA_REPORT, A4
+    c = canvas.Canvas(str(path), pagesize=A4)
+    c.setTitle("DopaReport")
+
+    def at(x, y, text, size=14):  # y measured from the top, like the report
+        c.setFont("Sarabun", size)
+        c.drawString(x, h - y - 13, text)
+
+    at(251, 33, "ข้อมูลทะเบียนราษฎร")
+    at(232, 54, "(ใช้ในราชการสำนักงานตำรวจแห่งชาติ)", 11)
+    c.rect(155, h - 420, 330, 330)  # the photo box
+    rows = [
+        (434, [(55, "เลขประจำตัวประชาชน"), (176, dashed(p["id"]))]),
+        (459, [(55, "ชื่อ-ชื่อสกุล"), (126, p["name"]), (306, "เพศ"), (356, p["gender"])]),
+        (484, [(55, f"วันเดือนปีเกิด {p['birth']}"), (306, "อายุ"), (356, p["age"]), (416, "ปี"), (448, "สัญชาติ"),
+               (525, "ไทย")]),
+        (534, [(55, "ข้อมููลที่อยู่")]),
+        (559, [(55, "เลขรหัสประจำบ้าน"), (165, p["house"]), (306, "สถานะภาพเจ้าบ้าน"), (416, p["owner"])]),
+        (584, [(55, "บ้านเลขที่"), (141, p["house_no"]), (306, "หมู่ที่"), (416, p["moo"])]),
+        (609, [(55, "ตรอก"), (141, p["alley"]), (306, "ซอย"), (416, p["soi"])]),
+        (634, [(55, "ถนน"), (141, p["road"]), (306, "ตำบล"), (416, p["sub"])]),
+        (659, [(55, "อำเภอ"), (141, p["dist"]), (306, "จังหวัด"), (416, p["prov"])]),
+        (684, [(55, f"สถานภาพบุคคล {p['status']}"), (306, "วันที่ย้ายเข้า"), (416, p["moved"])]),
+        (751, [(55, "พิมพ์จากฐานข้อมูล เมื่อวันที่"), (225, "1 ธันวาคม 2569 เวลา 09:00 น.")]),
+        (776, [(54, "หน่วยงานที่พิมพ์"), (225, "กองบังคับการตำรวจสืบสวนสอบสวนอาชญากรรมทางเทคโนโลยี 4")]),
+        (801, [(54, "ผู้พิมพ์รายงาน"), (225, "พ.ต.ต. ทดสอบ ระบบ")]),
+    ]
+    for y, cells in rows:
+        for x, text in cells:
+            if text:
+                at(x, y, text)
+    # the watermark: three lines written upwards, repeated across the page
+    c.setFont("Sarabun", 14)
+    c.setFillGray(0.75)
+    mark = ["พิมพ์วันที่ 1 ธันวาคม 2569 เวลา 09:00 น.", "ผู้พิมพ์รายงาน พ.ต.ต. ทดสอบ ระบบ",
+            "สว.(สอบสวน) กก.1 บก.สอท.4 บช.สอท."]
+    for x in (31, 245, 475):
+        for top in (650, 333):
+            for dx, line in zip((0, 34, 65), mark, strict=True):
+                c.saveState()
+                c.translate(x + dx + 16, h - top)
+                c.rotate(90)
+                c.drawString(0, 0, line)
+                c.restoreState()
+    c.showPage()
+    c.save()
+
+
 def to_pdf(doc, name: str, tmp: Path) -> Path:
     src = tmp / f"{name}.docx"
     doc.save(src)
@@ -147,6 +215,7 @@ def main() -> int:
         doc = _doc()
         doc.add_picture(str(tmp / "pic.png"), width=Inches(6.3))
         (OUT / "scanned.pdf").write_bytes(to_pdf(doc, "scanned", tmp).read_bytes())
+    dopa_report(OUT / "dopa_report.pdf")
     for f in sorted(OUT.glob("*.pdf")):
         print(f.relative_to(ROOT), f.stat().st_size)
     return 0

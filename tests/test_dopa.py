@@ -49,6 +49,26 @@ def test_text_pdf_in_bangkok_with_separate_fields():
     assert a.lines() == ["99/1 ซอยลาดพร้าว 101 ถนนลาดพร้าว", "แขวงลาดยาว เขตจตุจักร", "กรุงเทพมหานคร"]
 
 
+def test_the_dopa_printout_with_a_watermark_written_upwards():
+    """Laid out like the real DOPA report (JasperReports): the watermark "พิมพ์วันที่ ... / ผู้พิมพ์รายงาน ..." runs up
+    the page and scrambles the reading order of pdftotext -layout; the page is rebuilt from the positions instead."""
+    data = pdf("dopa_report.pdf")
+    text, rotated = dopa.bbox_layout(data)
+    assert rotated == 18 and "พิมพ์วันที่" not in text  # the watermark is gone
+    lines = [ln.split() for ln in text.split("\n")]
+    assert ["ชื่อ-ชื่อสกุล", "นางสาวมะลิ", "ทดสอบใจ", "เพศ", "หญิง"] in lines  # a label and its value on one line
+    people, how, notes, _ = dopa.read_pdf(data)
+    p = people[0]
+    assert how == "text" and notes == [] and p.warnings == []
+    assert (p.national_id, p.prefix, p.first_name, p.last_name) == ("1709900112239", "นางสาว", "มะลิ", "ทดสอบใจ")
+    assert (p.gender, p.birth_date, p.age, p.nationality) == ("หญิง", "3 ก.ย. 2541", "28", "ไทย")
+    assert (p.house_code, p.owner_status, p.moved_in) == ("1030-012345-1", "ผู้อาศัย", "15 ม.ค. 2565")
+    assert p.person_status == "บุคคลนี้มีภูมิลำเนาอยู่ในบ้านนี้"
+    a = p.address  # Bangkok, under the labels ตำบล / อำเภอ; ตรอก and หมู่ที่ left blank in the report
+    assert (a.house_no, a.moo, a.alley, a.soi, a.road) == ("77/5", "", "", "พหลโยธิน 32", "พหลโยธิน")
+    assert a.format() == ("บ้านเลขที่ 77/5 ซอยพหลโยธิน 32 ถนนพหลโยธิน แขวงลาดยาว เขตจตุจักร กรุงเทพมหานคร 10900")
+
+
 def test_two_people_in_one_file():
     people, _, _, _ = dopa.read_pdf(pdf("two_people.pdf"))
     assert [p.national_id for p in people] == [PROVINCE_ID, SECOND_ID]

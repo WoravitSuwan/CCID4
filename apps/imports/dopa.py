@@ -50,11 +50,54 @@ def _run(cmd, data: bytes | None = None, timeout: int = 90) -> bytes:
     return subprocess.run(cmd, input=data, capture_output=True, timeout=timeout, check=True).stdout
 
 
+_BBOX_LINE = re.compile(r'<line xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">(.*?)</line>', re.S)
+_BBOX_WORD = re.compile(r"<word [^>]*>([^<]*)</word>")
+
+
+def bbox_layout(data: bytes) -> tuple[str, int]:
+    """(the page rebuilt from the position of each line of text, how many lines ran up the page). Reports like
+    the DOPA printout (JasperReports) carry a watermark written upwards across the page ("พิมพ์วันที่ ...",
+    "ผู้พิมพ์รายงาน ..."): those lines are dropped, the others put back in rows (top to bottom) and columns
+    (left to right) so a label and its value stay on one line."""
+    import html
+
+    out_pages, rotated = [], 0
+    xml = _run(["pdftotext", "-bbox-layout", "-enc", "UTF-8", "-", "-"], data).decode("utf-8", "replace")
+    for page in re.split(r"<page ", xml)[1:]:
+        lines = []
+        for m in _BBOX_LINE.finditer(page):
+            x0, y0, x1, y1 = (float(v) for v in m.groups()[:4])
+            if y1 - y0 > x1 - x0 and y1 - y0 > 30:  # taller than wide: written upwards
+                rotated += 1
+                continue
+            text = " ".join(html.unescape(w) for w in _BBOX_WORD.findall(m.group(5))).strip()
+            if text:
+                lines.append((y0, x0, text))
+        rows: list[list] = []
+        for y0, x0, text in sorted(lines):
+            if rows and abs(rows[-1][0] - y0) <= 4:  # the same row of the page
+                rows[-1][1].append((x0, text))
+            else:
+                rows.append([y0, [(x0, text)]])
+        out = []
+        for _y, cells in rows:
+            line = ""
+            for x0, text in sorted(cells):
+                col = int(x0 / 4)  # keep the columns: a value lines up under/after its label
+                line += " " * max(3 if line else 0, col - len(line)) + text
+            out.append(line)
+        out_pages.append("\n".join(out))
+    return "\n\f".join(out_pages), rotated
+
+
 def text_layer(data: bytes) -> tuple[str, str]:
     """(the PDF's own text laid out as on the page, which reader): '' for a scanned page. pdftotext (poppler)
     reads Thai correctly; pypdf is only the stand-by - with some fonts its Thai comes out garbled."""
     if shutil.which("pdftotext"):
         try:
+            text, rotated = bbox_layout(data)
+            if rotated:  # a watermark running up the page breaks -layout's reading order
+                return text, "poppler"
             return _run(["pdftotext", "-layout", "-enc", "UTF-8", "-", "-"], data).decode("utf-8", "replace"), "poppler"
         except (OSError, subprocess.SubprocessError) as exc:
             logger.warning("pdftotext failed: %s", exc)
@@ -149,7 +192,8 @@ LABELS: dict[str, list[str]] = {
     "birth_date": ["วันเดือนปีเกิด", "วัน/เดือน/ปีเกิด", "วัน เดือน ปีเกิด", "วัน เดือน ปี เกิด", "วันเกิด", "เกิดวันที่"],
     "age": ["อายุ"],
     "nationality": ["สัญชาติ"],
-    "owner_status": ["สถานภาพเจ้าบ้าน", "สถานะเจ้าบ้าน", "สถานภาพในบ้าน", "สถานะในบ้าน", "สถานะภาพในบ้าน",
+    "owner_status": ["สถานภาพเจ้าบ้าน", "สถานะภาพเจ้าบ้าน", "สถานะเจ้าบ้าน", "สถานภาพในบ้าน", "สถานะในบ้าน",
+                     "สถานะภาพในบ้าน",
                      "ความเกี่ยวพันกับเจ้าบ้าน"],
     "person_status": ["สถานภาพบุคคล", "สถานะบุคคล", "สถานะภาพบุคคล", "สถานภาพ"],
     "moved_in": ["วันที่ย้ายเข้า", "วันย้ายเข้า", "ย้ายเข้าวันที่", "ย้ายเข้าเมื่อ"],
@@ -706,7 +750,7 @@ def _check(p: Person) -> None:
         p.warnings.append(f"ไม่รู้จักจังหวัด \"{p.address.province}\" ตรวจการสะกด")
     if p.address.province and not p.address.postcode:
         p.warnings.append("หารหัสไปรษณีย์จากตำบล/อำเภอ/จังหวัดไม่ได้ ตรวจการสะกด หรือกรอกเอง")
-    if p.person_status and not re.search(r"มีชีวิต|ปกติ|-", p.person_status):
+    if p.person_status and not re.search(r"มีชีวิต|ปกติ|ภูมิลำเนาอยู่ในบ้านนี้|-", p.person_status):
         p.warnings.append(f"สถานภาพบุคคล: {p.person_status}")
 
 
