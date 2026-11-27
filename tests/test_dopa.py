@@ -102,6 +102,20 @@ def test_without_poppler_pypdf_reads_the_text(monkeypatch):
     assert "poppler-utils" in notes[0]  # Thai may come out garbled: the staff are told to check every field
 
 
+def test_the_dopa_printout_without_poppler(monkeypatch):
+    """A computer with no poppler (e.g. run without Docker): pypdf gives each piece of text with its position, so
+    the watermark written upwards is dropped there too - it used to end up in ถนน / อำเภอ / จังหวัด."""
+    real = dopa.shutil.which
+    monkeypatch.setattr(dopa.shutil, "which", lambda name: None if name == "pdftotext" else real(name))
+    text, rotated = dopa.pypdf_layout(pdf("dopa_report.pdf"))
+    assert rotated == 18 and "พิมพ์วันที่" not in text
+    people, how, notes, _ = dopa.read_pdf(pdf("dopa_report.pdf"))
+    p = people[0]
+    assert how == "text" and "poppler-utils" in notes[0] and p.warnings == []
+    assert p.national_id == "1709900112239" and p.full_name == "นางสาวมะลิ ทดสอบใจ"
+    assert p.address.format() == ("บ้านเลขที่ 77/5 ซอยพหลโยธิน 32 ถนนพหลโยธิน แขวงลาดยาว เขตจตุจักร กรุงเทพมหานคร 10900")
+
+
 def test_not_a_pdf():
     assert dopa.read_pdf(b"hello") == ([], "none", ["ไม่ใช่ไฟล์ PDF"], "")
 

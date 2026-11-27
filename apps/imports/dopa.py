@@ -73,21 +73,54 @@ def bbox_layout(data: bytes) -> tuple[str, int]:
             text = " ".join(html.unescape(w) for w in _BBOX_WORD.findall(m.group(5))).strip()
             if text:
                 lines.append((y0, x0, text))
-        rows: list[list] = []
-        for y0, x0, text in sorted(lines):
-            if rows and abs(rows[-1][0] - y0) <= 4:  # the same row of the page
-                rows[-1][1].append((x0, text))
-            else:
-                rows.append([y0, [(x0, text)]])
-        out = []
-        for _y, cells in rows:
-            line = ""
-            for x0, text in sorted(cells):
-                col = int(x0 / 4)  # keep the columns: a value lines up under/after its label
-                line += " " * max(3 if line else 0, col - len(line)) + text
-            out.append(line)
-        out_pages.append("\n".join(out))
+        out_pages.append(_rows_to_text(lines))
     return "\n\f".join(out_pages), rotated
+
+
+def _rows_to_text(pieces) -> str:
+    """[(top, left, text)] of one page -> lines: the same row of the page on one line, in columns."""
+    rows: list[list] = []
+    for top, left, text in sorted(pieces):
+        if rows and abs(rows[-1][0] - top) <= 4:  # the same row of the page
+            rows[-1][1].append((left, text))
+        else:
+            rows.append([top, [(left, text)]])
+    out = []
+    for _top, cells in rows:
+        line = ""
+        for left, text in sorted(cells):
+            col = int(left / 4)  # keep the columns: a value lines up under/after its label
+            line += " " * max(3 if line else 0, col - len(line)) + text
+        out.append(line)
+    return "\n".join(out)
+
+
+def pypdf_layout(data: bytes) -> tuple[str, int]:
+    """The same as bbox_layout without poppler: each piece of text with its position from pypdf; pieces turned
+    on their side (the watermark) are dropped, the rest put back in rows and columns."""
+    from pypdf import PdfReader
+
+    pages, rotated = [], 0
+    for page in PdfReader(io.BytesIO(data)).pages:
+        height = float(page.mediabox.height)
+        pieces = []
+
+        def visit(text, cm, tm, _font, _size):
+            nonlocal rotated
+            if not text.strip():
+                return
+            a = tm[0] * cm[0] + tm[1] * cm[2]
+            b = tm[0] * cm[1] + tm[1] * cm[3]
+            if abs(b) > abs(a):  # written upwards (or downwards)
+                rotated += 1
+                return
+            x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
+            y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
+            pieces.append((round(height - y, 1), round(x, 1), text.strip()))
+
+        page.extract_text(visitor_text=visit)
+        pages.append(_rows_to_text(pieces))
+    return "\n\f".join(pages), rotated
 
 
 def text_layer(data: bytes) -> tuple[str, str]:
@@ -104,6 +137,9 @@ def text_layer(data: bytes) -> tuple[str, str]:
     try:
         from pypdf import PdfReader
 
+        text, rotated = pypdf_layout(data)
+        if rotated:  # the DOPA printout's watermark: rebuilt from positions, as with poppler
+            return text, "pypdf"
         reader = PdfReader(io.BytesIO(data))
         return "\n\f".join(page.extract_text(extraction_mode="layout") or "" for page in reader.pages), "pypdf"
     except Exception as exc:  # a broken file: the caller reports it
