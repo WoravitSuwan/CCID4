@@ -55,8 +55,8 @@ class ApplyForm(StyledForm):
 
 
 def _records(user):
-    qs = DopaRecord.objects.select_related("case", "uploaded_by")
-    return qs if perms.is_admin(user) else qs.filter(uploaded_by=user)
+    """Each investigator sees only what they uploaded."""
+    return DopaRecord.objects.select_related("case", "uploaded_by").filter(uploaded_by=user)
 
 
 def _chosen_case(request) -> Case | None:
@@ -74,7 +74,7 @@ def mask_ids(text: str) -> str:
     return re.sub(r"(?<!\d)\d[\s-]?\d{4}[\s-]?\d{5}[\s-]?\d{2}[\s-]?\d(?!\d)", hide, text or "")
 
 
-@perms.require(perms.can_issue_any)
+@perms.require(perms.can_use_registration_pdf)
 def dopa_home(request):
     """Upload one or many PDFs; the list of what is waiting to be checked."""
     chosen = _chosen_case(request)
@@ -120,13 +120,13 @@ def dopa_home(request):
         "chosen": chosen, "pending": records.filter(state=DopaState.PENDING)[:200],
         "done": records.exclude(state=DopaState.PENDING)[:20], "max_files": MAX_FILES, "max_mb": MAX_MB,
         "ocr": dopa.ocr_status(), "ocr_help": dopa.OCR_HELP.get(dopa.ocr_status(), ""),
-        "linked": getattr(request.user, "investigator", None) if not perms.is_admin(request.user) else None,
+        "linked": request.user.investigator,
     })
 
 
 def _record(request, pk) -> DopaRecord:
     rec = get_object_or_404(DopaRecord.objects.select_related("case__complainant"), pk=pk)
-    if not perms.is_admin(request.user) and rec.uploaded_by_id != request.user.pk:
+    if rec.uploaded_by_id != request.user.pk:
         raise Http404
     if rec.case_id and not may_use(request.user, rec.case):  # the case was moved to another investigator
         rec.case = None
@@ -141,7 +141,7 @@ def _initial(rec: DopaRecord, person) -> dict:
     return initial
 
 
-@perms.require(perms.can_issue_any)
+@perms.require(perms.can_use_registration_pdf)
 def dopa_review(request, pk):
     rec = _record(request, pk)
     person = rec.person()
@@ -230,7 +230,7 @@ def _next(request):
 
 
 @require_POST
-@perms.require(perms.can_issue_any)
+@perms.require(perms.can_use_registration_pdf)
 def dopa_discard_all(request):
     """Clear the list: every record still waiting (only the user's own, for call staff)."""
     qs = _records(request.user).filter(state=DopaState.PENDING)

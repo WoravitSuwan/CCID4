@@ -169,8 +169,14 @@ def test_thai_dates():
 
 # --------------------------------------------------------------------------- matching (ใครคดีมัน)
 @pytest.fixture
-def caller(db):
-    return User.objects.create_user("caller_d", password="pass12345", role=Role.OUTSOURCE, first_name="สมใจ")
+def caller(imported):
+    """A พนักงานสอบสวน account (the only kind that may use the registration PDFs) owning every sample case."""
+    from apps.registry.models import InvestigatorAlias
+
+    inv = InvestigatorAlias.objects.filter(investigator__isnull=False).first().investigator
+    InvestigatorAlias.objects.update(investigator=inv)
+    return User.objects.create_user("inv_owner", password="pass12345", role=Role.INVESTIGATOR, first_name="สมใจ",
+                                    investigator=inv)
 
 
 def _case_with_id(national_id: str) -> Case:
@@ -197,11 +203,13 @@ def test_a_linked_investigator_sees_only_their_own_cases(imported, caller):
     other = Investigator.objects.create(sign_name="คนอื่น ทดสอบ")
     case.investigator_alias.investigator = other
     case.investigator_alias.save()
-    officer = User.objects.create_user("inv_d", password="pass12345", role=Role.OUTSOURCE, investigator=mine)
+    officer = User.objects.create_user("inv_d", password="pass12345", role=Role.INVESTIGATOR, investigator=mine)
     person = dopa.read_pdf(pdf("province.pdf"))[0][0]
     assert not cases_for(officer).filter(pk=case.pk).exists()
     assert match(person, "x.pdf", officer)[0] is None  # someone else's case: not matched, not offered
-    assert match(person, "x.pdf", caller)[0] == case  # call staff work from the shared list
+    case.investigator_alias.investigator = mine
+    case.investigator_alias.save()
+    assert match(person, "x.pdf", officer)[0] == case
 
 
 # --------------------------------------------------------------------------- pages
@@ -272,7 +280,7 @@ def test_fix_a_field_choose_the_case_and_discard(client, imported, caller):
 def test_cannot_save_to_a_case_of_another_investigator(client, imported):
     case = Case.objects.not_final().first()
     mine = Investigator.objects.create(sign_name="ทดสอบ เจ้าของ")
-    officer = User.objects.create_user("inv_e", password="pass12345", role=Role.OUTSOURCE, investigator=mine)
+    officer = User.objects.create_user("inv_e", password="pass12345", role=Role.INVESTIGATOR, investigator=mine)
     client.force_login(officer)
     upload(client, "province.pdf", case=case.pk)  # not theirs: the case from the link is not used
     rec = DopaRecord.objects.get()
@@ -286,7 +294,8 @@ def test_other_users_records_are_private(client, imported, caller):
     client.force_login(caller)
     upload(client, "province.pdf")
     rec = DopaRecord.objects.get()
-    other = User.objects.create_user("caller_x", password="pass12345", role=Role.OUTSOURCE)
+    other = User.objects.create_user("inv_x", password="pass12345", role=Role.INVESTIGATOR,
+                                     investigator=Investigator.objects.create(sign_name="อีก คนหนึ่ง"))
     client.force_login(other)
     assert client.get(f"/imports/dopa/{rec.pk}/").status_code == 404
     assert "ขวัญใจ" not in client.get("/imports/dopa/").content.decode()
@@ -300,14 +309,37 @@ def test_upload_limits_and_wrong_files(client, imported, caller):
     assert "นำเข้า PDF ทะเบียนราษฎร" in page and 'multiple' in page
 
 
-def test_links_to_the_import_from_the_case_pages(client, admin_user, imported, caller):
+def test_links_to_the_import_from_the_case_pages(client, imported, caller):
     case = Case.objects.not_final().first()
     client.force_login(caller)
     assert f'/imports/dopa/?case={case.pk}' in client.get(f"/calls/{case.pk}/").content.decode()
-    client.force_login(admin_user)
-    assert f'/imports/dopa/?case={case.pk}' in client.get(f"/cases/{case.pk}/").content.decode()
+    assert 'href="/imports/dopa/"' in client.get("/calls/").content.decode()  # the menu
     page = client.get(f"/imports/dopa/?case={case.pk}").content.decode()
     assert f'name="case" value="{case.pk}"' in page
+
+
+def test_only_investigator_accounts_have_the_registration_pdfs(client, admin_user, imported, caller):
+    """ทะเบียนราษฎร: on the pages of พนักงานสอบสวน accounts only - not administrators, not call staff, and not an
+    investigator account that is not linked yet."""
+    client.force_login(caller)
+    upload(client, "province.pdf")
+    rec = DopaRecord.objects.get()
+    staff = User.objects.create_user("call_z", password="pass12345", role=Role.OUTSOURCE)
+    lone = User.objects.create_user("inv_lone", password="pass12345", role=Role.INVESTIGATOR)
+    case = Case.objects.not_final().first()
+    for user, pages in ((admin_user, ("/", f"/cases/{case.pk}/", f"/calls/{case.pk}/", "/calls/", "/imports/")),
+                        (staff, (f"/calls/{case.pk}/", "/calls/", "/imports/")),
+                        (lone, ("/calls/",))):
+        client.force_login(user)
+        for url in pages:
+            html = client.get(url).content.decode()
+            assert "/imports/dopa/" not in html and "ทะเบียนราษฎร" not in html, (user.username, url)
+        for url in ("/imports/dopa/", f"/imports/dopa/{rec.pk}/", f"/imports/dopa/?case={case.pk}"):
+            assert client.get(url).status_code == 403, (user.username, url)
+        assert client.post("/imports/dopa/", {"files": SimpleUploadedFile("a.pdf", pdf("province.pdf"))}
+                           ).status_code == 403
+        assert client.post(f"/imports/dopa/{rec.pk}/", {"action": "discard"}).status_code == 403
+    assert DopaRecord.objects.count() == 1 and DopaRecord.objects.get().state == DopaState.PENDING
 
 
 def test_old_records_are_removed_with_the_old_files(imported, caller):

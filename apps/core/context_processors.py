@@ -63,6 +63,7 @@ def app_context(request):
         "perm_calls_manage": perms.can_manage_calls(user),
         "is_outsource": perms.is_case_staff(user),  # the call-staff screens (call staff and investigators)
         "is_investigator": perms.is_investigator(user),
+        "perm_registration_pdf": perms.can_use_registration_pdf(user),
         "my_investigator": getattr(user, "investigator", None) if perms.scoped_investigator(user) else None,
     }
     if perms.is_admin(user):

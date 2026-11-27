@@ -9,11 +9,6 @@
 {% else %}
 <h1 class="mb-4">นำเข้าข้อมูล</h1>
 {% endif %}
-<a href="{% url 'dopa_home' %}" class="card mb-4 flex items-center gap-3 no-underline hover:ring-indigo-200">
-  <span class="msg-card-icon bg-indigo-50 text-indigo-700">{% load ui %}{% icon "document" "h-5 w-5" %}</span>
-  <span class="min-w-0 flex-1"><span class="block font-semibold text-slate-800">นำเข้า PDF ทะเบียนราษฎร</span>
-    <span class="block text-sm text-slate-500">อ่านชื่อ เลขประจำตัวประชาชน และที่อยู่ตามทะเบียนบ้าน (รวมกรุงเทพฯ แขวง/เขต) จากไฟล์ PDF แล้วใช้ออกหมายเรียก</span></span>
-  {% icon "chevron-right" "h-5 w-5 text-slate-400" %}</a>
 <div class="grid gap-4 lg:grid-cols-3">
   <form method="post" enctype="multipart/form-data" class="card space-y-4">{% csrf_token %}
     <h2>1. อัปโหลดไฟล์</h2>

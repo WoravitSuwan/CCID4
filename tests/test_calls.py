@@ -141,6 +141,14 @@ def test_demo_has_call_staff(db, settings):
     bootstrap_demo()
     assert CallAssignment.objects.filter(assignee__username="call1").count() == 20
     assert CallAttempt.objects.count() == 4
+    # the พนักงานสอบสวน demo account: linked, with its own cases only
+    from apps.core import permissions as perms
+    from apps.registry.models import Case
+
+    officer = User.objects.get(username="inv1")
+    assert officer.role == Role.INVESTIGATOR and officer.investigator.sign_name == "ศักดิ์ชัย ใจดีสมมติ"
+    mine = perms.case_scope(Case.objects.all(), officer)
+    assert 0 < mine.count() < Case.objects.count()
 
 
 def test_shared_list_first_caller_takes_the_case_and_busy_warning(client, imported, caller):

@@ -116,7 +116,27 @@ def _ranges(request) -> list[str]:
     return [v for v in dict.fromkeys(request.GET.getlist("drange")) if v in keys]
 
 
-def _apply_filters(request, qs, damage=True):
+ADDR_CHOICES = {"missing": "ที่อยู่ไม่ครบ", "complete": "ที่อยู่ครบ"}
+
+
+def _addr(request) -> str:
+    value = request.GET.get("addr", "")
+    return value if value in ADDR_CHOICES else ""
+
+
+def address_missing_cases():
+    """Cases a summons cannot be sent to yet for lack of an address: the address in use (typed in, or else the
+    file ผู้แจ้ง) is incomplete, or the case matched no file ผู้แจ้ง and nobody typed one in."""
+    from django.db.models import Exists, OuterRef
+
+    from apps.registry.models import AddressOverride
+
+    typed = AddressOverride.objects.filter(receipt_no=OuterRef("receipt_no"))
+    return Case.objects.filter(Q(pk__in=Case.objects.address_incomplete().values("pk"))
+                               | (Q(complainant__isnull=True) & ~Exists(typed)))
+
+
+def _apply_filters(request, qs, damage=True, addr=True):
     """Search box and the column filters - kept across tabs. Several values ticked in one column: any of them;
     filters of different columns: all of them."""
     q = request.GET.get("q", "").strip()
@@ -143,6 +163,10 @@ def _apply_filters(request, qs, damage=True):
     status_ids = [int(v[1:]) for v in states if v.startswith("s")]
     if status_ids:
         qs = qs.filter(case__status_id__in=status_ids)
+    which = _addr(request) if addr else ""
+    if which:
+        missing = address_missing_cases().values("pk")
+        qs = qs.filter(case__in=missing) if which == "missing" else qs.exclude(case__in=missing)
     if not damage:  # (for the counts shown next to each range)
         return qs
     ranges = _ranges(request)
@@ -217,6 +241,7 @@ def _filter_ui(request, tab: str, base=None) -> dict:
 
     def url(**change):
         params = {"tab": tab, "q": request.GET.get("q", ""), "result": results, "drange": ranges,
+                  "addr": _addr(request),
                   "dmin": request.GET.get("dmin", ""),
                   "dmax": request.GET.get("dmax", ""), "year": [y + 543 for y in years], "state": states}
         params.update(change)
@@ -240,6 +265,8 @@ def _filter_ui(request, tab: str, base=None) -> dict:
         chips.append((f"มูลค่า ≤ {high:,.2f}", url(dmax="")))
     if request.GET.get("q", "").strip():
         chips.append((f"ค้นหา \"{request.GET['q'].strip()}\"", url(q="")))
+    if _addr(request):
+        chips.append((ADDR_CHOICES[_addr(request)], url(addr="")))
     return {
         "year_groups": [("", [(be, f"ปี {be}", ce in years) for ce, be in _years()])],
         "state_groups": [("", [(v, state_labels[v], v in states) for v in ("open", "final")]),
@@ -370,6 +397,12 @@ def queue(request):
         per_staff = list(rows)
     sort = _current_sort(request)
     ui = _filter_ui(request, tab, base)
+    # the address for the summons: how many of this tab (with the other filters) can / cannot get one yet
+    in_tab = _apply_tab(_apply_filters(request, base, addr=False), tab)
+    addr_total = in_tab.count()
+    addr_missing = in_tab.filter(case__in=address_missing_cases().values("pk")).count()
+    addr_buttons = [("", "ทั้งหมด", addr_total), ("missing", "ที่อยู่ไม่ครบ", addr_missing),
+                    ("complete", "ที่อยู่ครบ", addr_total - addr_missing)]
     request.session[LIST_KEY] = request.GET.urlencode()  # the call page's "back" returns to this exact list
     page = Paginator(_sorted(qs, sort), 50).get_page(request.GET.get("page"))
     return render(request, "calls/queue.html", {
@@ -379,7 +412,9 @@ def queue(request):
         "sankey": funnel.sankey(counts),
         "filtered": bool(ui["chips"]), "f": ui, "col": _column_sort(sort),
         "year": _year(request), "state": _state(request),
-        "sort_buttons": _sort_buttons(sort),
+        "sort_buttons": _sort_buttons(sort), "addr": _addr(request), "addr_buttons": addr_buttons,
+        "addr_missing_ids": set(address_missing_cases().filter(pk__in=[a.case_id for a in page])
+                                .values_list("pk", flat=True)),
         "results": RESULTS, "outcomes": CallOutcome.choices,
         "staff": call_staff(),
         "lock_minutes": OPEN_LOCK_MINUTES,

@@ -72,6 +72,13 @@ class Command(BaseCommand):
                 caller = User.objects.create_user(username, password=DEMO_PASSWORD, role=Role.OUTSOURCE,
                                                   first_name=first)
             callers.append(caller)
+        # a พนักงานสอบสวน account (ใครคดีมัน): the cases of the made-up signer ศักดิ์ชัย ใจดีสมมติ only
+        if not User.objects.filter(username="inv1").exists():
+            officer = next((inv for inv in Investigator.objects.all()
+                            if person_core_key(inv.sign_name) == "ศักดิ์ชัยใจดีสมมติ"), None)
+            if officer is not None and getattr(officer, "user", None) is None:
+                User.objects.create_user("inv1", password=DEMO_PASSWORD, role=Role.INVESTIGATOR,
+                                         first_name="พ.ต.ท.ศักดิ์ชัย", last_name="ใจดีสมมติ", investigator=officer)
         admin = User.objects.filter(username="admin").first()
         open_cases = list(Case.objects.not_final().order_by("receipt_no"))
         if open_cases and not callers[0].call_assignments.exists():
@@ -87,5 +94,6 @@ class Command(BaseCommand):
                 record_call(case, callers[0], outcome=outcome, note=note, appointment_at=appointment,
                             phone=case.victim_phone, called_at=now - dt.timedelta(hours=5 - idx))
         self.stdout.write(self.style.SUCCESS(
-            f"พร้อมแล้ว ผู้ใช้ทดลอง 2 บัญชี: admin (ผู้ดูแลระบบ) และ call1 (outsource) รหัสผ่าน {DEMO_PASSWORD} "
+            f"พร้อมแล้ว ผู้ใช้ทดลอง 3 บัญชี: admin (ผู้ดูแลระบบ), call1 (outsource) และ inv1 (พนักงานสอบสวน "
+            f"เห็นเฉพาะคดีของตนเอง) รหัสผ่าน {DEMO_PASSWORD} "
             "(ผู้ลงนาม 'ธนพล มั่นคงสมมติ' ยังไม่มียศ/ตำแหน่ง เพื่อลองนำเข้าจาก Excel ที่ ตั้งค่า → ผู้ลงนาม)"))

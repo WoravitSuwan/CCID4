@@ -18,8 +18,8 @@
     <a class="btn btn-line-soft" href="{% url 'daily_report' %}#line" title="ตั้งเวลาส่งอัตโนมัติ / ดูว่าทำไมยังส่งไม่ได้">{% line_icon %} LINE</a>
     {% endif %}
     {% endif %}
-    {% if is_outsource %}<a class="btn" href="{% url 'dopa_home' %}">{% icon "cases" "h-4 w-4" %} PDF ทะเบียนราษฎร</a>
-    <a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} อัปเดตข้อมูลคดี (Excel)</a>{% endif %}
+    {% if perm_registration_pdf %}<a class="btn" href="{% url 'dopa_home' %}">{% icon "cases" "h-4 w-4" %} PDF ทะเบียนราษฎร</a>{% endif %}
+    {% if is_outsource %}<a class="btn" href="{% url 'import_home' %}">{% icon "upload" "h-4 w-4" %} อัปเดตข้อมูลคดี (Excel)</a>{% endif %}
     {% if can_manage %}
     <a class="btn" href="{% url 'calls_export' %}">{% icon "download" "h-4 w-4" %} ส่งออกผลการโทร (Excel)</a>
     <a class="btn" href="{% url 'calls_assign' %}">{% icon "users" "h-4 w-4" %} กำหนดผู้รับผิดชอบ (ไม่บังคับ)</a>
@@ -90,6 +90,15 @@
     {% endfor %}
     <span class="text-xs text-slate-400">กดซ้ำเพื่อสลับลำดับ</span>
   </div>
+  <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3" role="group" aria-label="ที่อยู่สำหรับออกหมาย" data-keep-scroll>
+    <span class="text-sm text-slate-500">ที่อยู่สำหรับออกหมาย</span>
+    {% for value, label, n in addr_buttons %}
+    <a href="?{% query_replace addr=value page='' %}" aria-pressed="{% if addr == value %}true{% else %}false{% endif %}"
+       class="sort-btn {% if addr == value %}is-active{% endif %} {% if value == 'missing' and n %}addr-missing{% endif %}"
+       title="{% if value == 'missing' %}ออกหมายไม่ได้จนกว่าจะกรอก/แก้ที่อยู่ (ขาดบ้านเลขที่ ตำบล อำเภอ หรือจังหวัด หรือจับคู่ไฟล์ผู้แจ้งไม่ได้){% elif value == 'complete' %}ที่อยู่ครบ พร้อมออกหมาย{% else %}ไม่กรองตามที่อยู่{% endif %}">
+      {{ label }} <span class="tabular-nums opacity-70">{{ n|intcomma }}</span></a>
+    {% endfor %}
+  </div>
 </div>
 
 {% if can_issue and tab == "not_reached" or can_issue and tab == "to_issue" %}
@@ -131,6 +140,7 @@
       <tr class="cursor-pointer {% if a.callback_due %}bg-amber-50/60{% endif %}" onclick="if(!event.target.closest('a,button,input'))location.href='{% url 'call_case' a.case_id %}'">
         {% if can_issue %}<td data-label="เลือก"><input type="checkbox" class="check queue-cb" name="case_ids" value="{{ a.case_id }}"></td>{% endif %}
         <td class="whitespace-nowrap" data-label="เลขรับแจ้ง"><a class="font-mono font-medium" href="{% url 'call_case' a.case_id %}">{{ a.case.receipt_no }}</a>{% copy_btn a.case.receipt_no "เลขรับแจ้ง" %}
+          {% if a.case_id in addr_missing_ids %}<a class="badge badge-amber mt-1 block w-fit no-underline" href="{% url 'call_case' a.case_id %}#address" title="ออกหมายไม่ได้จนกว่าจะกรอก/แก้ที่อยู่">{% icon "envelope" "h-3 w-3" %} ที่อยู่ไม่ครบ</a>{% endif %}
           {% with other=a|opened_by_other:user %}{% if other %}<span class="badge badge-amber mt-1" title="{{ other.display_name }} เปิดคดีนี้อยู่">{% icon "phone" "h-3 w-3" %} {{ other.first_name|default:other.username }} กำลังเปิดอยู่</span>{% endif %}{% endwith %}</td>
         <td class="whitespace-nowrap text-sm" data-label="วันที่รับแจ้ง">{{ a.case.report_date|thai_date }}</td>
         <td class="min-w-[9rem] max-w-[15rem]" data-label="ผู้เสียหาย"><div class="font-medium">{% if a.case.victim_name %}{{ a.case.victim_name }}{% elif a.case.complainant %}{{ a.case.complainant.full_name }}{% else %}-{% endif %}</div><div class="font-mono text-sm text-slate-700">{% if a.case.victim_phone %}{{ a.case.victim_phone }}{% elif a.case.complainant.phone %}{{ a.case.complainant.phone }}{% else %}-{% endif %}</div>{% if a.case.case_type %}<div class="truncate text-xs text-slate-400 2xl:hidden" title="{{ a.case.case_type }}">{{ a.case.case_type }}</div>{% endif %}</td>

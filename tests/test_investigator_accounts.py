@@ -212,3 +212,29 @@ def test_summonses_of_other_investigators_are_hidden(client, setup_signers, two_
     client.force_login(officer)
     assert s not in client.get("/summons/").context["page"].object_list
     assert client.get(f"/summons/{s.pk}/docx/").status_code == 403
+
+
+def test_my_cases_split_by_address_for_the_summons(client, two_cases):
+    """คดีของฉัน: the same tabs and filters as call staff, plus ที่อยู่ไม่ครบ / ที่อยู่ครบ."""
+    from apps.registry.models import AddressOverride
+
+    officer, mine, theirs = two_cases
+    second = Case.objects.not_final().exclude(pk__in=[mine.pk, theirs.pk]).filter(complainant__isnull=False).first()
+    Case.objects.filter(pk=second.pk).update(investigator_alias=mine.investigator_alias)
+    AddressOverride.objects.create(receipt_no=mine.receipt_no, house_no="", subdistrict="", district="",
+                                   province="เชียงใหม่")  # typed in, but not enough to send a summons
+    AddressOverride.objects.create(receipt_no=second.receipt_no, house_no="9", subdistrict="ศรีภูมิ",
+                                   district="เมืองเชียงใหม่", province="เชียงใหม่")
+    client.force_login(officer)
+    page = client.get("/calls/?tab=all")
+    assert [(v, n) for v, _label, n in page.context["addr_buttons"]] == [("", 2), ("missing", 1), ("complete", 1)]
+    html = page.content.decode()
+    assert "ที่อยู่สำหรับออกหมาย" in html and html.count("ที่อยู่ไม่ครบ</a>") == 1  # the badge on that row
+    missing = client.get("/calls/?tab=all&addr=missing")
+    assert [a.case_id for a in missing.context["page"]] == [mine.pk]
+    chip = dict(missing.context["f"]["chips"])["ที่อยู่ไม่ครบ"]  # shown as a filter chip that takes it off
+    assert "addr=" not in chip and "tab=all" in chip
+    assert [a.case_id for a in client.get("/calls/?tab=all&addr=complete").context["page"]] == [second.pk]
+    # with a funnel tab too: never called + address missing
+    assert [a.case_id for a in client.get("/calls/?tab=never&addr=missing").context["page"]] == [mine.pk]
+    assert client.get("/calls/?addr=nonsense").status_code == 200  # an unknown value is ignored

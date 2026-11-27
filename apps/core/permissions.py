@@ -79,6 +79,12 @@ def can_import_update(user) -> bool:
     return is_admin(user) or is_case_staff(user)
 
 
+def can_use_registration_pdf(user) -> bool:
+    """นำเข้า PDF ทะเบียนราษฎร (names, ID numbers, house addresses from DOPA): พนักงานสอบสวน accounts only, for
+    their own cases - not administrators, not call staff."""
+    return is_investigator(user) and bool(getattr(user, "investigator_id", None))
+
+
 def can_issue_any(user) -> bool:
     return is_admin(user) or is_case_staff(user)
 

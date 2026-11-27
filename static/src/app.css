@@ -342,6 +342,7 @@
   .sort-btn:hover { @apply -translate-y-px text-indigo-700 ring-indigo-300; }
   .sort-btn:active { transform: scale(.96); }
   .sort-btn.is-active { @apply bg-indigo-600 text-white ring-indigo-600; box-shadow: 0 6px 14px -6px rgb(79 70 229 / .6); }
+  .sort-btn.addr-missing:not(.is-active) { @apply bg-amber-50 text-amber-800 ring-amber-300; }
   .sort-btn.is-active:hover { @apply text-white; }
   .sort-hint { @apply rounded-full bg-white/20 px-2 py-0.5 text-xs font-normal; }
 

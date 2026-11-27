@@ -20,7 +20,7 @@ RECEIPT_IN_NAME = re.compile(r"(?<![A-Z0-9])([A-Z]\d{8,13})(?!\d)")
 
 def cases_for(user):
     """The cases this user may update from a registration PDF."""
-    if not perms.can_issue_any(user):
+    if not perms.can_use_registration_pdf(user):
         return Case.objects.none()
     return perms.case_scope(Case.objects.all(), user)
 

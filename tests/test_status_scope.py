@@ -64,7 +64,7 @@ def test_old_demo_accounts_switched_off(db):
     assert not client_ok.is_active
 
 
-def test_login_page_lists_two_demo_accounts(client, settings):
+def test_login_page_lists_three_demo_accounts(client, settings):
     settings.DEMO_MODE = True
     page = client.get("/accounts/login/").content.decode()
-    assert "call1" in page and "admin" in page and "call2" not in page and "clerk" not in page
+    assert "call1" in page and "admin" in page and "inv1" in page and "call2" not in page and "clerk" not in page
